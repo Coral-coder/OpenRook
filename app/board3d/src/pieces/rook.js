@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { V2, armouredArms, armouredLegs, carve, cuirass, drape, face, folds, greatHelm, joint, resample, robeSkirt, skeleton } from '../carving.js';
 import { horse, soldierTop } from './soldier.js';
-import { helm } from './kr_armour.js';
+import { kettle } from './kr_armour.js';
 import { keep } from './kr_keep.js';
 
 export function rook(J, root, P) {
@@ -26,7 +26,9 @@ export function rook(J, root, P) {
       joint(J, 'wr' + side, J['el' + side], 0, -0.15 * H, 0);
     }
     soldierTop(J, P, H);
-    helm(P, J.head, H, 'sallet');
+    // a young face under a kettle helm
+    face(J.head, P, H);
+    kettle(P, J.head, H);
     const shield = new THREE.Group();
     shield.name = 'shield';
     J.elL.add(shield);

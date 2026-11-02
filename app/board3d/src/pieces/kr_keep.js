@@ -14,7 +14,7 @@ export function keep(tower, P, T) {
   P.torus(tower, 0.19, 0.008, 0, 0.026, 0, Math.PI / 2, Math.PI * 2, 40);
   // the mortar: a core just inside the stones
   P.cyl(tower, 0.146, 0.156, top - base, 0, base + (top - base) / 2, 0, 0, 0, 0, 32);
-  const courses = 12, ch = (top - base) / courses;
+  const courses = 14, ch = (top - base) / courses;
   const door = { a: 0, w: 0.085, h: 0.17 }; // the door faces +z (angle 0)
   for (let c = 0; c < courses; c++) {
     const r = 0.158 - (0.012 * c) / courses, y = base + ch * (c + 0.5);
@@ -28,7 +28,8 @@ export function keep(tower, P, T) {
       const inDoor = Math.cos(mid) > 0.8 && Math.abs(dx) < door.w / 2 + 0.01 && y < base + door.h;
       const inSlit = [1.9, 4.2].some((sa) => Math.abs(((mid - sa + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.1) && y > 0.28 && y < 0.42;
       if (!inDoor && !inSlit) {
-        const g = new THREE.BoxGeometry(w - 0.006, ch - 0.006, 0.03 + rnd() * 0.008);
+        const g = new RoundedBoxGeometry(w - 0.006, ch - 0.006, 0.03 + rnd() * 0.008, 1, 0.0045);
+        carve(g, 0.0025, 55 + rnd() * 30); // weathered, a little uneven
         const m = P.add(tower, g, Math.sin(mid) * r, y, Math.cos(mid) * r, 0, mid, 0);
         m.rotation.z = (rnd() - 0.5) * 0.03;
       }
@@ -44,7 +45,21 @@ export function keep(tower, P, T) {
   }
   for (let i = 0; i < 5; i++) P.box(tower, door.w / 5 - 0.003, door.h - 0.01, 0.01, -door.w / 2 + (i + 0.5) * (door.w / 5), base + (door.h - 0.01) / 2, dz - 0.002);
   for (const y of [0.05, 0.12]) P.box(tower, door.w, 0.008, 0.006, 0, base + y, dz + 0.005);
-  P.sphere(tower, 0.007, door.w * 0.3, base + door.h * 0.45, dz + 0.01, null, 8); // ring pull
+  // ironwork: strap hinges ending in scrolls, nail studs, a lock plate and a ring pull
+  for (const y of [0.05, 0.12]) {
+    for (const s of [-1, 1]) {
+      const sc = new THREE.Curve();
+      sc.getPoint = (t, o = new THREE.Vector3()) => {
+        const a = t * Math.PI * 1.6, r = 0.012 * (1 - t * 0.6);
+        return o.set(s * (door.w / 2 - 0.004 + Math.sin(a) * r * 0.2) - s * r * Math.sin(a) * 0 + s * 0.0, base + y + Math.cos(a) * r - r, dz + 0.007);
+      };
+      P.add(tower, new THREE.TubeGeometry(sc, 16, 0.0018, 5));
+    }
+    for (let i = 0; i < 5; i++) P.sphere(tower, 0.0022, -door.w / 2 + 0.008 + i * (door.w - 0.016) / 4, base + y, dz + 0.009, null, 6);
+  }
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) P.sphere(tower, 0.0018, -door.w * 0.3 + c * door.w * 0.3, base + 0.03 + r * 0.035, dz + 0.004, null, 6);
+  P.box(tower, 0.016, 0.022, 0.004, door.w * 0.28, base + door.h * 0.45, dz + 0.006); // lock plate
+  P.torus(tower, 0.008, 0.0016, door.w * 0.28, base + door.h * 0.4, dz + 0.01, 0, Math.PI * 2, 16); // ring pull
   // slit windows, with a sill and lintel stone
   for (const sa of [1.9, 4.2]) {
     const x = Math.sin(sa) * 0.15, z = Math.cos(sa) * 0.15;

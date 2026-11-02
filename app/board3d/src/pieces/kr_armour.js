@@ -1,7 +1,7 @@
 // Sculpted plate armour for the knight's rider and the rook's soldier: a breastplate with a
 // medial ridge and a waist, the plackart and fauld lames cut in as real grooves, a gorget,
 // layered pauldrons, and helms with slits and breaths cut through.
-import { blend, chisel, cone, sculpt, sphere, smax } from './kr_sculpt.js';
+import { blend, chisel, cone, roundBox, sculpt, sphere, smax } from './kr_sculpt.js';
 
 // cut grooves across a surface where band(x, y, z) < 0, [depth] deep
 export function grooved(f, bands, w, depth) {
@@ -25,7 +25,7 @@ export function torso(P, spine, H, { fauld = true } = {}) {
   ]);
   const bands = [(x, y) => y - 0.045 * H, (x, y) => y - 0.075 * H, (x, y) => y - 0.205 * H];
   if (fauld) bands.push((x, y) => y + 0.02 * H, (x, y) => y + 0.04 * H);
-  const g = sculpt(chisel(grooved(f, bands, 0.0025 * H, 0.004 * H), 0.0015 * H, 70 / H), [-0.16 * H, -0.08 * H, -0.12 * H], [0.16 * H, 0.26 * H, 0.12 * H], 32);
+  const g = sculpt(chisel(grooved(f, bands, 0.0025 * H, 0.004 * H), 0.0015 * H, 70 / H), [-0.16 * H, -0.08 * H, -0.12 * H], [0.16 * H, 0.26 * H, 0.12 * H], 50, { keep: 0.5 });
   return P.add(spine, g);
 }
 
@@ -36,7 +36,7 @@ export function pauldron(P, sh, H, s) {
     [sphere(s * 0.012 * H, 0.0, 0, 0.066 * H, 1.0, 0.62, 1.08)],
     [sphere(s * 0.026 * H, -0.03 * H, 0, 0.058 * H, 0.95, 0.42, 1.0), 0.016 * H],
   ]);
-  const g = sculpt(grooved(f, [(x, y) => y + 0.018 * H], 0.0022 * H, 0.0035 * H), [-0.1 * H, -0.08 * H, -0.09 * H], [0.1 * H, 0.08 * H, 0.09 * H], 26);
+  const g = sculpt(grooved(f, [(x, y) => y + 0.018 * H], 0.0022 * H, 0.0035 * H), [-0.1 * H, -0.08 * H, -0.09 * H], [0.1 * H, 0.08 * H, 0.09 * H], 40, { keep: 0.45 });
   return P.add(sh, g);
 }
 
@@ -61,7 +61,7 @@ export function helm(P, head, H, kind = 'great') {
     };
     const deep = (g) => (x, y, z) => Math.max(g(x, y, z), -(f(x, y, z) + 0.008 * H)); // cut 8 mm in, no deeper
     const cut = (x, y, z) => Math.max(f(x, y, z), -deep(slits)(x, y, z), -deep(breaths)(x, y, z), -(y + 0.019 * H));
-    return P.add(head, sculpt(cut, [-0.1 * H, -0.05 * H, -0.1 * H], [0.1 * H, 0.17 * H, 0.1 * H], 30));
+    return P.add(head, sculpt(cut, [-0.1 * H, -0.05 * H, -0.1 * H], [0.1 * H, 0.17 * H, 0.1 * H], 46, { keep: 0.55 }));
   }
   // sallet: a round skull tapering to a tail behind, a visor with a slit, a crest
   f = blend([
@@ -78,11 +78,58 @@ export function helm(P, head, H, kind = 'great') {
 /** A plume of carved feathers on the helm's top, sweeping back. */
 export function plume(P, head, H) {
   const parts = [];
-  for (let i = 0; i < 9; i++) {
-    const a = -0.4 - i * 0.16, l = 0.13 * H - i * 0.004 * H;
-    const x0 = (i % 2 ? 1 : -1) * 0.006 * H;
-    parts.push([cone([x0, 0.16 * H, -0.0], [x0 * 3, 0.16 * H + Math.cos(a) * l, Math.sin(a) * l], 0.012 * H, 0.004 * H), 0.008 * H]);
+  for (let i = 0; i < 13; i++) {
+    const a = -0.35 - i * 0.12, l = 0.14 * H - i * 0.004 * H;
+    const x0 = (i % 2 ? 1 : -1) * (0.004 + 0.002 * (i % 3)) * H;
+    const tip = [x0 * 3.5, 0.16 * H + Math.cos(a) * l, Math.sin(a) * l];
+    const mid = [x0 * 2, 0.16 * H + Math.cos(a - 0.15) * l * 0.55, Math.sin(a - 0.15) * l * 0.55];
+    parts.push([cone([x0, 0.16 * H, -0.0], mid, 0.011 * H, 0.009 * H), 0.007 * H]);
+    parts.push([cone(mid, tip, 0.009 * H, 0.002 * H), 0.006 * H]);
   }
   parts.unshift([sphere(0, 0.16 * H, 0, 0.016 * H)]);
-  return P.add(head, sculpt(chisel(blend(parts), 0.002 * H, 160 / H), [-0.05 * H, 0.12 * H, -0.18 * H], [0.05 * H, 0.32 * H, 0.06 * H], 22));
+  return P.add(head, sculpt(chisel(blend(parts), 0.002 * H, 160 / H), [-0.05 * H, 0.12 * H, -0.18 * H], [0.05 * H, 0.32 * H, 0.06 * H], 48, { keep: 0.45 }));
+}
+
+/**
+ * A gauntlet on the wrist joint (the hand hangs along -y, the fingers curl toward +z): a
+ * flared cuff, a plated back of the hand with a knuckle ridge, four fingers in lames curled
+ * into a fist, and the thumb across them.
+ */
+export function gauntlet(P, wr, H, s) {
+  const u = 0.1 * H;
+  const parts = [
+    [cone([0, 0.01 * u, 0], [0, -0.34 * u, 0.02 * u], 0.36 * u, 0.3 * u, 1, 0.85)], // cuff
+    [cone([0, -0.26 * u, 0.02 * u], [0, -0.36 * u, 0.03 * u], 0.4 * u, 0.33 * u, 1, 0.85), 0.03 * u], // its flared rim
+    [roundBox(0, -0.62 * u, 0.04 * u, 0.26 * u, 0.24 * u, 0.13 * u, 0.1 * u), 0.06 * u], // back of the hand
+    [cone([-0.3 * u, -0.86 * u, 0.12 * u], [0.3 * u, -0.86 * u, 0.12 * u], 0.07 * u, 0.07 * u), 0.04 * u], // knuckles
+  ];
+  for (let i = 0; i < 4; i++) {
+    const x = (i - 1.5) * 0.16 * u;
+    // each finger bends twice into the palm
+    parts.push([cone([x, -0.88 * u, 0.12 * u], [x, -1.02 * u, 0.26 * u], 0.07 * u, 0.065 * u), 0.02 * u]);
+    parts.push([cone([x, -1.02 * u, 0.26 * u], [x, -0.92 * u, 0.36 * u], 0.065 * u, 0.06 * u), 0.02 * u]);
+  }
+  parts.push([cone([-s * 0.32 * u, -0.58 * u, 0.14 * u], [-s * 0.14 * u, -0.8 * u, 0.36 * u], 0.075 * u, 0.06 * u), 0.03 * u]); // thumb
+  const bands = [(x, y) => y + 0.12 * u, (x, y) => y + 0.2 * u, (x, y) => y + 0.5 * u, (x, y) => y + 0.97 * u];
+  const g = sculpt(chisel(grooved(blend(parts), bands, 0.012 * u, 0.02 * u), 0.008 * u, 9 / u), [-0.6 * u, -1.25 * u, -0.5 * u], [0.6 * u, 0.15 * u, 0.6 * u], 36, { keep: 0.5 });
+  return P.add(wr, g);
+}
+
+/** A kettle helm: a ridged dome over a wide, sloping, rolled brim, riveted at the band. */
+export function kettle(P, head, H) {
+  const dome = blend([
+    [sphere(0, 0.075 * H, 0, 0.074 * H, 1, 0.92, 1.02)],
+    [cone([0, 0.06 * H, 0.076 * H], [0, 0.15 * H, 0.0], 0.007 * H, 0.009 * H), 0.012 * H], // the comb, front
+    [cone([0, 0.15 * H, 0.0], [0, 0.06 * H, -0.076 * H], 0.009 * H, 0.007 * H), 0.012 * H], // and back
+  ]);
+  const cut = (x, y, z) => Math.max(dome(x, y, z), -(y - 0.06 * H));
+  P.add(head, sculpt(cut, [-0.09 * H, 0.04 * H, -0.09 * H], [0.09 * H, 0.17 * H, 0.09 * H], 40, { keep: 0.5 }));
+  // the brim: a sloping ring with a rolled edge
+  P.lathe(head, [[0.072 * H, 0.068 * H], [0.135 * H, 0.04 * H], [0.14 * H, 0.032 * H], [0.135 * H, 0.03 * H], [0.07 * H, 0.06 * H]], 0, 48);
+  P.torus(head, 0.138 * H, 0.0045 * H, 0, 0.034 * H, 0, Math.PI / 2, Math.PI * 2, 48);
+  P.torus(head, 0.075 * H, 0.004 * H, 0, 0.066 * H, 0, Math.PI / 2, Math.PI * 2, 40); // the band
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    P.sphere(head, 0.0035 * H, Math.sin(a) * 0.077 * H, 0.072 * H, Math.cos(a) * 0.077 * H, null, 6);
+  }
 }
