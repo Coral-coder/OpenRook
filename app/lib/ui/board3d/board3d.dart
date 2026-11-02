@@ -33,7 +33,11 @@ class Board3D extends StatefulWidget {
     this.cinema,
     this.speed = 1,
     this.onIdle,
+    this.fill = false,
   });
+
+  /// Fill the space it's given (full-screen play) instead of a board-shaped box.
+  final bool fill;
 
   final Position position;
   final int ply;
@@ -163,6 +167,8 @@ class _Board3DState extends State<Board3D> {
       'sound': Settings.shared.moveSounds,
       'cinema': widget.cinema ?? (Settings.shared.cinematic ? 'fights' : 'off'),
       'speed': widget.speed,
+      'style': Settings.shared.style == 'toon' ? 'toon' : 'stone',
+      'view': Settings.shared.topDown ? 'top' : 'battle',
     });
     if (msg == _lastSent) return;
     _lastSent = msg;
@@ -184,21 +190,20 @@ class _Board3DState extends State<Board3D> {
         onImpact: widget.onImpact,
       );
     }
+    final view = _html == null
+        ? const Center(child: CircularProgressIndicator())
+        : Board3DView(
+            html: _html!,
+            onMessage: _onMessage,
+            onSender: (send) => _send = send,
+          );
+    if (widget.fill) return SizedBox.expand(child: view);
     return LayoutBuilder(builder: (context, c) {
       final w = c.maxWidth;
       return SizedBox(
         width: w,
         height: w * 0.95,
-        child: _html == null
-            ? const Center(child: CircularProgressIndicator())
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Board3DView(
-                  html: _html!,
-                  onMessage: _onMessage,
-                  onSender: (send) => _send = send,
-                ),
-              ),
+        child: ClipRRect(borderRadius: BorderRadius.circular(6), child: view),
       );
     });
   }

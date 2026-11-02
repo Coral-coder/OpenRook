@@ -5,6 +5,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../app/settings.dart';
+
 /// Listening for spoken moves and announcing moves out loud. Both run on the device's own
 /// speech engines (Apple / Google); nothing of ours is involved.
 class Voice extends ChangeNotifier {
@@ -23,14 +25,19 @@ class Voice extends ChangeNotifier {
     try {
       _sttReady = await _stt.initialize(
         onError: (e) {
-          error = e.permanent ? 'Speech recognition: ${e.errorMsg}' : null;
+          // in an open-mic session silence and no-match are normal: just listen again
+          final quiet = e.errorMsg.contains('no_match') || e.errorMsg.contains('speech_timeout') || e.errorMsg.contains('error_busy');
+          error = e.permanent && !(session && quiet) ? 'Speech recognition: ${e.errorMsg}' : null;
+          if (error != null && e.permanent && !quiet) session = false;
           listening = false;
           notifyListeners();
+          _maybeRestart();
         },
         onStatus: (s) {
           if (s == 'done' || s == 'notListening') {
             listening = false;
             notifyListeners();
+            _maybeRestart();
           }
         },
       );
@@ -72,26 +79,169 @@ class Voice extends ChangeNotifier {
   }
 
   Future<void> stopListening() async {
+    session = false;
+    _onPhrase = null;
     await _stt.stop();
     listening = false;
     notifyListeners();
+  }
+
+  // ------------------------------------------------------------------ always listening
+  /// True while the mic stays on for the whole game: it listens phrase after phrase,
+  /// steps aside while the board's voice speaks (so it doesn't hear itself), and comes back.
+  bool session = false;
+  void Function(List<String>)? _onPhrase;
+  bool _speaking = false;
+  Timer? _restart;
+
+  /// Starts (or keeps) the open-mic session; every phrase goes to [onPhrase].
+  Future<void> startSession(void Function(List<String> transcripts) onPhrase) async {
+    _onPhrase = onPhrase;
+    if (session) return;
+    session = true;
+    notifyListeners();
+    await _listenOnce();
+  }
+
+  Future<void> _listenOnce() async {
+    if (!session || _speaking || _stt.isListening) return;
+    error = null;
+    if (!await _initStt()) {
+      session = false;
+      notifyListeners();
+      return;
+    }
+    heard = '';
+    listening = true;
+    notifyListeners();
+    try {
+      await _stt.listen(
+        onResult: (SpeechRecognitionResult r) {
+          heard = r.recognizedWords;
+          notifyListeners();
+          if (r.finalResult) {
+            final cb = _onPhrase;
+            if (cb != null && r.recognizedWords.trim().isNotEmpty) cb([for (final a in r.alternates) a.recognizedWords]);
+          }
+        },
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+          listenFor: const Duration(seconds: 50),
+          pauseFor: const Duration(seconds: 3),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// The recogniser stopped (end of phrase, timeout or error): start again shortly.
+  void _maybeRestart() {
+    if (!session || _speaking) return;
+    _restart?.cancel();
+    _restart = Timer(const Duration(milliseconds: 400), _listenOnce);
+  }
+
+  // ------------------------------------------------------------------ the board's voice
+  List<Map<String, String>> _voices = [];
+
+  /// Text-to-speech voices on this device, best first (neural / premium / enhanced voices
+  /// in the device's language at the top).
+  Future<List<Map<String, String>>> voices() async {
+    if (_voices.isNotEmpty) return _voices;
+    try {
+      final raw = await _tts.getVoices as List? ?? const [];
+      _voices = [
+        for (final v in raw)
+          if (v is Map) {for (final e in v.entries) '${e.key}': '${e.value}'}
+      ];
+    } catch (_) {
+      _voices = [];
+    }
+    _voices = _voices.where((v) => (v['locale'] ?? '').toLowerCase().startsWith('en')).toList()
+      ..sort((a, b) => voiceScore(b).compareTo(voiceScore(a)));
+    return _voices;
+  }
+
+  /// How natural a voice is likely to sound, from what the platform tells us about it.
+  static int voiceScore(Map<String, String> v) {
+    final name = (v['name'] ?? '').toLowerCase();
+    final id = (v['identifier'] ?? '').toLowerCase();
+    final quality = (v['quality'] ?? '').toLowerCase();
+    final locale = (v['locale'] ?? '').toLowerCase().replaceAll('_', '-');
+    var s = 0;
+    if (quality.contains('premium') || id.contains('premium')) s += 60;
+    if (quality.contains('enhanced') || id.contains('enhanced')) s += 40;
+    if (name.contains('neural') || id.contains('neural') || name.contains('wavenet')) s += 45;
+    if (name.contains('network') || v['network_required'] == 'true' || v['network_required'] == '1') s += 30;
+    if (quality.contains('very high') || quality == '500') s += 25;
+    if (quality.contains('high') || quality == '400') s += 10;
+    if (locale == 'en-us') s += 6;
+    if (locale == 'en-gb') s += 8; // a British voice suits the castle
+    if (id.contains('compact') || name.contains('local') && name.contains('x-')) s -= 5;
+    if (id.contains('eloquence') || id.contains('speech.synthesis.voice.')) s -= 20; // novelty voices
+    return s;
+  }
+
+  Future<void> _pickVoice() async {
+    final s = Settings.shared;
+    final list = await voices();
+    Map<String, String>? v;
+    if (s.voiceName.isNotEmpty) {
+      for (final x in list) {
+        if (x['name'] == s.voiceName && (s.voiceLocale.isEmpty || x['locale'] == s.voiceLocale)) v = x;
+      }
+    }
+    v ??= list.isEmpty ? null : list.first;
+    if (v == null) return;
+    try {
+      await _tts.setVoice({'name': v['name']!, 'locale': v['locale'] ?? 'en-US'});
+    } catch (_) {}
+  }
+
+  /// Use a different voice (from settings); '' picks the best one automatically.
+  Future<void> useVoice(String name, String locale) async {
+    final s = Settings.shared;
+    s.voiceName = name;
+    s.voiceLocale = locale;
+    await s.save();
+    await _pickVoice();
   }
 
   Future<void> _initTts() async {
     if (_ttsReady) return;
     _ttsReady = true;
     try {
-      await _tts.setSpeechRate(kIsWeb ? 0.95 : 0.48);
-      await _tts.setPitch(0.85); // a little deeper, for the stone pieces
+      await _tts.setSpeechRate(kIsWeb ? 0.95 : 0.5);
+      await _tts.setPitch(0.9);
       await _tts.awaitSpeakCompletion(false);
+      if (!kIsWeb) await _tts.setSharedInstance(true);
+      _tts.setStartHandler(() => _speaking = true);
+      _tts.setCompletionHandler(_doneSpeaking);
+      _tts.setCancelHandler(_doneSpeaking);
+      _tts.setErrorHandler((_) => _doneSpeaking());
+      await _pickVoice();
     } catch (_) {}
+  }
+
+  void _doneSpeaking() {
+    _speaking = false;
+    _maybeRestart();
   }
 
   Future<void> say(String text) async {
     await _initTts();
+    if (session && _stt.isListening) {
+      // don't let the open mic hear the announcement
+      _speaking = true;
+      await _stt.stop();
+    }
     try {
+      _speaking = true;
       await _tts.speak(text);
-    } catch (_) {}
+    } catch (_) {
+      _doneSpeaking();
+    }
   }
 
   Future<void> stopSpeaking() async {

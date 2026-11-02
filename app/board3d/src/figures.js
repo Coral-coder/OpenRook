@@ -5,11 +5,20 @@
 // barbarian (rook), a crowned rogue (queen) and the crowned knight with a greatsword (king).
 // Black are the dead: skeleton minions, skeleton rogues, the skeleton mage, a hulking minion
 // with an axe and shield (rook), a crowned mage (queen) and the crowned warrior (king).
-// Every one of them stands on a stone pedestal carved with its chess symbol.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import MODELS from './models_data.gen.js';
+import { stoneMaterial } from './stone.js';
+
+// 'stone': living chess statues with heroic proportions (default). 'toon': the original KayKit look.
+let style = 'stone';
+export function setStyle(s) {
+  style = s === 'toon' ? 'toon' : 'stone';
+}
+export function getStyle() {
+  return style;
+}
 
 export const PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6;
 
@@ -57,43 +66,10 @@ export async function loadFigures() {
   return loaded;
 }
 
-// ------------------------------------------------------------------ pedestals with emblems
-const GLYPH = ['', '♟', '♞', '♝', '♜', '♛', '♚'];
-const emblemTex = {};
-function emblem(type, isWhite) {
-  const key = type + (isWhite ? 'w' : 'b');
-  if (emblemTex[key]) return emblemTex[key];
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const x = c.getContext('2d');
-  x.fillStyle = isWhite ? '#e9e1d0' : '#26201d';
-  x.beginPath();
-  x.arc(64, 64, 62, 0, Math.PI * 2);
-  x.fill();
-  x.lineWidth = 5;
-  x.strokeStyle = isWhite ? '#b8963e' : '#7a3b8c';
-  x.stroke();
-  x.fillStyle = isWhite ? '#8a6a24' : '#c9a7e0';
-  x.font = 'bold 84px "DejaVu Sans", "Segoe UI Symbol", "Apple Symbols", serif';
-  x.textAlign = 'center';
-  x.textBaseline = 'middle';
-  x.fillText(GLYPH[type] + '︎', 64, 70);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return (emblemTex[key] = t);
-}
-
-const pedestalGeo = new THREE.CylinderGeometry(0.33, 0.36, 0.08, 40);
-const topGeo = new THREE.CircleGeometry(0.31, 40);
-const PEDESTAL = {
-  white: new THREE.MeshStandardMaterial({ color: 0xece4d4, roughness: 0.35 }),
-  black: new THREE.MeshStandardMaterial({ color: 0x1f1a18, roughness: 0.28, metalness: 0.15 }),
-};
-
 // a small gold crown for the royals, parented to the head bone
 function crown(isWhite) {
   const g = new THREE.Group();
+  g.name = 'crown';
   const gold = new THREE.MeshStandardMaterial({ color: isWhite ? 0xe2b33c : 0x9b6bd1, roughness: 0.25, metalness: 0.9, emissive: isWhite ? 0x000000 : 0x2a0f40 });
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.22, 0.12, 20, 1, true), gold));
   for (let i = 0; i < 7; i++) {
@@ -114,18 +90,8 @@ export function buildFigure(code) {
   const type = code & 7, isWhite = (code & 8) === 0;
   const spec = ROSTER[isWhite ? 'white' : 'black'][type];
   const group = new THREE.Group();
-  // pedestal with the piece's emblem on top
-  const ped = new THREE.Mesh(pedestalGeo, PEDESTAL[isWhite ? 'white' : 'black']);
-  ped.position.y = 0.04;
-  ped.receiveShadow = ped.castShadow = true;
-  group.add(ped);
-  const top = new THREE.Mesh(topGeo, new THREE.MeshStandardMaterial({ map: emblem(type, isWhite), roughness: 0.4 }));
-  top.rotation.x = -Math.PI / 2;
-  top.position.y = 0.081;
-  group.add(top);
-
-  const inner = new THREE.Group(); // everything above the pedestal (moved by effects)
-  inner.position.y = 0.08;
+  // the figure stands right on its square: no base
+  const inner = new THREE.Group(); // the figure itself (moved by effects)
   group.add(inner);
   const src = loaded.byName[spec.model];
   const model = SkeletonUtils.clone(src.scene);
@@ -175,12 +141,73 @@ export function buildFigure(code) {
   // normalise the height so each piece towers over its square by its rank
   const box = new THREE.Box3().setFromObject(model);
   const h = box.max.y - box.min.y || 1;
-  model.scale.setScalar(spec.height / h);
+  const stone = style === 'stone';
+  // the stone statues are lengthened to heroic proportions, so start them a little smaller
+  model.scale.setScalar((spec.height / h) * (stone ? 0.86 : 1));
   inner.add(model);
 
+  const materials = [];
+  if (stone) {
+    const side = isWhite ? 'white' : 'black';
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      let held = false;
+      for (let q = o.parent; q; q = q.parent) if (/^handslot|^crown$/.test(q.name)) held = true;
+      const kind = o.material?.name === 'Glow' || /_Eyes$/.test(o.name) ? 2 : held || /crown/.test(o.name) ? 1 : 0;
+      o.material = stoneMaterial(o.material, side, kind);
+      materials.push(o.material);
+    });
+  } else {
+    model.traverse((o) => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        materials.push(o.material);
+      }
+    });
+  }
+
   const mixer = new THREE.AnimationMixer(model);
-  const fig = { group, type, isWhite, code, spec, model, mixer, current: null, parts: { inner } };
+  if (stone) {
+    // heroic proportions: a smaller head, longer legs and arms, a taller torso. The clips
+    // key every bone's scale, so this is re-applied after each update.
+    const bones = {};
+    model.traverse((o) => {
+      if (o.isBone) bones[o.name] = o;
+    });
+    const update = mixer.update.bind(mixer);
+    mixer.update = (dt) => {
+      update(dt);
+      bones.head?.scale.setScalar(0.62);
+      bones.spine?.scale.set(1, 1.18, 1);
+      for (const s2 of ['l', 'r']) {
+        bones['upperleg' + s2]?.scale.set(1, 1.32, 1);
+        bones['upperarm' + s2]?.scale.set(1, 1.18, 1);
+      }
+      if (bones.hips) bones.hips.position.y += 0.17; // keep the longer legs on the ground
+      return mixer;
+    };
+  }
+  const fig = { group, type, isWhite, code, spec, model, mixer, current: null, parts: { inner }, materials, stone };
   return fig;
+}
+
+/** Fades a figure (0 invisible .. 1 solid), for pieces in the camera's way and for deaths. */
+export function setOpacity(fig, o) {
+  if (fig.opacity === o) return;
+  fig.opacity = o;
+  for (const m of fig.materials) {
+    m.transparent = o < 0.999;
+    m.opacity = o;
+    m.depthWrite = o > 0.6;
+  }
+}
+
+/** Rots a stone figure (0 alive .. 1 crumbling); toon figures darken. */
+export function setRot(fig, r) {
+  for (const m of fig.materials) {
+    if (m.userData.uniforms) m.userData.uniforms.uRot.value = r;
+    else m.color.setScalar(1 - 0.75 * r);
+  }
 }
 
 /** Name of the clip a piece uses for an action ('idle', 'walk', 'attack', 'finish' ...). */
@@ -257,4 +284,43 @@ export function hasClip(name) {
 
 export function clipDuration(name) {
   return loaded.clips[name]?.duration || 1;
+}
+
+/**
+ * The bare skeleton left when a statue rots away: a bone-white skeleton in exactly the
+ * dying figure's pose (both rigs share bone names), placed where the figure lies.
+ */
+export function buildRemains(fig) {
+  const model = SkeletonUtils.clone(loaded.byName.skeleton_minion.scene);
+  const bonesFrom = {};
+  fig.model.traverse((o) => {
+    if (o.isBone) bonesFrom[o.name] = o;
+  });
+  const materials = [];
+  const bone = new THREE.MeshStandardMaterial({ color: 0xcdbf9c, roughness: 0.85, metalness: 0 });
+  model.traverse((o) => {
+    if (/^handslot/i.test(o.name.replace('.', ''))) for (const c of o.children) c.visible = false;
+    if (o.isBone && bonesFrom[o.name]) o.quaternion.copy(bonesFrom[o.name].quaternion); // the same pose
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.frustumCulled = false;
+      o.material = /_Eyes$/.test(o.name) || o.material?.name === 'Glow' ? new THREE.MeshBasicMaterial({ color: 0x000000 }) : bone.clone();
+      materials.push(o.material);
+    }
+  });
+  model.scale.copy(fig.model.scale);
+  model.position.copy(fig.model.position);
+  model.quaternion.copy(fig.model.quaternion);
+  const group = new THREE.Group();
+  const inner = new THREE.Group();
+  inner.position.copy(fig.parts.inner.position);
+  inner.quaternion.copy(fig.parts.inner.quaternion);
+  inner.add(model);
+  group.add(inner);
+  group.position.copy(fig.group.position);
+  group.quaternion.copy(fig.group.quaternion);
+  // the same pose puts the bones where the body lies; just rest them on the board
+  group.updateMatrixWorld(true);
+  group.position.y -= new THREE.Box3().setFromObject(group, true).min.y - 0.01;
+  return { group, model, materials, isWhite: fig.isWhite, parts: { inner }, opacity: 1 };
 }
