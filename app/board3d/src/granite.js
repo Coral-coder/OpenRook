@@ -50,14 +50,14 @@ export function granite(side, { grain = 48, offset = [0, 0, 0] } = {}) {
         float pit = smoothstep(0.8, 0.9, n3(gp * 1.2 + 11.0));    // weathered pits
         vec3 stone = mix(uTint, uTint2, g);
         stone = mix(stone, stone * 1.12, fleck * 0.5);
-        stone *= 1.0 - 0.12 * pit;
+        stone *= 1.0 - 0.06 * pit;
         // crumbling: the stone darkens and dries out as the piece is destroyed
         stone = mix(stone, stone * vec3(0.55, 0.5, 0.45), uRot);
         diffuseColor.rgb = stone;`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         // chisel-roughened surface: bump from the same grain
         {
-          float hh = (fbm(vGrain * uGrain * 1.9) + 0.6 * pit) * 0.004;
+          float hh = (fbm(vGrain * uGrain * 1.9) + 0.3 * pit) * 0.0022;
           vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
           float dhx = dFdx(hh), dhy = dFdy(hh);
           vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);

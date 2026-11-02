@@ -1,56 +1,124 @@
-// The pawn: carved on the shared skeleton (joint names and positions are what statues.js animates).
+// The pawn: a sturdy foot soldier who waits crouched behind his blades and rises to fight. A
+// quilted gambeson buttoned down the front, with a padded collar, quilted sleeves and a
+// quilted skirt; a belt with a buckle, a pouch and a dagger; leather bracers; hose over
+// muscled legs, leather knee cops, turned-down boots. A young face under a combed kettle hat
+// with a riveted band and a chin strap. Two arming swords with fullered blades.
+// (Carved on the shared skeleton: joint names and positions are what statues.js animates.)
 import * as THREE from 'three';
-import { V2, armouredArms, armouredLegs, carve, cuirass, drape, face, folds, greatHelm, joint, resample, robeSkirt, skeleton } from '../carving.js';
+import { carve, skeleton } from '../carving.js';
+import { boot, hand, lathe, muscleLimb, outward, quilt, robe, sculptHead, sword } from './bp_kit.js';
 
 export function pawn(J, root, P) {
-    const H = 0.6;
-    const legs = skeleton(J, root, H);
-    // a quilted gambeson, belted, over mail
-    const gam = new THREE.LatheGeometry(V2(resample([[0.094 * H, 0], [0.106 * H, 0.06 * H], [0.13 * H, 0.13 * H], [0.128 * H, 0.17 * H], [0.07 * H, 0.21 * H], [0, 0.21 * H]], 16)), 36);
-    const gp = gam.attributes.position;
-    for (let i = 0; i < gp.count; i++) {
-      const y = gp.getY(i), k = 1 + 0.035 * Math.abs(Math.sin((y / (0.021 * H)) * Math.PI)); // quilted bands
-      gp.setXYZ(i, gp.getX(i) * k, y, gp.getZ(i) * k * 0.78);
-    }
-    gam.computeVertexNormals();
-    P.add(J.spine, gam);
-    P.belt(J.hips, 0.1 * H, 0.04 * H);
-    const skirt = new THREE.LatheGeometry(V2(resample([[0.1 * H, 0.04 * H], [0.115 * H, -0.04 * H], [0.13 * H, -0.12 * H], [0.11 * H, -0.12 * H]], 8)), 36);
-    folds(skirt, 8, 0.08, 0.0, -0.12 * H);
-    P.add(J.hips, skirt);
-    P.cyl(J.neck, 0.036 * H, 0.046 * H, 0.06 * H, 0, 0, 0);
-    P.torus(J.neck, 0.05 * H, 0.012 * H, 0, -0.02 * H, 0, Math.PI / 2); // padded collar
-    // a tabard with a cross
-    const tab = drape(0.16 * H, 0.32 * H, { bend: 0.4, folds: 3, depth: 0.008 * H });
-    P.geo(J.chest, tab, 0, -0.1 * H, 0.098 * H, 0.06, 0, 0);
-    P.box(J.chest, 0.014 * H, 0.12 * H, 0.006 * H, 0, -0.02 * H, 0.104 * H);
-    P.box(J.chest, 0.08 * H, 0.014 * H, 0.006 * H, 0, 0.01 * H, 0.104 * H);
-    for (const s of [1, -1]) {
-      const side = s > 0 ? 'L' : 'R';
-      P.limb(J['sh' + side], 0.18 * H, 0.054 * H, 0.044 * H, 0.002);
-      for (let i = 0; i < 3; i++) P.torus(J['sh' + side], 0.05 * H - i * 0.003 * H, 0.006 * H, 0, -0.05 * H - i * 0.05 * H, 0); // quilting
-      P.limb(J['el' + side], 0.155 * H, 0.044 * H, 0.034 * H, 0.002);
-      P.lathe(J['el' + side], [[0.035 * H, -0.09 * H], [0.048 * H, -0.12 * H], [0.044 * H, -0.155 * H], [0.034 * H, -0.155 * H]], 0, 18); // leather bracer
-      P.gauntlet(J['wr' + side], 0.1 * H, s);
-      P.limb(J['hip' + side], 0.225 * H, 0.066 * H, 0.05 * H, 0.002);
-      P.limb(J['knee' + side], 0.215 * H, 0.05 * H, 0.042 * H, 0.002);
-      P.lathe(J['knee' + side], [[0.046 * H, -0.08 * H], [0.056 * H, -0.1 * H], [0.052 * H, -0.215 * H], [0.044 * H, -0.215 * H]], 0, 18); // boot
-      P.sphere(J['knee' + side], 0.052 * H, 0, 0, 0.015 * H, [1, 1, 0.9], 12);
-      P.sabaton(J['ankle' + side], 0.07 * H, 0.045 * H, 0.13 * H, -0.02 * H);
-    }
-    face(J.head, P, H);
-    // a kettle hat: a riveted dome and a wide sloping brim
-    P.cap(J.head, 0.074 * H, 0, 0.068 * H, 0, [1, 1.1, 1]);
-    P.lathe(J.head, [[0.07 * H, 0], [0.13 * H, -0.03 * H], [0.132 * H, -0.022 * H], [0.07 * H, 0.012 * H]], 0.07 * H, 36);
-    P.torus(J.head, 0.074 * H, 0.004 * H, 0, 0.072 * H, 0, Math.PI / 2, Math.PI * 2, 32);
-    P.rivets(J.head, 0.075 * H, 0.075 * H, 10, 0.004 * H);
-    P.box(J.head, 0.008 * H, 0.07 * H, 0.15 * H, 0, 0.11 * H, 0, 0, 0, 0);
-    const bL = P.sword(J.wrL, H, 0.42);
-    bL.name = 'weapon2';
-    bL.position.set(0, -0.05 * H, 0.02 * H);
-    const bR = P.sword(J.wrR, H, 0.42);
-    bR.position.set(0, -0.05 * H, 0.02 * H);
-    J.weapon = bR;
-    J.weapon2 = bL;
-    return { H, legs, style: 'dual' };
+  const H = 0.6;
+  const legs = skeleton(J, root, H);
+
+  // ---- the gambeson
+  const body = new THREE.LatheGeometry(
+    [[0.0001, -0.005], [0.096, -0.005], [0.106, 0.05], [0.124, 0.11], [0.136, 0.16], [0.14, 0.185], [0.118, 0.205], [0.066, 0.218], [0.0001, 0.22]]
+      .flatMap(([r, y], i, a) => {
+        if (i === a.length - 1) return [new THREE.Vector2(r * H, y * H)];
+        const [r1, y1] = a[i + 1];
+        return [0, 1, 2, 3].map((k) => new THREE.Vector2((r + ((r1 - r) * k) / 4) * H, (y + ((y1 - y) * k) / 4) * H));
+      }),
+    44,
+  );
+  outward(body);
+  quilt(body, 20, 0.0, 0.045); // vertical channels
+  quilt(body, 0, 0.034 * H, 0.025); // and rows
+  body.scale(1, 1, 0.8);
+  P.add(J.spine, body);
+  for (let i = 0; i < 6; i++) P.sphere(J.spine, 0.006 * H, 0, 0.03 * H + i * 0.03 * H, (0.106 + (i > 1 ? 0.014 : 0) + (i > 3 ? 0.006 : 0)) * H * 0.8 + 0.006 * H, [1, 1, 0.6], 8); // buttons
+  // padded shoulders
+  for (const s of [-1, 1]) P.add(J.chest, quilt(new THREE.SphereGeometry(0.058 * H, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), 12, 0, 0.04), s * 0.118 * H, 0.08 * H, 0, 0, 0, s * 0.45, [1.0, 0.55, 0.95]);
+  // padded collar
+  const collar = new THREE.LatheGeometry([[0.04, -0.03], [0.058, -0.025], [0.062, 0.0], [0.056, 0.02], [0.044, 0.024]].map(([r, y]) => new THREE.Vector2(r * H, y * H)), 32);
+  outward(collar);
+  quilt(collar, 14, 0, 0.06);
+  P.add(J.neck, collar);
+  P.cyl(J.neck, 0.036 * H, 0.044 * H, 0.06 * H, 0, 0, 0, 0, 0, 0, 16);
+  // quilted skirt from the belt (open at the hem, flaring, split a little at the front)
+  const skirt = robe([[0.1 * H, 0.05 * H], [0.112 * H, -0.02 * H], [0.13 * H, -0.1 * H], [0.142 * H, -0.15 * H], [0.13 * H, -0.152 * H], [0.118 * H, -0.1 * H]], { folds: 10, depth: 0.05, seg: 44, rows: 12, seed: 7, flat: 0.86 });
+  quilt(skirt, 18, 0.045 * H, 0.04);
+  P.add(J.hips, skirt);
+  // belt, buckle, pouch, dagger
+  P.belt(J.hips, 0.104 * H, 0.03 * H);
+  const pouch = new THREE.CapsuleGeometry(0.022 * H, 0.02 * H, 4, 10);
+  pouch.scale(1, 1, 0.6);
+  P.add(J.hips, pouch, 0.085 * H, -0.0 * H, 0.06 * H, 0, -0.6, 0);
+  P.box(J.hips, 0.04 * H, 0.012 * H, 0.03 * H, 0.085 * H, 0.025 * H, 0.06 * H, 0, -0.6, 0); // its flap
+  const dg = new THREE.Group();
+  dg.position.set(-0.1 * H, 0.0, 0.03 * H);
+  dg.rotation.set(0.2, 0.3, -0.15);
+  J.hips.add(dg);
+  P.cyl(dg, 0.009 * H, 0.006 * H, 0.09 * H, 0, -0.05 * H, 0, 0, 0, 0, 8); // scabbard
+  P.cyl(dg, 0.007 * H, 0.007 * H, 0.03 * H, 0, 0.012 * H, 0, 0, 0, 0, 8);
+  P.sphere(dg, 0.009 * H, 0, 0.03 * H, 0, null, 8);
+  P.box(dg, 0.04 * H, 0.008 * H, 0.01 * H, 0, -0.004 * H, 0);
+
+  // ---- arms: quilted sleeves, leather bracers, fists round the hilts
+  for (const s of [1, -1]) {
+    const side = s > 0 ? 'L' : 'R';
+    const ua = muscleLimb(0.18 * H, 0.056 * H, 0.046 * H, { bulge: 0.16, at: 0.35, seg: 16, rows: 10 });
+    quilt(ua, 12, 0, 0.035);
+    P.add(J['sh' + side], ua);
+    const fa = muscleLimb(0.155 * H, 0.046 * H, 0.036 * H, { bulge: 0.2, at: 0.2, seg: 16, rows: 10 });
+    carve(fa, 0.002 * H, 60 / H);
+    P.add(J['el' + side], fa);
+    // leather bracer, laced
+    lathe(P, J['el' + side], [[0.04 * H, -0.075 * H], [0.047 * H, -0.08 * H], [0.044 * H, -0.15 * H], [0.038 * H, -0.156 * H], [0.034 * H, -0.15 * H]], 0, 22);
+    for (let i = 0; i < 4; i++) P.box(J['el' + side], 0.03 * H, 0.003 * H, 0.004 * H, 0, -0.09 * H - i * 0.016 * H, -0.046 * H, 0, 0, (i % 2 ? 1 : -1) * 0.5);
+    hand(P, J['wr' + side], 0.1 * H, s, 'grip');
   }
+
+  // ---- legs: hose over muscled thighs and calves, knee cops, boots
+  for (const s of [1, -1]) {
+    const side = s > 0 ? 'L' : 'R';
+    const th = muscleLimb(0.225 * H, 0.066 * H, 0.048 * H, { bulge: 0.14, at: 0.28, seg: 16, rows: 10 });
+    carve(th, 0.0025 * H, 50 / H);
+    P.add(J['hip' + side], th);
+    const sh = muscleLimb(0.215 * H, 0.05 * H, 0.038 * H, { bulge: 0.08, at: 0.3, back: 0.3, seg: 16, rows: 10 });
+    P.add(J['knee' + side], sh);
+    // a hardened-leather knee cop with a strap
+    const cop = new THREE.SphereGeometry(0.05 * H, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    P.add(J['knee' + side], cop, 0, 0, 0.014 * H, Math.PI / 2, 0, 0, [1, 1, 0.75]);
+    P.torus(J['knee' + side], 0.052 * H, 0.004 * H, 0, -0.03 * H, 0, Math.PI / 2, Math.PI * 2, 20);
+    boot(P, J['knee' + side], J['ankle' + side], H, 0.215 * H);
+  }
+
+  // ---- the head under a kettle hat
+  const r = 0.062 * H;
+  P.add(J.head, sculptHead(r, { seg: 32 }), 0, 0.05 * H, 0);
+  // hair at the nape
+  const hair = new THREE.SphereGeometry(r * 1.03, 24, 12, (Math.PI * 5) / 6, (Math.PI * 4) / 3, Math.PI * 0.35, Math.PI * 0.3);
+  carve(hair, r * 0.06, 20 / r);
+  P.add(J.head, hair, 0, 0.05 * H, 0);
+  const hat = new THREE.Group();
+  hat.position.set(0, 0.05 * H, -0.004 * H);
+  hat.rotation.x = -0.12; // tipped back a little
+  J.head.add(hat);
+  // the dome, the band with its rivets, the wide sloping brim with a rolled edge, the comb
+  lathe(P, hat, [[0.0001, 0.115 * H], [0.03 * H, 0.112 * H], [0.058 * H, 0.096 * H], [0.074 * H, 0.066 * H], [0.078 * H, 0.04 * H], [0.077 * H, 0.03 * H]], 0, 32);
+  lathe(P, hat, [[0.079 * H, 0.026 * H], [0.081 * H, 0.03 * H], [0.081 * H, 0.046 * H], [0.078 * H, 0.05 * H]], 0, 32);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    P.sphere(hat, 0.004 * H, Math.sin(a) * 0.082 * H, 0.038 * H, Math.cos(a) * 0.082 * H, null, 6);
+  }
+  lathe(P, hat, [[0.077 * H, 0.03 * H], [0.11 * H, 0.012 * H], [0.13 * H, 0.0], [0.133 * H, -0.006 * H], [0.129 * H, -0.004 * H], [0.112 * H, 0.004 * H], [0.077 * H, 0.022 * H]], 0, 32);
+  const comb = new THREE.Shape();
+  comb.moveTo(-0.07 * H, 0);
+  comb.quadraticCurveTo(0, 0.07 * H, 0.07 * H, 0);
+  const cg = new THREE.ExtrudeGeometry(comb, { depth: 0.008 * H, bevelEnabled: true, bevelThickness: 0.002 * H, bevelSize: 0.002 * H, bevelSegments: 1, curveSegments: 14 });
+  cg.translate(0, 0, -0.004 * H);
+  P.add(hat, cg, 0, 0.06 * H, 0, 0, Math.PI / 2, 0);
+  // chin strap
+  P.add(hat, new THREE.TorusGeometry(0.066 * H, 0.0035 * H, 6, 24, Math.PI), 0, 0.03 * H, 0.004 * H, Math.PI, Math.PI / 2, 0, [1, 1.35, 1]);
+
+  // ---- two arming swords
+  const bL = sword(P, J.wrL, H, 0.42, 'weapon2');
+  bL.position.set(0, -0.032 * H, 0.03 * H);
+  const bR = sword(P, J.wrR, H, 0.42, 'weapon');
+  bR.position.set(0, -0.032 * H, 0.03 * H);
+  J.weapon = bR;
+  J.weapon2 = bL;
+  return { H, legs, style: 'dual' };
+}

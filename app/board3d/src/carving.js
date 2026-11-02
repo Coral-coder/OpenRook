@@ -73,6 +73,25 @@ export function drape(w, h, { bend = 0.2, folds: nf = 5, depth = 0.04, seg = 24 
   return g;
 }
 
+// A turned shape faces inward when its profile runs top to bottom; turn it outward.
+export function outward(g) {
+  g.computeVertexNormals();
+  const p = g.attributes.position, n = g.attributes.normal;
+  let dot = 0;
+  for (let i = 0; i < p.count; i++) dot += n.getX(i) * p.getX(i) + n.getZ(i) * p.getZ(i);
+  if (dot < 0 && g.index) {
+    const ix = g.index.array;
+    for (let i = 0; i < ix.length; i += 3) {
+      const t = ix[i + 1];
+      ix[i + 1] = ix[i + 2];
+      ix[i + 2] = t;
+    }
+    g.index.needsUpdate = true;
+    g.computeVertexNormals();
+  }
+  return g;
+}
+
 export const V2 = (pts) => pts.map(([r, y]) => new THREE.Vector2(r, y));
 
 // ------------------------------------------------------------------ the parts kit
@@ -93,7 +112,7 @@ export function kit(mat) {
     cyl: (parent, r1, r2, h, x, y, z, rx = 0, ry = 0, rz = 0, seg = 18) => add(parent, new THREE.CylinderGeometry(r1, r2, h, seg), x, y, z, rx, ry, rz),
     box: (parent, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => add(parent, new THREE.BoxGeometry(w, h, d), x, y, z, rx, ry, rz),
     torus: (parent, r, t, x, y, z, rx = Math.PI / 2, arc = Math.PI * 2, seg = 32) => add(parent, new THREE.TorusGeometry(r, t, 8, seg, arc), x, y, z, rx),
-    lathe: (parent, pts, y = 0, seg = 28, s = null) => add(parent, new THREE.LatheGeometry(V2(pts), seg), 0, y, 0, 0, 0, 0, s),
+    lathe: (parent, pts, y = 0, seg = 28, s = null) => add(parent, outward(new THREE.LatheGeometry(V2(pts), seg)), 0, y, 0, 0, 0, 0, s),
     geo: (parent, g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = null) => add(parent, g, x, y, z, rx, ry, rz, s),
     rivets(parent, ring, y, n, size, z0 = 0, from = 0, to = Math.PI * 2) {
       for (let i = 0; i < n; i++) {
