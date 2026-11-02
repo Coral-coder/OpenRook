@@ -174,6 +174,7 @@ class _Board3DState extends State<Board3D> {
       'cinema': widget.cinema ?? (Settings.shared.cinematic ? 'fights' : 'off'),
       'speed': widget.speed,
       'style': Settings.shared.style == 'toon' ? 'toon' : 'stone',
+      'room': Settings.shared.room,
       'view': Settings.shared.topDown ? 'top' : 'battle',
     });
     if (msg == _lastSent) return;

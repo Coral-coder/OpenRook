@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
+import { setupPost } from './post.js';
 import { stoneTime } from './stone.js';
 import { granite } from './granite.js';
 import { Rubble } from './rubble.js';
@@ -35,9 +36,13 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const atmosphere = setupAtmosphere(scene);
 
-const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 260);
+const post = setupPost(renderer);
+// what the tilt-shift keeps sharp: the board and everything standing on it
+const FOCUS_PTS = [];
+for (const x of [-4.3, 4.3]) for (const z of [-4.3, 4.3]) for (const y of [-0.2, 1.5]) FOCUS_PTS.push(new THREE.Vector3(x, y, z));
 
-scene.add(new THREE.HemisphereLight(0xb9c3d2, 0x1c1a18, 0.75));
+scene.add(new THREE.HemisphereLight(0xb9c3d2, 0x1c1a18, 0.3));
 // cold daylight falling from high windows
 const sun = new THREE.DirectionalLight(0xe2e8f0, 2.3);
 sun.position.set(-5, 11, 6);
@@ -99,11 +104,6 @@ const sqDark = new THREE.MeshStandardMaterial({ color: 0x2c2522, roughness: 0.3 
   plinth.position.y = -0.45;
   plinth.receiveShadow = true;
   scene.add(plinth);
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 48), new THREE.MeshStandardMaterial({ color: 0x1c1612, roughness: 0.9 }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = -0.65;
-  floor.receiveShadow = true;
-  scene.add(floor);
   // coordinates on the frame
   const label = (text, x, z) => {
     const c = document.createElement('canvas');
@@ -192,6 +192,8 @@ function receive(json) {
   const msg = typeof json === 'string' ? JSON.parse(json) : json;
   if (msg.type !== 'state') return;
   setSound(msg.sound !== false);
+  atmosphere.setRoom(msg.room || 'apothecary');
+  sun.color.set(atmosphere.key);
   if ((msg.style || 'stone') !== getStyle()) {
     // a different look: rebuild every figure
     setStyle(msg.style);
@@ -252,6 +254,8 @@ function fitCamera() {
   renderer.domElement.style.height = h + 'px';
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  const dpr = renderer.getPixelRatio();
+  post.setSize(Math.round(w * dpr), Math.round(h * dpr));
 }
 window.addEventListener('resize', fitCamera);
 fitCamera();
@@ -277,7 +281,7 @@ const topDown = () => state.view === 'top';
 function playerView() {
   const az = azimuth + user.az;
   // the top-down view looks almost straight down, so every piece is easy to read
-  const baseEl = camera.aspect < 0.8 ? 1.08 : BASE_EL; // tall phone screens look down more, so the board fills them
+  const baseEl = camera.aspect < 0.8 ? 0.98 : BASE_EL; // tall phone screens look down more, so the board fills them
   const el = topDown() ? Math.min(1.53, Math.max(1.0, 1.5 + user.el)) : Math.min(1.4, Math.max(0.22, baseEl + user.el));
   const dist = boardDist() * user.zoom * (topDown() ? 0.86 : 1);
   const target = new THREE.Vector3(0, -0.2, 0.25 * Math.cos(azimuth)).add(user.pan);
@@ -344,6 +348,21 @@ function resetView() {
 }
 
 // For recording previews: aim the camera (pan to x/z, zoom, orbit).
+window.__high = () => {
+  const out = [];
+  for (const p of pieces.values()) p.fig.group.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry.computeBoundingBox();
+    const b = new THREE.Box3().copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+    if (b.max.y > 3) out.push(p.code + ' ' + o.parent.name + ' local ' + o.geometry.boundingBox.min.toArray().map((v) => v.toFixed(2)) + ' / ' + o.geometry.boundingBox.max.toArray().map((v) => v.toFixed(2)));
+  });
+  return [...new Set(out)];
+};
+window.__probe = (x, y) => {
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(x, y), camera);
+  return rc.intersectObjects(scene.children, true).slice(0, 4).map((h) => { const c = []; for (let o = h.object; o; o = o.parent) c.push(o.type + ':' + (o.name || '') + (o.geometry ? '/' + o.geometry.type : '')); return h.distance.toFixed(1) + ' ' + h.point.toArray().map((v) => v.toFixed(1)).join(',') + ' ' + c.join(' < '); });
+};
 window.__view = (x, z, zoom = 1, az = 0, el = 0) => {
   user.pan.set(x, 0, z);
   user.zoom = zoom;
@@ -1291,6 +1310,10 @@ function frame(now) {
   tick(dt);
   requestAnimationFrame(frame);
 }
+window.__room = (r) => {
+  atmosphere.setRoom(r);
+  sun.color.set(atmosphere.key);
+};
 window.__manual = () => {
   manual = true;
 };
@@ -1300,7 +1323,7 @@ window.__isIdle = () => !wasBusy && !current && !queue.length && !deaths.length;
 
 function tick(realDt) {
   if (!ready) {
-    renderer.render(scene, camera);
+    post.render(scene, camera);
     return;
   }
   let dt = realDt * (state.speed || 1);
@@ -1392,7 +1415,8 @@ function tick(realDt) {
   particles.update(dt);
   updateCamera(realDt);
   fadeBlockers(realDt);
-  renderer.render(scene, camera);
+  post.focusOn(camera, FOCUS_PTS);
+  post.render(scene, camera);
   const nowBusy = busy || slowLeft > 0;
   if (wasBusy && !nowBusy) send({ type: 'idle', ply: state.ply });
   // the app waits for this before the computer replies: the board shows this position and

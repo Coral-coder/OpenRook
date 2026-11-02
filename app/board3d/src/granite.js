@@ -24,7 +24,7 @@ const NOISE = /* glsl */ `
  * side: 'white' | 'black'. grain: pattern size (bigger = finer). Each call makes its own
  * material, so a figure can crumble (uRot) or fade (opacity) on its own.
  */
-export function granite(side, { grain = 26, offset = [0, 0, 0] } = {}) {
+export function granite(side, { grain = 48, offset = [0, 0, 0] } = {}) {
   const white = side === 'white';
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
@@ -47,10 +47,10 @@ export function granite(side, { grain = 26, offset = [0, 0, 0] } = {}) {
         vec3 gp = vGrain * uGrain;
         float g = fbm(gp);
         float fleck = smoothstep(0.78, 0.86, n3(gp * 3.1));       // crystals in the stone
-        float pit = smoothstep(0.72, 0.8, n3(gp * 1.7 + 11.0));   // weathered pits
+        float pit = smoothstep(0.8, 0.9, n3(gp * 1.2 + 11.0));    // weathered pits
         vec3 stone = mix(uTint, uTint2, g);
-        stone = mix(stone, stone * 1.18, fleck * 0.6);
-        stone *= 1.0 - 0.28 * pit;
+        stone = mix(stone, stone * 1.12, fleck * 0.5);
+        stone *= 1.0 - 0.12 * pit;
         // crumbling: the stone darkens and dries out as the piece is destroyed
         stone = mix(stone, stone * vec3(0.55, 0.5, 0.45), uRot);
         diffuseColor.rgb = stone;`)

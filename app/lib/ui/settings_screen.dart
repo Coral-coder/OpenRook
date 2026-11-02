@@ -52,6 +52,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onSelectionChanged: (v) => setState(() => s.style = v.first),
               ),
             ),
+            ListTile(
+              title: const Text('Room'),
+              subtitle: Text(
+                s.room == 'tower'
+                    ? 'Astronomy tower: telescopes, star charts and books under a moonlit sky'
+                    : 'Apothecary cabin: jars and bottles, drying herbs and candlelight',
+              ),
+              trailing: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'apothecary', label: Text('Cabin')),
+                  ButtonSegment(value: 'tower', label: Text('Tower')),
+                ],
+                selected: {s.room},
+                onSelectionChanged: (v) => setState(() => s.room = v.first),
+              ),
+            ),
             SwitchListTile(
               title: const Text('Top-down view'),
               subtitle: const Text('Look straight down on the board (easier to read the position)'),
