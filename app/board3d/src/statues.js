@@ -13,7 +13,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { granite } from './granite.js';
-import { BUILD, kit, pedestal } from './carving.js';
+import { kit, pedestal } from './carving.js';
+import { BUILD } from './pieces/index.js';
 
 export const PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6;
 export const PED = 0.215; // pedestal height
