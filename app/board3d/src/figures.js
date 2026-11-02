@@ -300,11 +300,7 @@ export function buildRemains(fig) {
   const bone = new THREE.MeshStandardMaterial({ color: 0xcdbf9c, roughness: 0.85, metalness: 0 });
   model.traverse((o) => {
     if (/^handslot/i.test(o.name.replace('.', ''))) for (const c of o.children) c.visible = false;
-    if (o.isBone && bonesFrom[o.name]) {
-      o.position.copy(bonesFrom[o.name].position);
-      o.quaternion.copy(bonesFrom[o.name].quaternion);
-      o.scale.copy(bonesFrom[o.name].scale);
-    }
+    if (o.isBone && bonesFrom[o.name]) o.quaternion.copy(bonesFrom[o.name].quaternion); // the same pose
     if (o.isMesh) {
       o.castShadow = true;
       o.frustumCulled = false;
@@ -323,5 +319,8 @@ export function buildRemains(fig) {
   group.add(inner);
   group.position.copy(fig.group.position);
   group.quaternion.copy(fig.group.quaternion);
+  // the same pose puts the bones where the body lies; just rest them on the board
+  group.updateMatrixWorld(true);
+  group.position.y -= new THREE.Box3().setFromObject(group, true).min.y - 0.01;
   return { group, model, materials, isWhite: fig.isWhite, parts: { inner }, opacity: 1 };
 }
