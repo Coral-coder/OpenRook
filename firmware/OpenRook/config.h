@@ -1,11 +1,11 @@
 // OpenRook firmware configuration.
 //
-// Pins are for a 38-pin ESP32 DevKit V1 (ESP32-WROOM-32). See hardware/WIRING.md for the
-// full schematic. Mechanical numbers match 3d-prints/common.scad: change both together.
+// Pins are for an Espressif ESP32-DevKitC-32E (any ESP32-WROOM DevKit works). See
+// hardware/WIRING.md and hardware/schematic/ for the full circuit. Mechanical numbers match 3d-prints/common.scad: change both together.
 #pragma once
 
 // ---------------------------------------------------------------- pins
-// CoreXY stepper drivers (TMC2209 or A4988 in STEP/DIR mode).
+// CoreXY stepper drivers (TMC2209 StepStick modules in STEP/DIR mode, MS1 = MS2 = 3V3).
 #define PIN_A_STEP 25
 #define PIN_A_DIR 26
 #define PIN_B_STEP 27

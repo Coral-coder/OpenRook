@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.lightwave.openrook"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = maxOf(flutter.compileSdkVersion, 37) // speech_to_text needs 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

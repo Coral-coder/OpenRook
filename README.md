@@ -17,7 +17,7 @@ servers: games travel through public relays, and nothing needs to be hosted.
 | Folder | What |
 | --- | --- |
 | [`3d-prints/`](3d-prints/) | Every printable part: STLs ready to slice, plus parametric OpenSCAD sources. |
-| [`hardware/`](hardware/) | What to buy ([BOM](hardware/BOM.md)), the [wiring / schematic](hardware/WIRING.md), and the [build guide](hardware/ASSEMBLY.md). |
+| [`hardware/`](hardware/) | What to buy ([BOM](hardware/BOM.md) + a Mouser cart file), the [circuit / schematic](hardware/WIRING.md), and the [build guide](hardware/ASSEMBLY.md). |
 | [`firmware/`](firmware/) | The ESP32 Arduino sketch and the [board protocol](firmware/PROTOCOL.md). |
 | [`app/`](app/) | The cross-platform Flutter app (Android, iOS, desktop, web). |
 
@@ -37,7 +37,8 @@ servers: games travel through public relays, and nothing needs to be hosted.
 
 ## Get started
 
-1. Order the parts in [hardware/BOM.md](hardware/BOM.md) (about $110–150).
+1. Order the parts: upload [hardware/mouser-bom.csv](hardware/mouser-bom.csv) to Mouser's BOM tool for all the
+   electronics, and get the frame hardware and magnets on the short list in [hardware/BOM.md](hardware/BOM.md).
 2. Print the parts in [3d-prints/](3d-prints/).
 3. Build it with [hardware/ASSEMBLY.md](hardware/ASSEMBLY.md) and [hardware/WIRING.md](hardware/WIRING.md).
 4. Flash the [firmware](firmware/README.md).

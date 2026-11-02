@@ -1,0 +1,26 @@
+Mouser Part Number,Manufacturer Part Number,Manufacturer,Description,Quantity,Reference,Notes
+356-ESP32-DEVKITC32E,ESP32-DEVKITC-32E,Espressif Systems,ESP32 dev board (WROOM-32E 4 MB),1,U2,The brain; Bluetooth to the app
+579-MCP23017-E/SP,MCP23017-E/SP,Microchip,16-bit I2C I/O expander DIP-28,1,U5,Reads the 8x8 sensor matrix
+,ED28DT,On Shore Technology,DIP socket 28-pin 0.3 in,1,U5,Socket for the MCP23017
+485-324,324,Adafruit,Stepper motor NEMA-17 200 steps 12 V 350 mA,2,Motor A/B,CoreXY motors
+485-169,169,Adafruit,Micro servo SG92R,1,J2,Lifts the magnet
+,FLEX-14-10-15,Littelfuse,Reed switch SPST-NO 14 mm glass 10-15 AT,70,SW a1-h8,One per square + 6 spares (the glass is fragile)
+,1N4148,onsemi,Diode 100 V 200 mA DO-35,75,D a1-h8 / D1 / D2,64 for the matrix + 2 + spares
+,TSR 2-2450,TRACO Power,Switching regulator 5 V 2 A SIP-3,1,U1,12 V -> 5 V for ESP32 and servo
+,EEU-FR1V101,Panasonic,Electrolytic 100 uF 35 V,4,C1 C2 C4 C5,
+,C320C104K5R5TA,KEMET,Ceramic 100 nF 50 V radial,2,C3,1 spare
+,CFR-25JB-52-4K7,Yageo,Resistor 4.7 kOhm 1/4 W,2,R1 R2,I2C pull-ups
+,CFR-25JB-52-10K,Yageo,Resistor 10 kOhm 1/4 W,1,R3,MCP23017 reset pull-up
+,CFR-25JB-52-330R,Yageo,Resistor 330 Ohm 1/4 W,1,R4,LED data
+,CFR-25JB-52-1K,Yageo,Resistor 1 kOhm 1/4 W,1,R5,Buzzer transistor base
+,2N3904BU,onsemi,NPN transistor TO-92,1,Q1,Buzzer driver
+,CEM-1203(42),CUI Devices,Magnetic buzzer 3 V 12 mm,1,BZ1,Optional
+,1938,Adafruit,NeoPixel 5 mm diffused through-hole (5 pack),1,LED1,Status light; optional
+,798,Adafruit,Power supply 12 V 5 A with 2.1 mm plug (US wall plug),1,J1,Any 12 V >= 2 A centre-positive 2.1 mm adapter works
+,RAPC722X,Switchcraft,DC power jack 2.1 mm panel mount,1,J1,
+,SS-5GL,Omron,Microswitch SPDT hinge lever,2,J3 J4,X and Y endstops (wire C and NO)
+,PPTC191LFBN-RC,Sullins,Female header 1x19 2.54 mm,2,U2,ESP32 sockets
+,PPTC081LFBN-RC,Sullins,Female header 1x8 2.54 mm,4,U3 U4,Stepper driver sockets
+,PRPC040SAAN-RC,Sullins,Male header 1x40 2.54 mm breakaway,1,J2 J5 J6,Cut to 3 + 8 + 8
+,1935161,Phoenix Contact,Screw terminal 2-pos 5.08 mm,2,J3 J4,Endstop wires
+,1935187,Phoenix Contact,Screw terminal 4-pos 5.08 mm,2,J7 J8,Motor wires
