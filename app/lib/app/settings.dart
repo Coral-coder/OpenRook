@@ -1,0 +1,100 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../net/nostr_pool.dart';
+
+/// A friend match saved so it can be resumed (the relays keep its moves).
+class SavedRoom {
+  SavedRoom({required this.code, required this.host, required this.opponent, required this.created, this.finished = false});
+  final String code;
+  final bool host;
+  String opponent;
+  final int created;
+  bool finished;
+
+  Map<String, dynamic> toJson() => {'code': code, 'host': host, 'opponent': opponent, 'created': created, 'finished': finished};
+  static SavedRoom fromJson(Map<String, dynamic> j) => SavedRoom(
+        code: j['code'] as String,
+        host: j['host'] as bool? ?? false,
+        opponent: j['opponent'] as String? ?? 'Friend',
+        created: j['created'] as int? ?? 0,
+        finished: j['finished'] as bool? ?? false,
+      );
+}
+
+class Settings extends ChangeNotifier {
+  Settings._();
+  static final Settings shared = Settings._();
+  late SharedPreferences _p;
+
+  String name = 'Player';
+  late String secretKey;
+  List<String> relays = List.of(defaultRelays);
+  int engineLevel = 2;
+  String lichessToken = '';
+  String lichessUser = '';
+  String chessComUser = '';
+  bool autoFlip = true;
+  int captureSlots = 8; // per side: 8 standard build, 16 wide build
+  bool moveSounds = true;
+  List<SavedRoom> rooms = [];
+  String? savedComputerGame; // json: {fen, moves, color, level}
+
+  NostrPool? _pool;
+  NostrPool get pool => _pool ??= NostrPool(secretKey: secretKey, relays: relays);
+
+  Future<void> load() async {
+    _p = await SharedPreferences.getInstance();
+    name = _p.getString('name') ?? 'Player ${DateTime.now().millisecond % 1000}';
+    secretKey = _p.getString('secretKey') ?? newIdentity();
+    await _p.setString('secretKey', secretKey);
+    relays = _p.getStringList('relays') ?? List.of(defaultRelays);
+    engineLevel = _p.getInt('engineLevel') ?? 2;
+    lichessToken = _p.getString('lichessToken') ?? '';
+    lichessUser = _p.getString('lichessUser') ?? '';
+    chessComUser = _p.getString('chessComUser') ?? '';
+    autoFlip = _p.getBool('autoFlip') ?? true;
+    captureSlots = _p.getInt('captureSlots') ?? 8;
+    moveSounds = _p.getBool('moveSounds') ?? true;
+    savedComputerGame = _p.getString('computerGame');
+    try {
+      rooms = [for (final r in jsonDecode(_p.getString('rooms') ?? '[]') as List) SavedRoom.fromJson(r as Map<String, dynamic>)];
+    } catch (_) {
+      rooms = [];
+    }
+  }
+
+  Future<void> save() async {
+    await _p.setString('name', name);
+    await _p.setStringList('relays', relays);
+    await _p.setInt('engineLevel', engineLevel);
+    await _p.setString('lichessToken', lichessToken);
+    await _p.setString('lichessUser', lichessUser);
+    await _p.setString('chessComUser', chessComUser);
+    await _p.setBool('autoFlip', autoFlip);
+    await _p.setInt('captureSlots', captureSlots);
+    await _p.setBool('moveSounds', moveSounds);
+    await _p.setString('rooms', jsonEncode([for (final r in rooms) r.toJson()]));
+    if (savedComputerGame == null) {
+      await _p.remove('computerGame');
+    } else {
+      await _p.setString('computerGame', savedComputerGame!);
+    }
+    notifyListeners();
+  }
+
+  void rememberRoom(SavedRoom r) {
+    rooms.removeWhere((x) => x.code == r.code);
+    rooms.insert(0, r);
+    if (rooms.length > 30) rooms.removeLast();
+    save();
+  }
+
+  /// Reconnects to the relays after the list changed.
+  void resetPool() {
+    _pool?.close();
+    _pool = null;
+  }
+}
