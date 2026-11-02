@@ -27,25 +27,24 @@ const mix = (a, b, t) => (t <= 0 ? [[a, 1]] : t >= 1 ? [[b, 1]] : [[a, 1 - t], [
 // into the weapon arm's and the other arm's rotation.
 export const RIGS = {
   [KING]: {
+    // his armour is long slivers from belt to feet, so his body stays one piece that leans from
+    // the ankles; the arms with the sword, and the head, move on their own
     bones: {
-      root: [null, [0, 0, 0]], hips: ['root', [0, 29, 0]], spine: ['hips', [0, 31, 0]], head: ['spine', [0, 46.5, 0]],
-      weapon: ['spine', [0, 45.5, 0.5]], legL: ['hips', [2.6, 28, 0]], legR: ['hips', [-2.6, 28, 0]],
+      root: [null, [0, 0, 0]], spine: ['root', [0, 10.5, 0]], head: ['spine', [0, 46.5, 0]],
+      weapon: ['spine', [0, 45.5, 0.5]],
     },
     parts: [
       // both arms reach down to the sword hilt: arms, hands and sword lift together
       { bone: 'weapon', seed: [[-1.5, 43, 5.5], [1.5, 43, 5.5], [-8, 39.5, 1], [8, 39.5, 1], [0, 39, 5.2], [0, 34.5, 4.8], [0, 10, 2.7]], allow: (x, y, z) =>
         (y > 36 && y < 47.5 && (Math.abs(x) > 4.4 || z > 1.8) && !(x > 3.4 && z < -2.2)) ||
-        (Math.abs(x) < 1.5 && Math.abs(z - (2.6 + (y - 12) * 0.095)) < 1.3 && y > 9.9 && y < 45) },
+        (Math.abs(x) < 1.6 && Math.abs(z - (2.6 + (y - 12) * 0.095)) < 2.1 && y > 9.9 && y < 45) },
       { bone: 'head', seed: [0, 51, 0], allow: (x, y, z) => y > 46 && Math.abs(x) < 3.8 },
     ],
     base(x, y, z) {
-      if (y < 10.2) return [['root', 1]];
-      if (x > 3.4 && z < -2.2) return [['spine', 1]]; // the shield slung on his back
-      if (y < 31) return mix(x < 0 ? 'legR' : 'legL', 'hips', sm(y, 26.5, 30));
-      return mix('hips', 'spine', sm(y, 29, 33));
+      return y < 10.2 ? [['root', 1]] : [['spine', 1]];
     },
     swing: (a, b) => [-2.5 * a - 1.05 * b, 0, 0], // overhead, then down to arms-out, blade forward
-    legs: true,
+    legs: false,
   },
   [QUEEN]: {
     bones: {
@@ -132,19 +131,29 @@ export const RIGS = {
     legs: false,
   },
   [PAWN]: {
+    // crouched on his heels, blade tucked under his crossed arms. To fight he stands up: the
+    // whole body rises off the pedestal on a pair of legs that are folded away inside the crouch
+    // (`legs` below), and his back straightens
     bones: {
-      root: [null, [0, 0, 0]], spine: ['root', [0, 10.5, -1]], head: ['spine', [0, 17.5, 6.5]], weapon: ['spine', [0, 16, 3]],
+      root: [null, [0, 0, 0]], spine: ['root', [0, 10.5, -1]], head: ['spine', [0, 17.5, 6.5]],
+      weapon: ['spine', [0, 15.5, 3]],
     },
+    // [x, z] of each leg: foot on the pedestal (root), hip up inside the body (spine)
+    unfold: { foot: [[-2.4, 1.2], [2.4, 1.2]], hip: [[-2.3, 0], [2.3, 0]], footY: 9.45, hipY: 12, r: [1.9, 1.5] },
+    caps: { pedestal: [0, 9.46, -1, 6.6], body: [0, 9.5, -1, 6.2] }, // [x, y, z, radius]
     parts: [
       { bone: 'head', seed: [0, 20, 9], allow: (x, y, z) => z > 5.8 && y > 16.2 },
       // the crossed arms and the dagger they hold
       { bone: 'weapon', seed: [0, 13, 5.5], allow: (x, y, z) => y > 10.8 && y < 17 && z > 2.5 },
     ],
     base(x, y, z) {
-      if (y < 9.4) return [['root', 1]];
-      return mix('root', 'spine', sm(y, 9.4, 11.5));
+      // the seam where he sat on the pedestal goes with him (inside his footprint), the
+      // pedestal's rim stays
+      const under = (x / 6.4) ** 2 + ((z + 1) / 6.8) ** 2 < 1;
+      return y < 9.25 || (y < 9.6 && !under) ? [['root', 1]] : [['spine', 1]];
     },
-    swing: (a, b) => [-1.1 * a - 0.7 * b, 0, 0],
+    // a flat slash: the blade comes out from under his arms, swings wide, then cuts across
+    swing: (a, b) => [-0.9 * a - 0.6 * b, 1.6 * a - 2.4 * b, 0.5 * a - 0.3 * b],
     legs: false,
   },
 };
@@ -165,6 +174,13 @@ export function posture(type, move, k, T, at, side, seed) {
     o[0] += r[0]; o[1] += r[1]; o[2] += r[2];
   };
   const weapon = (a, b) => add('weapon', rig.swing(a, b));
+  // the pawn unfolding: 0 crouched .. 1 standing tall (joint offsets in J.$pos, in mm)
+  const stand = (u) => {
+    if (type !== PAWN || u <= 0) return;
+    J.$pos = { spine: [0, 8 * u, 0.5 * u] };
+    add('spine', [-0.8 * u, 0, 0]);
+    add('head', [0.5 * u, 0, 0]);
+  };
   const off = (a) => rig.off && add('off', rig.off(a));
   const knight = type === KNIGHT;
   switch (move) {
@@ -207,7 +223,10 @@ export function posture(type, move, k, T, at, side, seed) {
         add('rider', [0.12 + 0.08 * S(g + 2), 0, 0]);
       }
       if (type === ROOK) add('spine', [0, 0.45 * S(T * 1.7), 0]); // the lookout scans the field
-      if (type === PAWN) add('spine', [-0.25, 0, 0.1 * st]); // up out of his crouch to scurry
+      if (type === PAWN) {
+        stand(0.6); // half up out of his crouch to scurry
+        add('spine', [0, 0, 0.1 * st]);
+      }
       break;
     }
     case 'leap':
@@ -238,7 +257,7 @@ export function posture(type, move, k, T, at, side, seed) {
         add('legL', [-0.45 * b - 0.15 * a, 0, 0]);
         add('legR', [0.35 * b + 0.1 * a, 0, 0]);
       }
-      if (type === PAWN) add('spine', [-0.55 * a + 0.35 * b, 0, 0]); // springs up out of the crouch
+      if (type === PAWN) stand(bump(k, 0, at * 0.45, 0.85, 1)); // unfolds to his full height to cut
       if (knight) {
         // the horse rears, forelegs pawing, and crashes down on the victim
         add('horse', [(-0.42 * a + 0.15 * b) * big, 0, 0]);
@@ -259,6 +278,7 @@ export function posture(type, move, k, T, at, side, seed) {
       break;
     }
     case 'guard':
+      stand(0.7);
       weapon(0.38 + 0.04 * S(T * 2), 0);
       off(0.6);
       add('spine', [-0.05, 0.12 * S(T * 0.9), 0]);
@@ -314,6 +334,7 @@ export function posture(type, move, k, T, at, side, seed) {
     }
     case 'cheer': {
       const j = bump(k, 0, 0.25, 0.7, 1);
+      stand(j);
       weapon(1.05 * j, 0);
       add('spine', [-0.15 * j, 0, 0]);
       add('head', [-0.35 * j, 0, 0]);

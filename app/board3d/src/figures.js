@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RIGS, posture } from './rigs.js';
 import MODELS from './models_data.gen.js';
 import { stoneMaterial } from './stone.js';
@@ -493,7 +493,14 @@ function statueGeometry(type) {
   const weights = (v) => {
     const w = new Float32Array(names.length);
     const x = vx[v * 3], y = vx[v * 3 + 1], z = vx[v * 3 + 2];
-    const k = owner[v] >= 0 ? 0.5 + 0.5 * ring[v] : 0;
+    let k = 0;
+    if (owner[v] >= 0) {
+      // soften the seam only at the joint itself (a shoulder, a hip), never where the limb
+      // merely touches something far from it (a sword tip resting by a foot)
+      const pv = rig.bones[rig.parts[owner[v]].bone][1];
+      const atJoint = (x - pv[0]) ** 2 + (y - pv[1]) ** 2 + (z - pv[2]) ** 2 < 6 * 6;
+      k = atJoint ? 0.5 + 0.5 * ring[v] : 1;
+    }
     if (k > 0) w[names.indexOf(rig.parts[owner[v]].bone)] += k;
     const base = rig.base(x, y, z);
     let total = 0;
@@ -530,7 +537,53 @@ function statueGeometry(type) {
   }
   out.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
   out.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  if (rig.unfold) return (statueGeo[type] = withLegs(out, rig, names));
   return (statueGeo[type] = out);
+}
+
+// The pawn's legs (and lids for the pedestal and his underside), folded away inside his crouch
+// and drawn out as he stands: each leg is a tapered column whose foot is bound to the pedestal
+// and whose hip is bound to his body, so it stretches as the body rises.
+function withLegs(geo, rig, names) {
+  const { unfold: legs, caps } = rig;
+  const root = names.indexOf('root'), body = names.indexOf('spine');
+  const parts = [];
+  const skin = (g, fn) => {
+    const p = g.attributes.position, si = [], sw = [];
+    for (let i = 0; i < p.count; i++) {
+      const t = fn(p.getX(i), p.getY(i), p.getZ(i));
+      si.push(root, body, 0, 0);
+      sw.push(1 - t, t, 0, 0);
+    }
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    parts.push(g);
+  };
+  legs.foot.forEach((f, i) => {
+    const h = legs.hip[i];
+    const g = new THREE.CylinderGeometry(legs.r[1], legs.r[0], 1, 12, 6, false).toNonIndexed();
+    g.translate(0, 0.5, 0);
+    const p = g.attributes.position;
+    for (let v = 0; v < p.count; v++) {
+      const t = p.getY(v);
+      p.setXYZ(v, p.getX(v) + f[0] + (h[0] - f[0]) * t, legs.footY + (legs.hipY - legs.footY) * t, p.getZ(v) + f[1] + (h[1] - f[1]) * t);
+    }
+    g.computeVertexNormals();
+    skin(g, (x, y) => (y - legs.footY) / (legs.hipY - legs.footY));
+  });
+  for (const [name, [x, y, z, r]] of Object.entries(caps)) {
+    const g = new THREE.CircleGeometry(r, 24).toNonIndexed();
+    g.rotateX(name === 'body' ? Math.PI / 2 : -Math.PI / 2); // the body's lid faces down
+    g.translate(x, y, z);
+    skin(g, () => (name === 'body' ? 1 : 0));
+  }
+  for (const g of parts) {
+    g.deleteAttribute('uv');
+    if (g.index) throw new Error('indexed');
+  }
+  const merged = mergeGeometries([geo, ...parts]);
+  merged.computeBoundingBox();
+  return merged;
 }
 
 function buildStatue(code) {
@@ -715,11 +768,17 @@ function animateStatue(fig, dt) {
   // and the limbs: every joint eases toward this move's pose
   const J = posture(fig.type, m.name, k, T, m.at, m.side, fig.seed);
   const jf = 1 - Math.exp(-dt * Math.max(snap, 16));
+  const lift = J.$pos || {};
   for (const [name, bone] of Object.entries(fig.bones)) {
     const want = J[name] || ZERO;
-    const cur = fig.joints[name] || (fig.joints[name] = [0, 0, 0]);
+    const cur = fig.joints[name] || (fig.joints[name] = [0, 0, 0, 0, 0, 0]);
     for (let i = 0; i < 3; i++) cur[i] += (want[i] - cur[i]) * jf;
     bone.rotation.set(cur[0], cur[1], cur[2]);
+    // joints that also move (the pawn rising out of his crouch)
+    const wp = lift[name] || ZERO;
+    for (let i = 0; i < 3; i++) cur[3 + i] += (wp[i] - cur[3 + i]) * jf;
+    const bind = bone.userData.bind || (bone.userData.bind = bone.position.clone());
+    bone.position.set(bind.x + cur[3], bind.y + cur[4], bind.z + cur[5]);
   }
   return fig.mixer;
 }

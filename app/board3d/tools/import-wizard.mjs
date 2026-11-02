@@ -22,7 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 const BASE_MM = 20; // PIECE_BASE in 3d-prints/src/common.scad
 const MAG_D = 10.3, MAG_H = 3.2; // PIECE_MAG_D / PIECE_MAG_H (the magnet + clearance)
 // triangles kept in the game per piece (there are 32 figures on the board)
-const GAME_TRIS = { pawn: 5000, rook: 9000, knight: 12000, bishop: 9000, queen: 10000, king: 12000 };
+const GAME_TRIS = { pawn: 5000, rook: 9000, knight: 12000, bishop: 9000, queen: 10000, king: 26000 };
 
 const src = process.argv[2];
 if (!src) {

@@ -696,9 +696,9 @@ function chooseDuelAngle(a, mid, dist) {
     const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
     // a side-on view of the duel reads best; head-on is fine if it's the only clear one
     const across = Math.abs(dir.dot(a.dir));
-    for (const h of [1.5, 2.3]) {
+    for (const h of [0.55, 0.85, 1.3]) { // down on the board among the pieces, then higher if blocked
       const cam = mid.clone().addScaledVector(dir, dist).setY(h);
-      const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h > 2 ? 0.6 : 0) +
+      const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h - 0.55) * 0.5 +
         (Math.abs(cam.x) > 7 || Math.abs(cam.z) > 7 ? 2 : 0);
       if (!best || score < best.score) best = { score, dir, h };
     }
@@ -718,13 +718,13 @@ function duelShot(a) {
   }
   const close = a.slowed ? 0.84 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (3.1 / Math.sqrt(aspect)) * close + spread * 0.9;
+  const dist = (2.5 / Math.sqrt(aspect)) * close + spread * 0.9;
   if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
   // a slow dolly around the fight, never swinging far from the clear side
   const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
   const off = a.angle.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
   shot.pos.copy(mid).add(off).setY(a.angle.h * close + spread * 0.5);
-  shot.target.copy(mid).setY(0.55 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
+  shot.target.copy(mid).setY(0.75 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
   shot.want = 1;
 }
 
@@ -732,8 +732,9 @@ function followShot(p) {
   const g = p.fig.group;
   const fwd = new THREE.Vector3(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y));
   const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
-  shot.pos.copy(g.position).addScaledVector(fwd, -2.8).addScaledVector(side, 1.0).setY(2.3);
-  shot.target.copy(g.position).addScaledVector(fwd, 1.2).setY(0.5);
+  // low, over the shoulder of the piece on the move, looking down the board where it's going
+  shot.pos.copy(g.position).addScaledVector(fwd, -1.9).addScaledVector(side, 0.85).setY(0.95);
+  shot.target.copy(g.position).addScaledVector(fwd, 1.6).setY(0.7);
   shot.want = 1;
 }
 
@@ -1219,7 +1220,7 @@ function stepMove(a, dt) {
     if (fighting && cinema() !== 'off') {
       if (!a.shotStart) a.shotStart = a.t;
       duelShot(a);
-    } else if (cinema() === 'all' && phase.name !== 'turnback') {
+    } else if (cinema() !== 'off' && phase.name !== 'turnback') {
       followShot(mover);
     } else if (shot.want && (!a.dir || phase.name === 'turnback' || (phase.name === 'walk' && phase.settle && k > 0.5))) {
       releaseShot();
