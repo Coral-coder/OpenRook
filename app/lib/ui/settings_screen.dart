@@ -41,7 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(
                 s.style == 'toon'
                     ? 'Toon: friendly cartoon heroes and skeletons (for kids)'
-                    : 'Wizard: living stone statues, light magic against dark',
+                    : 'Wizard: life-size marble and obsidian statues, light magic against dark',
               ),
               trailing: SegmentedButton<String>(
                 segments: const [
@@ -128,7 +128,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text('Your OpenRook ID: ${s.pool.publicKey.substring(0, 16)}…', style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 8),
             Text(
-              '3D characters: KayKit Adventurers and Skeletons by Kay Lousberg (kaylousberg.com), CC0, carved into stone for the Wizard armies. ${NeuralVoice.credit}',
+              'Wizard armies: Quaternius\'s Universal Base Characters, Fantasy Outfits and Universal Animation Library (quaternius.com), CC0. '
+              'Toon armies: KayKit by Kay Lousberg (kaylousberg.com), CC0. ${NeuralVoice.credit}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

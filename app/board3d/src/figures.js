@@ -9,9 +9,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import MODELS from './models_data.gen.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { stoneMaterial } from './stone.js';
+import { buildHero, heroClipFor, HERO_MODELS, HERO_STRIKE_AT } from './heroes.js';
 
-// 'stone': living chess statues with heroic proportions (default). 'toon': the original KayKit look.
+// 'stone': the Wizard armies, life-size marble and obsidian statues (heroes.js, default).
+// 'toon': KayKit's cartoon heroes and skeletons, for kids.
 let style = 'stone';
 export function setStyle(s) {
   style = s === 'toon' ? 'toon' : 'stone';
@@ -42,7 +45,8 @@ const ROSTER = {
   },
 };
 
-let loaded = null;
+let loaded = { byName: {}, clips: {}, heroClips: {} };
+const TOON_MODELS = () => Object.keys(MODELS).filter((n) => !n.startsWith('h_'));
 
 function b64ToBuffer(b64) {
   const bin = atob(b64);
@@ -51,18 +55,25 @@ function b64ToBuffer(b64) {
   return out.buffer;
 }
 
-/** Decodes the embedded models once. */
-export async function loadFigures() {
-  if (loaded) return loaded;
-  const loader = new GLTFLoader();
-  const parse = (name) => new Promise((res, rej) => loader.parse(b64ToBuffer(MODELS[name]), '', res, rej));
-  const names = Object.keys(MODELS);
-  const gltfs = await Promise.all(names.map(parse));
-  const byName = {};
-  names.forEach((n, i) => (byName[n] = gltfs[i]));
-  const clips = {};
-  for (const c of byName.anims.animations) clips[c.name] = c;
-  loaded = { byName, clips };
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+const parsing = {};
+function parse(name) {
+  return (parsing[name] ??= new Promise((res, rej) => loader.parse(b64ToBuffer(MODELS[name]), '', res, rej)).then((g) => {
+    loaded.byName[name] = g;
+    if (name === 'anims') for (const c of g.animations) loaded.clips[c.name] = c;
+    if (name === 'h_anims') for (const c of g.animations) loaded.heroClips[c.name] = c;
+    return g;
+  }));
+}
+
+/** Whether the models for a style are decoded. */
+export function styleReady(s) {
+  return (s === 'toon' ? TOON_MODELS() : HERO_MODELS).every((n) => loaded.byName[n]);
+}
+
+/** Decodes the models a style needs (once). */
+export async function loadFigures(s = style) {
+  await Promise.all((s === 'toon' ? TOON_MODELS() : HERO_MODELS).map(parse));
   return loaded;
 }
 
@@ -87,6 +98,7 @@ function crown(isWhite) {
 
 /** Builds a figure for a piece code (Dart's: white 1..6, black 9..14). */
 export function buildFigure(code) {
+  if (style === 'stone') return buildStatue(code);
   const type = code & 7, isWhite = (code & 8) === 0;
   const spec = ROSTER[isWhite ? 'white' : 'black'][type];
   const group = new THREE.Group();
@@ -191,6 +203,17 @@ export function buildFigure(code) {
   return fig;
 }
 
+// A Wizard-army statue (heroes.js).
+function buildStatue(code) {
+  const h = buildHero(code, loaded.byName);
+  const group = new THREE.Group();
+  const inner = new THREE.Group();
+  group.add(inner);
+  inner.add(h.model);
+  const mixer = new THREE.AnimationMixer(h.model);
+  return { group, type: h.type, isWhite: h.isWhite, code, spec: h.spec, model: h.model, mixer, current: null, parts: { inner }, materials: h.materials, stone: true, hero: true, bones: h.bones };
+}
+
 /** Fades a figure (0 invisible .. 1 solid), for pieces in the camera's way and for deaths. */
 export function setOpacity(fig, o) {
   if (fig.opacity === o) return;
@@ -212,6 +235,7 @@ export function setRot(fig, r) {
 
 /** Name of the clip a piece uses for an action ('idle', 'walk', 'attack', 'finish' ...). */
 export function clipFor(fig, action) {
+  if (fig.hero) return heroClipFor(fig, action);
   const s = fig.spec.style, white = fig.isWhite, t = fig.type;
   switch (action) {
     case 'idle':
@@ -255,6 +279,7 @@ export function clipFor(fig, action) {
 
 // When in a clip (0..1) the blow lands.
 export const STRIKE_AT = {
+  ...HERO_STRIKE_AT,
   '1H_Melee_Attack_Slice_Diagonal': 0.42, '1H_Melee_Attack_Chop': 0.45, '1H_Melee_Attack_Stab': 0.42,
   '1H_Melee_Attack_Jump_Chop': 0.6, '2H_Melee_Attack_Slice': 0.45, '2H_Melee_Attack_Chop': 0.52,
   '2H_Melee_Attack_Spin': 0.55, Spellcast_Shoot: 0.45, Spellcast_Long: 0.7, Spellcast_Raise: 0.62,
@@ -262,7 +287,7 @@ export const STRIKE_AT = {
 
 /** Plays a clip on a figure, cross-fading from whatever it was doing. */
 export function play(fig, name, { loop = false, fade = 0.18, speed = 1, duration = 0 } = {}) {
-  const clip = loaded.clips[name];
+  const clip = (fig.hero ? loaded.heroClips : loaded.clips)[name];
   if (!clip) return 0;
   const action = fig.mixer.clipAction(clip);
   if (fig.current === action && loop) return clip.duration;
@@ -278,12 +303,12 @@ export function play(fig, name, { loop = false, fade = 0.18, speed = 1, duration
   return clip.duration / action.timeScale;
 }
 
-export function hasClip(name) {
-  return !!loaded?.clips[name];
+export function hasClip(name, fig) {
+  return !!(fig?.hero ? loaded.heroClips : loaded.clips)[name];
 }
 
 export function clipDuration(name) {
-  return loaded.clips[name]?.duration || 1;
+  return (loaded.clips[name] || loaded.heroClips[name])?.duration || 1;
 }
 
 /**
@@ -291,6 +316,7 @@ export function clipDuration(name) {
  * dying figure's pose (both rigs share bone names), placed where the figure lies.
  */
 export function buildRemains(fig) {
+  if (fig.hero) return witheredRemains(fig);
   const model = SkeletonUtils.clone(loaded.byName.skeleton_minion.scene);
   const bonesFrom = {};
   fig.model.traverse((o) => {
@@ -322,5 +348,31 @@ export function buildRemains(fig) {
   // the same pose puts the bones where the body lies; just rest them on the board
   group.updateMatrixWorld(true);
   group.position.y -= new THREE.Box3().setFromObject(group, true).min.y - 0.01;
+  return { group, model, materials, isWhite: fig.isWhite, parts: { inner }, opacity: 1 };
+}
+
+// A Wizard statue's remains: its own body in the pose it fell in, shrunk to bone-white, gaunt
+// limbs (the stone flesh has fallen away).
+function witheredRemains(fig) {
+  fig.group.updateMatrixWorld(true);
+  const model = SkeletonUtils.clone(fig.model);
+  const bone = new THREE.MeshStandardMaterial({ color: 0xcdbf9c, roughness: 0.9 });
+  const materials = [];
+  model.traverse((o) => {
+    if (o.isBone && /^(spine|upperarm|lowerarm|thigh|calf|neck)/.test(o.name)) o.scale.set(0.55, 1, 0.55);
+    if (o.name === 'weapon' || o.name === 'crown') o.visible = false;
+    if (o.isMesh) {
+      o.material = /Eyes$|^Face\.001$/.test(o.name) ? new THREE.MeshBasicMaterial({ color: 0x050403 }) : bone.clone();
+      materials.push(o.material);
+    }
+  });
+  const group = new THREE.Group();
+  const inner = new THREE.Group();
+  inner.position.copy(fig.parts.inner.position);
+  inner.quaternion.copy(fig.parts.inner.quaternion);
+  inner.add(model);
+  group.add(inner);
+  group.position.copy(fig.group.position);
+  group.quaternion.copy(fig.group.quaternion);
   return { group, model, materials, isWhite: fig.isWhite, parts: { inner }, opacity: 1 };
 }

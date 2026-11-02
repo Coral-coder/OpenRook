@@ -1,4 +1,19 @@
-The character models in this folder come from two packs by Kay Lousberg (www.kaylousberg.com),
+The h_*.glb models (the default Wizard armies) come from three packs by Quaternius
+(quaternius.com), released under Creative Commons Zero (CC0, public domain):
+
+  Universal Base Characters           https://quaternius.itch.io/universal-base-characters
+  Modular Character Outfits - Fantasy https://quaternius.itch.io/modular-character-outfits-fantasy
+  Universal Animation Library         https://quaternius.itch.io/universal-animation-library
+
+They were trimmed and compressed by tools/pack-heroes.mjs. The original licence text:
+
+  License: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+  https://creativecommons.org/publicdomain/zero/1.0/
+  Models by @Quaternius - https://www.patreon.com/quaternius
+
+==========================================================================================
+
+The other models (the Toon armies) come from two packs by Kay Lousberg (www.kaylousberg.com),
 released under Creative Commons Zero (CC0, public domain):
 
   KayKit Character Pack: Adventures 1.0  https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0

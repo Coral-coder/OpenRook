@@ -8,7 +8,7 @@
 // Bridge: the app calls window.openrook.receive(json). This page posts JSON strings back
 // through window.OpenRook.postMessage (WebView channel) or window.parent.postMessage (web).
 import * as THREE from 'three';
-import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
+import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, styleReady, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
 import { stoneMaterial, stoneTime } from './stone.js';
 import { Particles, chime, clang, crash, glowSprite, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
@@ -192,6 +192,16 @@ function receive(json) {
   if (msg.type !== 'state') return;
   setSound(msg.sound !== false);
   if ((msg.style || 'stone') !== getStyle()) {
+    if (!styleReady(msg.style || 'stone')) {
+      // decode that look's models first, then come back
+      pendingState = msg;
+      ready = false;
+      loadFigures(msg.style || 'stone').then(() => {
+        ready = true;
+        receive(pendingState);
+      });
+      return;
+    }
     // a different look: rebuild every figure
     setStyle(msg.style);
     for (const p of pieces.values()) removePiece(p);
@@ -655,7 +665,7 @@ function turnToward(cur, target, k) {
 
 // Each piece plays one named action at a time; one-shots fall back to idle when they end.
 function act(p, action, opts = {}) {
-  const name = hasClip(action) ? action : clipFor(p.fig, action);
+  const name = hasClip(action, p.fig) ? action : clipFor(p.fig, action);
   p.anim = action;
   const d = play(p.fig, name, opts);
   p.until = opts.loop ? 0 : simT + d;
@@ -880,7 +890,7 @@ function decay(d, dt) {
     if (Math.random() < 0.3) particles.burst(fig.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.15, (Math.random() - 0.5) * 0.6)), { color: fig.isWhite ? 0x6a1010 : 0x1d6b33, n: 1, speed: 0.2, up: 0.3, size: 0.05, life: 0.7, gravity: 3, solid: true });
     return false;
   }
-  if (fig.isWhite && !d.remains && fig.stone) {
+  if (!d.remains && fig.stone && (fig.hero || fig.isWhite)) {
     // the rotten stone flesh bursts off the statue, leaving the skeleton beneath
     fig.group.updateMatrixWorld(true);
     d.remains = buildRemains(fig);
