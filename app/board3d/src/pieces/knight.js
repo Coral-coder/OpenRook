@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { V2, armouredArms, armouredLegs, carve, cuirass, drape, face, folds, greatHelm, joint, resample, robeSkirt, skeleton } from '../carving.js';
 import { horse, soldierTop } from './soldier.js';
+import { helm, plume } from './kr_armour.js';
 
 export function knight(J, root, P) {
     horse(J, root, P);
@@ -32,12 +33,8 @@ export function knight(J, root, P) {
       P.torus(shin, 0.045 * H, 0.006 * H, 0, -0.215 * H, 0.03 * H, 0); // stirrup
     }
     soldierTop(J, P, H);
-    greatHelm(J.head, P, H);
-    P.add(J.head, new THREE.ConeGeometry(0.022 * H, 0.1 * H, 8), 0, 0.19 * H, 0);
-    for (let i = 0; i < 7; i++) {
-      const plume = new THREE.CapsuleGeometry(0.008 * H, 0.1 * H, 3, 6);
-      P.add(J.head, plume, 0, 0.16 * H + i * 0.004 * H, -0.02 * H - i * 0.016 * H, -0.6 - i * 0.18, 0, (i % 2 ? 1 : -1) * 0.1);
-    }
+    helm(P, J.head, H, 'great');
+    plume(P, J.head, H);
     const shield = new THREE.Group();
     shield.name = 'shield';
     J.elL.add(shield);
