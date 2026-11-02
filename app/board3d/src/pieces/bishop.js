@@ -7,20 +7,20 @@
 // (Carved on the shared skeleton: joint names and positions are what statues.js animates.)
 import * as THREE from 'three';
 import { V2, carve, joint, skeleton } from '../carving.js';
-import { hand, lathe, moustache, outward, robe, sculptBeard, sculptHead } from './bp_kit.js';
+import { bead, beardLocks, eyes, face, fineHand, fringe, gem, lathe, moustache, onSurface, outward, quatrefoil, robe, sculptBeard, sculptHead } from './bp_kit.js';
 
 export function bishop(J, root, P) {
   const H = 1.02;
   const legs = skeleton(J, root, H);
 
   // ---- the alb, from the waist to the pedestal
-  const alb = robe([[0.095 * H, 0.05 * H], [0.108 * H, -0.05 * H], [0.14 * H, -0.24 * H], [0.18 * H, -0.44 * H], [0.19 * H, -0.5 * H], [0.0001, -0.505 * H]], { folds: 17, depth: 0.07, seg: 64, rows: 16, seed: 2, flat: 0.86, soft: true });
-  P.add(J.hips, alb);
+  const alb = robe([[0.095 * H, 0.05 * H], [0.108 * H, -0.05 * H], [0.14 * H, -0.24 * H], [0.18 * H, -0.44 * H], [0.19 * H, -0.5 * H], [0.0001, -0.505 * H]], { folds: 23, depth: 0.065, seg: 112, rows: 30, seed: 2, flat: 0.86, soft: true });
+  const albMesh = P.add(J.hips, alb);
   // the body under the vestments
   lathe(P, J.spine, [[0.09 * H, 0], [0.1 * H, 0.06 * H], [0.118 * H, 0.13 * H], [0.11 * H, 0.18 * H], [0.06 * H, 0.21 * H], [0, 0.21 * H]], 0, 24, [1, 1, 0.8]);
 
   // ---- the chasuble: a bell from the shoulders, dipping long in front and behind
-  const ch = robe([[0.05 * H, 0.135 * H], [0.11 * H, 0.126 * H], [0.165 * H, 0.095 * H], [0.185 * H, 0.04 * H], [0.178 * H, -0.12 * H], [0.168 * H, -0.3 * H], [0.164 * H, -0.4 * H], [0.152 * H, -0.405 * H], [0.156 * H, -0.3 * H]], { folds: 15, depth: 0.075, seg: 80, rows: 22, seed: 5, flat: 0.8, hemWave: 0.01, soft: true });
+  const ch = robe([[0.05 * H, 0.135 * H], [0.11 * H, 0.126 * H], [0.165 * H, 0.095 * H], [0.185 * H, 0.04 * H], [0.178 * H, -0.12 * H], [0.168 * H, -0.3 * H], [0.164 * H, -0.4 * H], [0.152 * H, -0.405 * H], [0.156 * H, -0.3 * H]], { folds: 17, depth: 0.075, seg: 112, rows: 34, seed: 5, flat: 0.8, hemWave: 0.01, soft: true });
   {
     const p = ch.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -39,13 +39,50 @@ export function bishop(J, root, P) {
     ch.computeVertexNormals();
   }
   P.add(J.chest, ch);
-  // jewels set in the orphrey
-  for (const y of [0.03, -0.06, -0.16, -0.26]) {
-    P.sphere(J.chest, 0.008 * H, 0, y * H, 0.142 * H, [1, 1, 0.6], 10);
-    P.sphere(J.chest, 0.008 * H, 0, y * H, -0.142 * H, [1, 1, 0.6], 10);
+  // the orphreys embroidered in relief: beaded edges, quatrefoils and set jewels down the
+  // front and back bands, and a beaded yoke across the shoulders
+  {
+    const probe = new THREE.Mesh(ch);
+    const put = (a, y, lift, make) => {
+      const hit = onSurface(probe, a, y, lift);
+      if (!hit) return;
+      const g = new THREE.Group();
+      g.position.copy(hit.p);
+      face(g, hit.n);
+      J.chest.add(g);
+      make(g);
+    };
+    for (const a0 of [Math.PI / 2, -Math.PI / 2]) {
+      for (let y = 0.1; y > -0.37; y -= 0.016) {
+        for (const da of [-0.105, 0.105]) put(a0 + da, y * H, 0.0, (g) => bead(P, g, 0.0034 * H));
+      }
+      let k = 0;
+      for (let y = 0.075; y > -0.36; y -= 0.055, k++) {
+        if (k % 2) put(a0, y * H, 0.001 * H, (g) => gem(P, g, 0.0065 * H, 0, 0, 0));
+        else put(a0, y * H, 0.0, (g) => quatrefoil(P, g, 0.012 * H));
+      }
+    }
+    for (let a = 0.35; a < Math.PI - 0.34; a += 0.075) {
+      for (const sgn of [1, -1]) put(sgn * a, 0.04 * H, 0, (g) => bead(P, g, 0.0036 * H));
+    }
+  }
+  // an embroidered apparel on the alb's hem before him
+  {
+    const probe = new THREE.Mesh(alb);
+    for (let i = -3; i <= 3; i++) {
+      const hit = onSurface(probe, Math.PI / 2 + i * 0.07, -0.43 * H, 0.0);
+      if (!hit) continue;
+      const g = new THREE.Group();
+      g.position.copy(hit.p);
+      face(g, hit.n);
+      J.hips.add(g);
+      if (i % 2 === 0) quatrefoil(P, g, 0.011 * H);
+      else gem(P, g, 0.005 * H, 0, 0, 0);
+      for (const dy of [0.024, -0.024]) bead(P, g, 0.003 * H, 0, dy * H, 0);
+    }
   }
   // the amice, folded round the neck
-  lathe(P, J.neck, [[0.042 * H, -0.03 * H], [0.062 * H, -0.02 * H], [0.064 * H, 0.0], [0.05 * H, 0.012 * H], [0.04 * H, 0.008 * H]], 0, 32);
+  lathe(P, J.neck, [[0.042 * H, -0.03 * H], [0.062 * H, -0.02 * H], [0.066 * H, -0.008 * H], [0.064 * H, 0.0], [0.05 * H, 0.012 * H], [0.04 * H, 0.008 * H]], 0, 56);
   P.cyl(J.neck, 0.034 * H, 0.04 * H, 0.06 * H, 0, 0, 0, 0, 0, 0, 16);
   // the stole's fringed ends hanging below the chasuble
   for (const s of [-1, 1]) {
@@ -57,30 +94,34 @@ export function bishop(J, root, P) {
     P.box(st, 0.04 * H, 0.016 * H, 0.008 * H, 0, -0.14 * H, 0);
     P.box(st, 0.014 * H, 0.014 * H, 0.009 * H, 0, -0.02 * H, 0.001 * H); // embroidered cross
     P.box(st, 0.005 * H, 0.032 * H, 0.009 * H, 0, -0.02 * H, 0.001 * H);
-    for (let i = 0; i < 6; i++) P.box(st, 0.004 * H, 0.022 * H, 0.004 * H, (i - 2.5) * 0.0065 * H, -0.158 * H, 0);
+    const fr = new THREE.Group();
+    fr.position.set(0, -0.15 * H, 0);
+    st.add(fr);
+    fringe(P, fr, 0.036 * H, 0.03 * H, 11, 0.0016 * H);
   }
 
   // ---- arms in alb sleeves; a hand raised in blessing, the other on the crozier
   for (const s of [1, -1]) {
     const side = s > 0 ? 'L' : 'R';
     lathe(P, J['sh' + side], [[0.05 * H, 0.01 * H], [0.054 * H, -0.06 * H], [0.052 * H, -0.18 * H], [0.044 * H, -0.19 * H]], 0, 20);
-    const sl = robe([[0.046 * H, 0.0], [0.052 * H, -0.08 * H], [0.058 * H, -0.135 * H], [0.054 * H, -0.15 * H], [0.034 * H, -0.15 * H], [0.034 * H, -0.12 * H]], { folds: 8, depth: 0.12, seg: 32, rows: 10, seed: s + 3, flat: 1 });
+    const sl = robe([[0.046 * H, 0.0], [0.052 * H, -0.08 * H], [0.058 * H, -0.135 * H], [0.054 * H, -0.15 * H], [0.034 * H, -0.15 * H], [0.034 * H, -0.12 * H]], { folds: 9, depth: 0.12, seg: 48, rows: 16, seed: s + 3, flat: 1 });
     P.add(J['el' + side], sl);
     lathe(P, J['el' + side], [[0.034 * H, -0.143 * H], [0.04 * H, -0.148 * H], [0.038 * H, -0.158 * H], [0.03 * H, -0.158 * H]], 0, 20); // cuff
-    hand(P, J['wr' + side], 0.1 * H, s, s > 0 ? 'grip' : 'bless');
+    fineHand(P, J['wr' + side], 0.1 * H, s, s > 0 ? 'grip' : 'bless', { ring: s < 0 });
   }
-  // a ring on the blessing hand
-  P.torus(J.wrR, 0.012 * H, 0.003 * H, 0.0, -0.02 * H, 0.0, Math.PI / 2, Math.PI * 2, 12);
 
   // ---- the head: an old, lined face with a long beard
   const r = 0.062 * H;
-  P.add(J.head, sculptHead(r, { old: true, seg: 40 }), 0, 0.05 * H, 0);
-  const beard = sculptBeard(r * 0.78, 0.12 * H);
-  carve(beard, r * 0.025, 30 / r);
-  P.add(J.head, beard, 0, 0.05 * H - r * 0.55, r * 0.2);
+  P.add(J.head, sculptHead(r, { old: true, seg: 64 }), 0, 0.05 * H, 0);
+  eyes(P, J.head, r, 0, 0.05 * H, 0);
+  // the beard: a combed mass, and long separate locks falling over it
+  const beard = sculptBeard(r * 0.7, 0.1 * H);
+  carve(beard, r * 0.02, 30 / r);
+  P.add(J.head, beard, 0, 0.05 * H - r * 0.55, r * 0.15);
+  for (const lock of beardLocks(r, 0.13 * H, { n: 26 })) P.add(J.head, lock, 0, 0.05 * H, r * 0.05);
   for (const m of moustache(r)) P.add(J.head, m, 0, 0.05 * H - r * 0.4, r * 1.0);
   // hair at the back and sides, below the mitre
-  const hair = new THREE.SphereGeometry(r * 1.04, 24, 12, (Math.PI * 5) / 6, (Math.PI * 4) / 3, Math.PI * 0.3, Math.PI * 0.45);
+  const hair = new THREE.SphereGeometry(r * 1.04, 44, 20, (Math.PI * 5) / 6, (Math.PI * 4) / 3, Math.PI * 0.3, Math.PI * 0.45);
   {
     const p = hair.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -99,7 +140,7 @@ export function bishop(J, root, P) {
   mi.lineTo(mw, 0);
   mi.bezierCurveTo(mw * 1.08, mh * 0.45, mw * 0.55, mh * 0.8, 0, mh);
   mi.bezierCurveTo(-mw * 0.55, mh * 0.8, -mw * 1.08, mh * 0.45, -mw, 0);
-  const mg = new THREE.ExtrudeGeometry(mi, { depth: 0.07 * H, bevelEnabled: true, bevelThickness: 0.006 * H, bevelSize: 0.005 * H, bevelSegments: 3, curveSegments: 20, steps: 4 });
+  const mg = new THREE.ExtrudeGeometry(mi, { depth: 0.07 * H, bevelEnabled: true, bevelThickness: 0.006 * H, bevelSize: 0.005 * H, bevelSegments: 4, curveSegments: 40, steps: 10 });
   mg.translate(0, 0, -0.035 * H);
   {
     // it thins toward the peak (two panels leaning together) and curves round the head
@@ -132,29 +173,44 @@ export function bishop(J, root, P) {
     }
     tg.computeVertexNormals();
     P.add(mitre, tg, 0, 0, 0, 0, zs > 0 ? 0 : Math.PI, 0);
-    for (const y of [0.05, 0.1, 0.145]) {
-      const t = y * H / mh;
-      if (y * H < mh * 0.9) P.sphere(mitre, 0.005 * H, 0, y * H, zs * ((0.047 * H) * (1 - 0.75 * t * t)), [1, 1, 0.6], 8);
+    for (const y of [0.05, 0.1]) {
+      const t = (y * H) / mh;
+      gem(P, mitre, 0.005 * H, 0, y * H, zs * (0.047 * H * (1 - 0.75 * t * t)), zs > 0 ? 0 : Math.PI, -zs * 0.5 * t);
     }
-    P.sphere(mitre, 0.007 * H, 0, 0.013 * H, zs * 0.044 * H, [1, 1, 0.6], 10);
+    // beads up the edges of the titulus
+    for (let y = 0.004; y < 0.13; y += 0.011) {
+      const t = (y * H) / mh;
+      for (const dx of [-0.0095, 0.0095]) bead(P, mitre, 0.0022 * H, dx * H * (1 - t * 0.45), y * H, zs * (0.046 * H * (1 - 0.75 * t * t)));
+    }
+    gem(P, mitre, 0.007 * H, 0, 0.013 * H, zs * 0.044 * H, zs > 0 ? 0 : Math.PI);
+    // and gems round the circulus
+    for (const dx of [-0.032, 0.032]) gem(P, mitre, 0.0045 * H, dx * H, 0.013 * H, zs * 0.04 * H, zs > 0 ? 0 : Math.PI);
   }
   P.sphere(mitre, 0.01 * H, 0, mh + 0.006 * H, 0, null, 10); // the knop on the peak
   // lappets hanging behind
   for (const s of [-1, 1]) {
-    const lp = new THREE.PlaneGeometry(0.024 * H, 0.17 * H, 2, 10);
+    const lp = new THREE.BoxGeometry(0.024 * H, 0.17 * H, 0.003 * H, 4, 24, 1);
     const p = lp.attributes.position;
-    for (let i = 0; i < p.count; i++) p.setZ(i, -((p.getY(i) / (0.17 * H) - 0.5) ** 2) * 0.03 * H + Math.sin(p.getY(i) * 90) * 0.002 * H);
+    for (let i = 0; i < p.count; i++) p.setZ(i, p.getZ(i) - ((p.getY(i) / (0.17 * H) - 0.5) ** 2) * 0.03 * H + Math.sin(p.getY(i) * 90) * 0.002 * H);
     lp.computeVertexNormals();
     P.add(mitre, lp, s * 0.032 * H, -0.07 * H, -0.06 * H, 0.12, Math.PI, s * 0.05);
     P.box(mitre, 0.026 * H, 0.014 * H, 0.006 * H, s * 0.032 * H, -0.15 * H, -0.075 * H, 0.12, 0, 0);
-    for (let i = 0; i < 4; i++) P.box(mitre, 0.004 * H, 0.016 * H, 0.004 * H, s * 0.032 * H + (i - 1.5) * 0.006 * H, -0.165 * H, -0.077 * H);
+    const fr = new THREE.Group();
+    fr.position.set(s * 0.032 * H, -0.157 * H, -0.077 * H);
+    fr.rotation.x = 0.12;
+    mitre.add(fr);
+    fringe(P, fr, 0.026 * H, 0.022 * H, 9, 0.0014 * H);
+    // a little cross embroidered on each lappet
+    P.box(mitre, 0.004 * H, 0.03 * H, 0.004 * H, s * 0.032 * H, -0.1 * H, -0.071 * H, 0.12, 0, 0);
+    P.box(mitre, 0.018 * H, 0.004 * H, 0.004 * H, s * 0.032 * H, -0.095 * H, -0.0715 * H, 0.12, 0, 0);
   }
 
   // ---- the crozier in his left hand
   const cr = new THREE.Group();
   cr.name = 'weapon';
   J.wrL.add(cr);
-  P.cyl(cr, 0.011 * H, 0.012 * H, 0.95 * H, 0, -0.2 * H, 0, 0, 0, 0, 14);
+  P.cyl(cr, 0.011 * H, 0.012 * H, 0.95 * H, 0, -0.2 * H, 0, 0, 0, 0, 20);
+  for (let y = -0.6; y < 0.12; y += 0.075) P.torus(cr, 0.0118 * H, 0.0012 * H, 0, y * H, 0, Math.PI / 2 + 0.35, Math.PI * 2, 14); // a spiral binding
   P.add(cr, new THREE.ConeGeometry(0.012 * H, 0.03 * H, 10), 0, -0.69 * H, 0, Math.PI, 0, 0); // ferrule
   for (const y of [-0.45, -0.1]) lathe(P, cr, [[0.012 * H, -0.012 * H], [0.02 * H, -0.004 * H], [0.02 * H, 0.004 * H], [0.012 * H, 0.012 * H]], y * H, 18);
   lathe(P, cr, [[0.012 * H, 0], [0.024 * H, 0.012 * H], [0.03 * H, 0.03 * H], [0.024 * H, 0.05 * H], [0.014 * H, 0.06 * H]], 0.17 * H, 20); // knop
@@ -179,11 +235,11 @@ export function bishop(J, root, P) {
     const a = t * Math.PI * 1.85, rr = R0 * (1 - t * 0.6);
     return out.set(-R0 + rr * Math.cos(a), rr * Math.sin(a), 0);
   };
-  const tube = new THREE.TubeGeometry(spiral, 48, 0.0115 * H, 8);
+  const tube = new THREE.TubeGeometry(spiral, 96, 0.0115 * H, 14);
   {
     // the crook thins as it curls
     const p = tube.attributes.position;
-    const segs = 48, rad = 8;
+    const segs = 96, rad = 14;
     const c = new THREE.Vector3();
     for (let i = 0; i <= segs; i++) {
       spiral.getPoint(i / segs, c);
@@ -202,9 +258,17 @@ export function bishop(J, root, P) {
     spiral.getPoint(t, cp);
     // a curled leaf on the outer edge of the crook
     const a = t * Math.PI * 1.85;
-    const leaf = new THREE.SphereGeometry(0.012 * H * (1 - t * 0.5), 8, 6);
-    leaf.scale(0.7, 1.4, 0.45);
-    P.add(cr, leaf, cp.x + Math.cos(a) * 0.016 * H, cp.y + 0.33 * H + Math.sin(a) * 0.016 * H, 0, 0, 0, a - Math.PI / 2);
+    // a crocket: three curled lobes of a leaf on the outer edge of the crook
+    const lg = new THREE.Group();
+    lg.position.set(cp.x + Math.cos(a) * 0.016 * H, cp.y + 0.33 * H + Math.sin(a) * 0.016 * H, 0);
+    lg.rotation.z = a - Math.PI / 2;
+    cr.add(lg);
+    const ls = 0.012 * H * (1 - t * 0.5);
+    for (const [dx, dy, k] of [[0, 0.3, 1], [-0.55, -0.1, 0.75], [0.55, -0.1, 0.75]]) {
+      const leaf = new THREE.SphereGeometry(ls * k, 9, 6);
+      leaf.scale(0.6, 1.3, 0.45);
+      P.add(lg, leaf, dx * ls, dy * ls, 0, 0, 0, -dx * 0.6);
+    }
   }
   // the rosette in the curl
   spiral.getPoint(1, cp);

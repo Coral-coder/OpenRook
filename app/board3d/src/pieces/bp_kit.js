@@ -64,8 +64,29 @@ export function sculptHead(r, { old = false, ears = true, seg = 48 } = {}) {
     [[0, -0.55, 0.94], [0.14, 0.045], 0.035], // lower lip
     [[0, -0.77, 0.75], [0.2, 0.12], 0.08], // chin
   ];
-  if (ears) F.push([[-0.97, 0.02, 0.05], [0.06, 0.2, 0.14], 0.14], [[0.97, 0.02, 0.05], [0.06, 0.2, 0.14], 0.14]);
-  if (old) F.push([[-0.25, 0.42, 0.9], [0.4, 0.03], -0.012], [[0.25, 0.5, 0.86], [0.4, 0.03], -0.012]); // furrows
+  if (ears) {
+    for (const s of [-1, 1]) {
+      F.push([[s * 0.97, 0.02, 0.05], [0.06, 0.2, 0.14], 0.14]); // the ear
+      F.push([[s * 0.99, 0.03, 0.08], [0.03, 0.12, 0.05], -0.05]); // its bowl
+      F.push([[s * 0.98, -0.16, 0.06], [0.05, 0.06, 0.08], 0.05]); // the lobe
+    }
+  }
+  for (const s of [-1, 1]) {
+    F.push([[s * 0.2, -0.3, 0.94], [0.035, 0.15], -0.028]); // the folds from nose to mouth
+    F.push([[s * 0.62, 0.2, 0.75], [0.12, 0.14], -0.025]); // temples
+    F.push([[s * 0.22, -0.62, 0.9], [0.06, 0.07], -0.02]); // the corners of the mouth
+  }
+  F.push([[0, -0.34, 0.99], [0.03, 0.05], -0.025]); // the philtrum
+  F.push([[0, -0.66, 0.92], [0.1, 0.03], -0.02]); // the groove above the chin
+  if (old) {
+    F.push([[-0.25, 0.42, 0.9], [0.4, 0.03], -0.016], [[0.25, 0.5, 0.86], [0.4, 0.03], -0.016], [[0, 0.58, 0.8], [0.35, 0.025], -0.012]); // furrows
+    F.push([[0, 0.3, 0.99], [0.025, 0.08], -0.02], [[0.06, 0.3, 0.99], [0.02, 0.07], -0.012]); // frown lines
+    for (const s of [-1, 1]) {
+      F.push([[s * 0.3, -0.02, 0.92], [0.12, 0.035], 0.025]); // bags under the eyes
+      for (let k = 0; k < 3; k++) F.push([[s * (0.58 + 0.02 * k), 0.16 - k * 0.07, 0.78], [0.08, 0.012], -0.012]); // crow's feet
+      F.push([[s * 0.38, -0.52, 0.85], [0.08, 0.1], -0.02]); // jowls
+    }
+  }
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i).normalize();
     let d = 1;
@@ -259,7 +280,7 @@ export function sword(P, parent, H, len, name) {
   parent.add(g);
   const L = len * H, w = 0.03 * H, th = 0.008 * H;
   // blade: cross-sections along its length, lens-shaped with a groove down the middle
-  const N = 14, M = 10;
+  const N = 22, M = 12;
   const pos = [], idx = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
@@ -285,15 +306,208 @@ export function sword(P, parent, H, len, name) {
   bg.setIndex(idx);
   bg.computeVertexNormals();
   P.add(g, bg);
-  // guard, grip, pommel
-  P.cyl(g, 0.009 * H, 0.009 * H, 0.15 * H, 0, -0.055 * H, 0, 0, 0, Math.PI / 2, 10);
-  for (const s of [-1, 1]) P.sphere(g, 0.012 * H, s * 0.076 * H, -0.055 * H, 0, null, 8);
-  P.box(g, 0.026 * H, 0.016 * H, 0.016 * H, 0, -0.065 * H, 0); // langet
-  P.cyl(g, 0.011 * H, 0.012 * H, 0.085 * H, 0, -0.008 * H, 0, 0, 0, 0, 10);
-  for (let i = 0; i < 4; i++) P.torus(g, 0.0125 * H, 0.003 * H, 0, -0.035 * H + i * 0.02 * H, 0, Math.PI / 2, Math.PI * 2, 8);
-  P.cyl(g, 0.024 * H, 0.024 * H, 0.014 * H, 0, 0.044 * H, 0, Math.PI / 2, 0, 0, 16);
-  P.sphere(g, 0.008 * H, 0, 0.044 * H, 0.008 * H, null, 6);
-  P.sphere(g, 0.008 * H, 0, 0.044 * H, -0.008 * H, null, 6);
+  // the cross-guard: a squared block, arms tapering to drooping knobbed ends
+  P.box(g, 0.026 * H, 0.016 * H, 0.018 * H, 0, -0.055 * H, 0);
+  for (const s of [-1, 1]) {
+    const q = new THREE.CylinderGeometry(0.0055 * H, 0.0085 * H, 0.062 * H, 10, 6);
+    const qp = q.attributes.position;
+    for (let i = 0; i < qp.count; i++) qp.setX(i, qp.getX(i) - ((qp.getY(i) / (0.031 * H) + 1) / 2) ** 2 * 0.006 * H);
+    q.computeVertexNormals();
+    P.add(g, q, s * 0.044 * H, -0.055 * H, 0, 0, 0, s * (Math.PI / 2 + 0.12));
+    P.add(g, new THREE.SphereGeometry(0.009 * H, 10, 8), s * 0.077 * H, -0.059 * H, 0);
+  }
+  P.box(g, 0.022 * H, 0.016 * H, 0.012 * H, 0, -0.067 * H, 0); // langet
+  // a ricasso shoulder on the blade, and a grip wound with wire between two ferrules
+  P.box(g, 0.03 * H, 0.012 * H, 0.009 * H, 0, -0.08 * H, 0);
+  P.cyl(g, 0.0105 * H, 0.0122 * H, 0.085 * H, 0, -0.008 * H, 0, 0, 0, 0, 14);
+  for (let i = 0; i < 10; i++) P.add(g, new THREE.TorusGeometry(0.0122 * H - Math.abs(i - 4.5) * 0.0002 * H, 0.0018 * H, 4, 10), 0, -0.042 * H + i * 0.0075 * H, 0, Math.PI / 2 + 0.18);
+  for (const y of [-0.047, 0.031]) P.add(g, new THREE.CylinderGeometry(0.0135 * H, 0.0135 * H, 0.006 * H, 14), 0, y * H, 0);
+  // a scent-stopper pommel with a peened button
+  lathe(P, g, [[0.0001, 0.034 * H], [0.009 * H, 0.035 * H], [0.019 * H, 0.046 * H], [0.017 * H, 0.06 * H], [0.008 * H, 0.068 * H], [0.0001, 0.069 * H]], 0, 16);
+  P.add(g, new THREE.SphereGeometry(0.004 * H, 8, 6), 0, 0.071 * H, 0);
   g.userData.tip = [0, -0.06 * H - L * 0.9, 0];
+  return g;
+}
+
+// ------------------------------------------------------------------ fine detail (second pass)
+
+/** Carved eyes for a sculptHead of radius r (placed at the head's centre): eyeballs with a
+ * raised iris rim and a drilled pupil, sitting in the sockets under the lids. */
+export function eyes(P, parent, r, cx, cy, cz, { look = 0 } = {}) {
+  for (const s of [-1, 1]) {
+    const g = new THREE.SphereGeometry(r * 0.125, 18, 12);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const a = Math.acos(Math.max(-1, Math.min(1, z / (r * 0.125)))); // angle from straight ahead
+      let k = 1;
+      if (a < 0.28) k = 0.9; // drilled pupil
+      else if (a < 0.55) k = 1.035; // the iris rim stands proud
+      p.setXYZ(i, x * k, y * k, z * k);
+    }
+    g.computeVertexNormals();
+    g.rotateY(look + s * 0.12);
+    P.add(parent, g, cx + s * r * 0.272, cy + r * 0.13, cz + r * 0.78);
+  }
+}
+
+/** A beard of separate locks: tapering, twisting tubes that fall from the jaw and cheeks and
+ * curl at their ends; dense in front, thinner at the sides. */
+export function beardLocks(r, len, { n = 30, seed = 3 } = {}) {
+  const out = [];
+  const rnd = (i, k) => {
+    const v = Math.sin(i * 12.9898 + k * 78.233 + seed) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1) - 0.5; // -0.5 .. 0.5 round the jaw
+    const a = u * 2.4; // angle round the face
+    const start = new THREE.Vector3(Math.sin(a) * r * 0.78, -r * (0.35 + 0.2 * Math.cos(a * 1.2)), Math.cos(a) * r * 0.72);
+    const l = len * (1 - Math.abs(u) * 0.9) * (0.75 + 0.35 * rnd(i, 1));
+    const sway = (rnd(i, 2) - 0.5) * r * 0.5;
+    const pts = [];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      pts.push(new THREE.Vector3(
+        start.x * (1 - t * 0.55) + sway * t + Math.sin(t * 5 + i) * r * 0.06,
+        start.y - l * t,
+        start.z + r * 0.25 * t * (1 - t) + r * 0.2 * t - Math.abs(u) * r * 0.3 * t,
+      ));
+    }
+    // the end curls
+    const end = pts[pts.length - 1];
+    pts.push(end.clone().add(new THREE.Vector3(Math.sign(sway || 1) * r * 0.08, -r * 0.04, r * 0.06)));
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const thick = r * (0.11 + 0.05 * rnd(i, 3)) * (1 - Math.abs(u) * 0.5);
+    const g = new THREE.TubeGeometry(curve, 12, thick, 6, false);
+    const p = g.attributes.position;
+    const c = new THREE.Vector3();
+    for (let s = 0; s <= 12; s++) {
+      const t = s / 12;
+      curve.getPoint(t, c);
+      const k = Math.max(0.12, 1 - t * 0.85) * (1 + 0.15 * Math.sin(t * 14 + i)); // tapering, twisted
+      for (let j = 0; j <= 6; j++) {
+        const idx = s * 7 + j;
+        p.setXYZ(idx, c.x + (p.getX(idx) - c.x) * k, c.y + (p.getY(idx) - c.y) * k, c.z + (p.getZ(idx) - c.z) * k);
+      }
+    }
+    g.computeVertexNormals();
+    out.push(g);
+  }
+  return out;
+}
+
+/** A cut gem: faceted, in a raised bezel; lies flat on a surface facing +z. */
+export function gem(P, parent, size, x, y, z, ry = 0, rx = 0) {
+  const grp = new THREE.Group();
+  grp.position.set(x, y, z);
+  grp.rotation.set(rx, ry, 0);
+  parent.add(grp);
+  const stone = new THREE.OctahedronGeometry(size, 1);
+  stone.scale(1, 1.25, 0.55);
+  P.add(grp, stone, 0, 0, size * 0.25);
+  P.add(grp, new THREE.TorusGeometry(size * 0.95, size * 0.22, 5, 12), 0, 0, size * 0.05, 0, 0, 0, [1, 1.25, 1]);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    P.add(grp, new THREE.SphereGeometry(size * 0.2, 5, 3), Math.cos(a) * size * 1.05, Math.sin(a) * size * 1.3, size * 0.25); // claws
+  }
+  return grp;
+}
+
+/**
+ * Raised work set onto a carved surface: casts toward the axis at height y and angle a (round
+ * the y axis, 0 = +x, PI/2 = +z) and places a motif on the surface it finds, facing outward.
+ */
+const _rc = new THREE.Raycaster();
+export function onSurface(mesh, a, y, lift = 0) {
+  mesh.updateMatrixWorld(true);
+  const dir = new THREE.Vector3(-Math.cos(a), 0, -Math.sin(a));
+  const from = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)).multiplyScalar(5).setY(y);
+  _rc.set(from, dir);
+  const hit = _rc.intersectObject(mesh, false)[0];
+  if (!hit) return null;
+  const n = hit.face.normal.clone().transformDirection(mesh.matrixWorld);
+  return { p: hit.point.clone().addScaledVector(n, lift), n };
+}
+
+/** Orients a motif group so its +z points along normal n. */
+export function face(grp, n) {
+  grp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+  return grp;
+}
+
+/** A small bead in relief (faces +z): cheap, for long rows of them. */
+export function bead(P, parent, r, x = 0, y = 0, z = 0) {
+  return P.add(parent, new THREE.SphereGeometry(r, 6, 4), x, y, z, 0, 0, 0, [1, 1, 0.6]);
+}
+
+/** Embroidered quatrefoil: four petals round a bead, in relief (faces +z). */
+export function quatrefoil(P, parent, s) {
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    P.add(parent, new THREE.SphereGeometry(s * 0.42, 8, 5), Math.cos(a) * s * 0.5, Math.sin(a) * s * 0.5, 0, 0, 0, 0, [1, 1, 0.38]);
+  }
+  P.add(parent, new THREE.SphereGeometry(s * 0.26, 6, 4), 0, 0, s * 0.12, 0, 0, 0, [1, 1, 0.6]);
+}
+
+/** A fringe of separate threads hanging from a line (faces +z), n threads across width w. */
+export function fringe(P, parent, w, len, n, thick) {
+  for (let i = 0; i < n; i++) {
+    const g = new THREE.CylinderGeometry(thick, thick * 0.6, len * (0.9 + 0.2 * Math.sin(i * 7.1)), 5);
+    g.translate(0, -len / 2, 0);
+    P.add(parent, g, (i / (n - 1) - 0.5) * w, 0, 0, 0, 0, Math.sin(i * 3.3) * 0.08);
+  }
+  P.cyl(parent, thick * 1.6, thick * 1.6, w * 1.02, 0, 0, 0, 0, 0, Math.PI / 2, 8);
+}
+
+/** A finer hand: rounder fingers with knuckles and nails, three phalanges, a fleshier palm. */
+export function fineHand(P, parent, s, side, pose = 'grip', { ring = false } = {}) {
+  const g = new THREE.Group();
+  parent.add(g);
+  const palm = new THREE.CapsuleGeometry(s * 0.25, s * 0.3, 6, 14);
+  palm.scale(1, 1, 0.52);
+  P.add(g, palm, 0, -s * 0.38, 0);
+  P.sphere(g, s * 0.2, 0, -s * 0.06, 0, [1.1, 0.8, 0.7], 14); // wrist
+  P.sphere(g, s * 0.14, -side * s * 0.13, -s * 0.36, s * 0.05, [0.8, 1.2, 0.7], 10); // the ball of the thumb
+  const curl = pose === 'grip' ? [1.35, 1.5, 1.0] : pose === 'open' ? [0.2, 0.2, 0.15] : [1.45, 1.6, 1.1];
+  for (let i = 0; i < 4; i++) {
+    const f = new THREE.Group();
+    f.position.set((i - 1.5) * s * 0.15, -s * 0.7, s * 0.03);
+    g.add(f);
+    const raised = pose === 'bless' && i < 2;
+    const lens = [0.2, 0.14, 0.11].map((v) => s * v * (1 - Math.abs(i - 1.3) * 0.12));
+    let parentJ = f;
+    lens.forEach((l, k) => {
+      const seg = new THREE.Group();
+      if (k > 0) seg.position.y = -lens[k - 1];
+      seg.rotation.x = raised ? (k ? 0.04 : 0) : -curl[k];
+      parentJ.add(seg);
+      const rr = s * (0.068 - k * 0.006);
+      P.add(seg, new THREE.CapsuleGeometry(rr, l, 2, 7), 0, -l / 2, 0);
+      P.add(seg, new THREE.SphereGeometry(rr * 1.12, 7, 5), 0, 0, 0); // knuckle
+      if (k === 2) P.add(seg, new THREE.SphereGeometry(rr * 0.8, 6, 4), 0, -l * 0.7, rr * 0.55, 0, 0, 0, [0.9, 1.2, 0.35]); // nail
+      parentJ = seg;
+    });
+    if (ring && i === 2) {
+      const rg = new THREE.Group();
+      rg.position.y = -lens[0] * 0.45;
+      f.children[0].add(rg);
+      P.add(rg, new THREE.TorusGeometry(s * 0.085, s * 0.022, 8, 18), 0, 0, 0, Math.PI / 2);
+      gem(P, rg, s * 0.05, 0, 0, s * 0.09, 0, 0);
+    }
+  }
+  // the thumb, two segments
+  const t = new THREE.Group();
+  t.position.set(-side * s * 0.2, -s * 0.32, s * 0.1);
+  t.rotation.set(pose === 'grip' ? -1.0 : -0.5, 0, -side * (pose === 'bless' ? 0.9 : 0.55));
+  g.add(t);
+  P.add(t, new THREE.CapsuleGeometry(s * 0.075, s * 0.15, 3, 10), 0, -s * 0.08, 0);
+  const t2 = new THREE.Group();
+  t2.position.y = -s * 0.17;
+  t2.rotation.x = pose === 'grip' ? -0.6 : -0.2;
+  t.add(t2);
+  P.add(t2, new THREE.CapsuleGeometry(s * 0.068, s * 0.12, 3, 10), 0, -s * 0.07, 0);
+  P.sphere(t2, s * 0.05, 0, -s * 0.13, s * 0.04, [0.9, 1.2, 0.35], 8);
+  if (pose === 'bless') g.rotation.set(-Math.PI / 2 - 0.15, side * 0.3, 0);
   return g;
 }
