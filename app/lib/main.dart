@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'app/settings.dart';
 import 'ui/home_screen.dart';
+import 'voice/neural_voice.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Settings.shared.load();
+  NeuralVoice.shared.ensure(); // fetch the announcer's voice in the background (first run only)
   runApp(const OpenRookApp());
 }
 
