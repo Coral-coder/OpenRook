@@ -225,12 +225,33 @@ class Voice extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Completer<void>? _utterance; // the device voice's current line, done when it finishes
+
   void _doneSpeaking() {
     _speaking = false;
+    if (_utterance?.isCompleted == false) _utterance!.complete();
     _maybeRestart();
   }
 
-  Future<void> say(String text) async {
+  // Callouts wait their turn: a line starts only when the one before it has finished, so two
+  // moves in quick succession are announced one after the other, never over each other.
+  Future<void> _line = Future.value();
+  int _gen = 0; // bumped by stopSpeaking: lines still waiting are dropped
+
+  /// Done when everything queued so far has been said.
+  Future<void> get quiet => _line;
+
+  /// Says [text] after anything already queued; completes when it has been said.
+  Future<void> say(String text) {
+    final gen = _gen;
+    final f = _line.then<void>((_) async {
+      if (gen == _gen) await _sayNow(text);
+    });
+    _line = f.catchError((_) {});
+    return _line;
+  }
+
+  Future<void> _sayNow(String text) async {
     await _initTts();
     if (session && _stt.isListening) {
       // don't let the open mic hear the announcement
@@ -248,14 +269,20 @@ class Voice extends ChangeNotifier {
       _doneSpeaking();
       return;
     }
+    _utterance = Completer<void>();
     try {
       await _tts.speak(text);
+      // the completion handler ends the line (with a ceiling, in case it never comes)
+      await _utterance!.future.timeout(Duration(milliseconds: 1500 + text.length * 120), onTimeout: () {});
     } catch (_) {
       _doneSpeaking();
     }
   }
 
   Future<void> stopSpeaking() async {
+    _gen++;
+    _line = Future.value();
+    if (_utterance?.isCompleted == false) _utterance!.complete();
     await NeuralVoice.shared.stop();
     try {
       await _tts.stop();

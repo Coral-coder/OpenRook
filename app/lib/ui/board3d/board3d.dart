@@ -33,6 +33,7 @@ class Board3D extends StatefulWidget {
     this.cinema,
     this.speed = 1,
     this.onIdle,
+    this.onShown,
     this.fill = false,
   });
 
@@ -58,6 +59,9 @@ class Board3D extends StatefulWidget {
 
   /// Called when the board has finished acting out everything it was given.
   final VoidCallback? onIdle;
+
+  /// The same, with the ply the board has now acted out up to.
+  final void Function(int ply)? onShown;
 
   @override
   State<Board3D> createState() => _Board3DState();
@@ -107,6 +111,8 @@ class _Board3DState extends State<Board3D> {
         widget.onImpact?.call(m['heavy'] == true);
       case 'idle':
         widget.onIdle?.call();
+      case 'shown':
+        if (m['ply'] is int) widget.onShown?.call(m['ply'] as int);
     }
   }
 

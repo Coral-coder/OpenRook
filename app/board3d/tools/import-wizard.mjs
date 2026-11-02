@@ -164,21 +164,15 @@ for (const [piece, m] of Object.entries(meshes)) {
   const fit = m.raw.pos.map((v) => v * SCALE);
   writeStl(STL + `board-fit/piece_${piece}.stl`, fit, m.raw.idx, 3);
 
-  // the game: each shell simplified on its own (specks under 2 mm³ dropped), y-up
+  // the game: the shells fused into one solid (specks under 2 mm³ dropped) and simplified, so
+  // the surface is one connected skin the skeleton can follow (rigs.js); y-up
   const kept = shells.filter((p) => p.volume() > 2);
-  const total = kept.reduce((n, p) => n + p.numTri(), 0);
-  const ps = [], is = [];
-  for (const part of kept) {
-    const g = part.getMesh();
-    const w = weld(g.vertProperties, g.triVerts); // manifold splits vertices along seams
-    const want = Math.max(12, Math.round((GAME_TRIS[piece] * part.numTri()) / total));
-    const [idx] = MeshoptSimplifier.simplify(w.idx, w.pos, 3, want * 3, 0.006); // ~0.3 mm
-    const c = compact(w.pos, idx);
-    const base = ps.length / 3;
-    for (const v of c.pos) ps.push(v);
-    for (const v of c.idx) is.push(v + base);
-  }
-  const s = { pos: new Float32Array(ps), idx: new Uint32Array(is) };
+  const fused = (kept.length > 1 ? Manifold.union(kept) : kept[0]).getMesh();
+  const w = weld(fused.vertProperties, fused.triVerts); // manifold splits vertices along seams
+  const [idx] = MeshoptSimplifier.simplify(w.idx, w.pos, 3, GAME_TRIS[piece] * 3, 0.006); // ~0.3 mm
+  const c = compact(w.pos, idx);
+  const ps = c.pos, is = c.idx;
+  const s = { pos: ps, idx: is };
   const pos = new Float32Array(s.pos.length);
   for (let i = 0; i < pos.length; i += 3) {
     // 3MF is z-up; glTF is y-up (the figures face +z either way)
@@ -194,7 +188,7 @@ for (const [piece, m] of Object.entries(meshes)) {
   doc.createScene().addChild(doc.createNode('wizard_' + piece).setMesh(doc.createMesh('wizard_' + piece).addPrimitive(prim)));
   await doc.transform(quantize({ quantizePosition: 14 }));
   await io.write(MODELS + 'wizard_' + piece + '.glb', doc);
-  console.log(`${piece.padEnd(6)} original ${m.raw.idx.length / 3} triangles (board-fit x${SCALE.toFixed(4)}, magnet ${clash < 0.5 ? 'fits the base recess' : 'DOES NOT FIT: ' + clash.toFixed(1) + ' mm³ in the way'}), game ${s.idx.length / 3} (${kept.length} shells)`);
+  console.log(`${piece.padEnd(6)} original ${m.raw.idx.length / 3} triangles (board-fit x${SCALE.toFixed(4)}, magnet ${clash < 0.5 ? 'fits the base recess' : 'DOES NOT FIT: ' + clash.toFixed(1) + ' mm³ in the way'}), game ${s.idx.length / 3} (${kept.length} shells fused)`);
 }
 
 function writeStl(path, v, t, np) {

@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RIGS, posture } from './rigs.js';
 import MODELS from './models_data.gen.js';
 import { stoneMaterial } from './stone.js';
 
@@ -385,6 +386,150 @@ function statueGeometry(type) {
   g.setIndex(src.geometry.index.clone());
   const out = toCreasedNormals(g, (35 * Math.PI) / 180);
   out.computeBoundingBox();
+  // bind every vertex to the joints of the body part it belongs to (rigs.js)
+  const rig = RIGS[type];
+  const names = Object.keys(rig.bones);
+  const p = out.attributes.position;
+  const n = p.count;
+  // weld the corners (the geometry is unindexed) so limbs can be grown over the surface
+  const key = new Map(), id = new Int32Array(n), vx = [];
+  for (let i = 0; i < n; i++) {
+    const k = Math.round(p.getX(i) * 200) + ',' + Math.round(p.getY(i) * 200) + ',' + Math.round(p.getZ(i) * 200);
+    let v = key.get(k);
+    if (v === undefined) {
+      v = vx.length / 3;
+      key.set(k, v);
+      vx.push(p.getX(i), p.getY(i), p.getZ(i));
+    }
+    id[i] = v;
+  }
+  const nv = vx.length / 3;
+  const nbr = Array.from({ length: nv }, () => []);
+  for (let t = 0; t < n; t += 3) {
+    for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
+      nbr[id[t + a]].push(id[t + b]);
+      nbr[id[t + b]].push(id[t + a]);
+    }
+  }
+  // pieces modelled as many loose shells (the king's sword, hands, armour plates) touch rather
+  // than join: link vertices of different shells that lie within 0.4 mm of each other
+  const shell = new Int32Array(nv).fill(-1);
+  for (let s0 = 0, ns = 0; s0 < nv; s0++) {
+    if (shell[s0] >= 0) continue;
+    const q = [s0];
+    shell[s0] = ns;
+    for (let h = 0; h < q.length; h++) for (const w of nbr[q[h]]) if (shell[w] < 0) { shell[w] = ns; q.push(w); }
+    ns++;
+  }
+  const cell = new Map(), C = 0.4;
+  const ck = (x, y, z) => Math.floor(x / C) + ',' + Math.floor(y / C) + ',' + Math.floor(z / C);
+  for (let v = 0; v < nv; v++) {
+    const k = ck(vx[v * 3], vx[v * 3 + 1], vx[v * 3 + 2]);
+    (cell.get(k) || cell.set(k, []).get(k)).push(v);
+  }
+  for (let v = 0; v < nv; v++) {
+    const x = vx[v * 3], y = vx[v * 3 + 1], z = vx[v * 3 + 2];
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let l = -1; l <= 1; l++) {
+      for (const w of cell.get(ck(x + i * C, y + j * C, z + l * C)) || []) {
+        if (w > v && shell[w] !== shell[v] && (vx[w * 3] - x) ** 2 + (vx[w * 3 + 1] - y) ** 2 + (vx[w * 3 + 2] - z) ** 2 < C * C) {
+          nbr[v].push(w);
+          nbr[w].push(v);
+        }
+      }
+    }
+  }
+  const owner = new Int32Array(nv).fill(-1); // part index
+  const ring = new Float32Array(nv); // how far inside its part (edge rings, for a soft seam)
+  rig.parts.forEach((part, pi) => {
+    const ok = (v) => owner[v] < 0 && part.allow(vx[v * 3], vx[v * 3 + 1], vx[v * 3 + 2]);
+    // start from the allowed vertex nearest each seed (a limb can be several loose pieces:
+    // two arms, a hand, a sword)
+    const region = [];
+    for (const sd of Array.isArray(part.seed[0]) ? part.seed : [part.seed]) {
+      let seed = -1, best = 2.5 * 2.5; // within 2.5 mm
+      for (let v = 0; v < nv; v++) {
+        if (!ok(v)) continue;
+        const d = (vx[v * 3] - sd[0]) ** 2 + (vx[v * 3 + 1] - sd[1]) ** 2 + (vx[v * 3 + 2] - sd[2]) ** 2;
+        if (d < best) {
+          best = d;
+          seed = v;
+        }
+      }
+      if (seed >= 0) {
+        owner[seed] = pi;
+        region.push(seed);
+      }
+    }
+    if (!region.length) return;
+    for (let h = 0; h < region.length; h++) {
+      for (const w of nbr[region[h]]) {
+        if (ok(w)) {
+          owner[w] = pi;
+          region.push(w);
+        }
+      }
+    }
+    // rings in from the edge of the part
+    const dist = new Int32Array(nv).fill(-1), q = [];
+    const near = (v, w) => (vx[v * 3] - vx[w * 3]) ** 2 + (vx[v * 3 + 1] - vx[w * 3 + 1]) ** 2 + (vx[v * 3 + 2] - vx[w * 3 + 2]) ** 2 < 1.6 * 1.6;
+    for (const v of region) {
+      // soften only real joints (short edges to the body), not long slivers that happen to
+      // touch it: a sword blade or a staff is all slivers and must move whole
+      if (nbr[v].some((w) => owner[w] !== pi && near(v, w))) {
+        dist[v] = 0;
+        q.push(v);
+      }
+    }
+    for (let h = 0; h < q.length; h++) {
+      for (const w of nbr[q[h]]) {
+        if (owner[w] === pi && dist[w] < 0) {
+          dist[w] = dist[q[h]] + 1;
+          q.push(w);
+        }
+      }
+    }
+    for (const v of region) ring[v] = Math.min(1, (dist[v] < 0 ? 3 : dist[v]) / 2);
+  });
+  const weights = (v) => {
+    const w = new Float32Array(names.length);
+    const x = vx[v * 3], y = vx[v * 3 + 1], z = vx[v * 3 + 2];
+    const k = owner[v] >= 0 ? 0.5 + 0.5 * ring[v] : 0;
+    if (k > 0) w[names.indexOf(rig.parts[owner[v]].bone)] += k;
+    const base = rig.base(x, y, z);
+    let total = 0;
+    for (const [, bw] of base) total += bw;
+    for (const [bn, bw] of base) w[names.indexOf(bn)] += ((1 - k) * bw) / total;
+    return w;
+  };
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  const put = (i, v) => {
+    let j = 0;
+    v.forEach((w, b) => {
+      if (w > 0.001 && j < 4) {
+        si[i * 4 + j] = b;
+        sw[i * 4 + j++] = w;
+      }
+    });
+  };
+  // a triangle whose corners belong to unrelated parts would stretch into a sheet when they
+  // move apart, so it moves whole, with the part most of it belongs to
+  for (let t = 0; t < n; t += 3) {
+    const v = [0, 1, 2].map((c) => weights(id[t + c]));
+    let far = 0;
+    for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) far = Math.max(far, v[a].reduce((d, w, i) => d + Math.abs(w - v[b][i]), 0));
+    // ... and so does any long sliver that would bend across a joint
+    let long = 0;
+    for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) long = Math.max(long, (p.getX(t + a) - p.getX(t + b)) ** 2 + (p.getY(t + a) - p.getY(t + b)) ** 2 + (p.getZ(t + a) - p.getZ(t + b)) ** 2);
+    if (far > 1.2 || (far > 0.15 && long > 9)) {
+      const sum = v[0].map((w, i) => w + v[1][i] + v[2][i]);
+      const m = new Float32Array(names.length);
+      m[sum.indexOf(Math.max(...sum))] = 1;
+      v[0] = v[1] = v[2] = m;
+    }
+    for (let c = 0; c < 3; c++) put(t + c, v[c]);
+  }
+  out.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  out.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   return (statueGeo[type] = out);
 }
 
@@ -399,21 +544,40 @@ function buildStatue(code) {
   const mat = stoneMaterial(null, isWhite ? 'white' : 'black', 0, { scale: 0.2 });
   // the stone shader brightens by the base colour: tone the marble down so the carving reads
   mat.color.set(isWhite ? 0x9c968c : 0xb0b0b0);
-  const mesh = new THREE.Mesh(geo, mat);
+  const mesh = new THREE.SkinnedMesh(geo, mat);
   mesh.scale.setScalar(MM);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  mesh.frustumCulled = false; // the posed limbs leave the bind-pose bounds
   model.add(mesh);
+  // the skeleton, in the model's millimetres
+  const rig = RIGS[type];
+  const bones = {}, list = [];
+  for (const [name, [parent, pivot]] of Object.entries(rig.bones)) {
+    const b = new THREE.Bone();
+    b.name = name;
+    b.userData.pivot = pivot;
+    const pp = parent ? rig.bones[parent][1] : [0, 0, 0];
+    b.position.set(pivot[0] - pp[0], pivot[1] - pp[1], pivot[2] - pp[2]);
+    (parent ? bones[parent] : mesh).add(b);
+    bones[name] = b;
+    list.push(b);
+  }
+  mesh.updateMatrixWorld(true);
+  mesh.bind(new THREE.Skeleton(list));
+  // sparks fly from the weapon, wherever the arm swings it
   const hand = new THREE.Object3D();
   hand.name = 'handslotr';
-  hand.position.fromArray(WEAPON[type]).multiplyScalar(MM);
-  model.add(hand);
+  const wb = bones.weapon || bones.spine;
+  hand.position.fromArray(WEAPON[type]).sub(new THREE.Vector3().fromArray(wb.userData.pivot));
+  wb.add(hand);
   const bb = geo.boundingBox;
   const fig = {
     group, type, isWhite, code, spec: {}, model, materials: [mat], stone: false, statue: true,
     parts: { inner }, current: null, move: { name: 'idle', t: 0, d: 2, loop: true },
     height: (bb.max.y - bb.min.y) * MM, radius: 10 * MM,
     pose: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
+    bones, joints: {}, seed: Math.random() * 10,
   };
   fig.mixer = { update: (dt) => animateStatue(fig, dt) };
   return fig;
@@ -430,6 +594,7 @@ function playStatue(fig, name, { loop, speed, duration }) {
   return d;
 }
 
+const ZERO = [0, 0, 0];
 const smooth = (x) => x * x * (3 - 2 * x);
 const c01 = (x) => Math.max(0, Math.min(1, x));
 // rise from 0 to 1 between a and b, then fall back to 0 between c and d
@@ -442,25 +607,23 @@ function strikePose(fig, k, at, big) {
   const lunge = bump(k, at - 0.12, at, at + 0.12, 0.98);
   const s = big ? 1.4 : 1;
   switch (fig.type) {
-    case KNIGHT: // the horse rears up and stamps down
-      P.rx = -0.55 * wind * s + 0.3 * lunge;
-      P.y = 0.1 * wind;
-      P.z = -0.1 * wind + 0.42 * lunge * s;
+    case KNIGHT: // the horse rears (its joints) and the whole statue lunges as it stamps down
+      P.y = 0.06 * wind;
+      P.z = -0.08 * wind + 0.4 * lunge * s;
       break;
     case ROOK: // the tower jumps and comes down like a hammer
       P.y = 0.55 * wind * s;
       P.rx = -0.12 * wind + 0.18 * lunge;
       P.z = 0.38 * lunge;
       break;
-    case PAWN: // a short, low charge
-      P.rx = -0.25 * wind + 0.5 * lunge;
-      P.z = -0.06 * wind + 0.45 * lunge;
+    case PAWN: // springs at the victim
+      P.y = 0.08 * lunge;
+      P.z = -0.04 * wind + 0.45 * lunge;
       break;
-    default: // bishop, queen, king: rise up, twist away, and crash down on the victim
-      P.rx = -0.4 * wind * s + 0.55 * lunge;
-      P.ry = 0.6 * wind * (big ? 1 : 0.5) - 0.2 * lunge;
-      P.y = 0.14 * wind * s;
-      P.z = -0.12 * wind + 0.42 * lunge * s;
+    default: // bishop, queen, king: step in behind the blow
+      P.rx = -0.08 * wind + 0.15 * lunge;
+      P.y = 0.04 * wind * s;
+      P.z = -0.08 * wind + 0.4 * lunge * s;
   }
   return P;
 }
@@ -476,12 +639,11 @@ function animateStatue(fig, dt) {
   switch (m.name) {
     case 'walk':
     case 'run': {
-      // grinding across the board: leaning into the slide, juddering on the squares
-      const lean = c01(T * 3);
-      P.rx = (m.name === 'run' ? 0.12 : 0.07) * lean;
-      P.rz = Math.sin(T * 47) * 0.012 + Math.sin(T * 7.3) * 0.02;
-      P.x = Math.sin(T * 61) * 0.004;
-      P.y = Math.abs(Math.sin(T * 23)) * 0.006;
+      // marching: a bob with every stride and a roll from foot to foot (the legs are in rigs.js)
+      const w = m.name === 'run' ? 11 : 7.5;
+      P.y = Math.abs(Math.sin(T * w)) * 0.03;
+      P.rz = Math.sin(T * w) * 0.03;
+      P.rx = 0.04 * c01(T * 3);
       break;
     }
     case 'leap':
@@ -550,5 +712,14 @@ function animateStatue(fig, dt) {
   for (const key in q) q[key] += (P[key] - q[key]) * f;
   fig.model.position.set(q.x, q.y, q.z);
   fig.model.rotation.set(q.rx, q.ry, q.rz, 'YXZ');
+  // and the limbs: every joint eases toward this move's pose
+  const J = posture(fig.type, m.name, k, T, m.at, m.side, fig.seed);
+  const jf = 1 - Math.exp(-dt * Math.max(snap, 16));
+  for (const [name, bone] of Object.entries(fig.bones)) {
+    const want = J[name] || ZERO;
+    const cur = fig.joints[name] || (fig.joints[name] = [0, 0, 0]);
+    for (let i = 0; i < 3; i++) cur[i] += (want[i] - cur[i]) * jf;
+    bone.rotation.set(cur[0], cur[1], cur[2]);
+  }
   return fig.mixer;
 }

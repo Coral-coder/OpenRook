@@ -1260,6 +1260,7 @@ let last = performance.now();
 let matedDone = -1, matedAt = 0, releaseAt = 0;
 let slowLeft = 0;
 let wasBusy = false;
+let shownPly = null;
 let manual = false, simT = 0;
 let nextFidget = 3;
 function frame(now) {
@@ -1372,6 +1373,12 @@ function tick(realDt) {
   renderer.render(scene, camera);
   const nowBusy = busy || slowLeft > 0;
   if (wasBusy && !nowBusy) send({ type: 'idle', ply: state.ply });
+  // the app waits for this before the computer replies: the board shows this position and
+  // has nothing left to act out (sent after an animation, or straight after a jump)
+  if (!nowBusy && state.ply !== shownPly) {
+    shownPly = state.ply;
+    send({ type: 'shown', ply: state.ply });
+  }
   wasBusy = nowBusy;
 }
 requestAnimationFrame(frame);
