@@ -135,15 +135,18 @@ export function limbShape(len, r, { flat = 0.9, rad = 16, rings = 8, forward = 0
 /** A bell sleeve hanging from the elbow: it opens toward the wrist and its hem sags (local -z
  * is down while the forearm is held forward). */
 export function bellSleeve(H, len, r0, r1, sag, folds_ = 8) {
+  // a sleeve fitted at the elbow that widens toward the wrist; the cloth below the arm (local
+  // -z while the forearm is held forward) hangs down in a long lip, the top stays close
   return sculpt(-len, 0, (u) => {
     const t = 1 - u;
     return r0 + (r1 - r0) * t * t;
   }, {
-    rad: 32, rings: 14, capTop: false, capBottom: false,
+    rad: 36, rings: 18, capTop: false, capBottom: false,
     shape: (x, y, z, a, u) => {
       const t = 1 - u;
-      const k = 1 + 0.12 * t * Math.sin(folds_ * a + 1.3 * Math.sin(2 * a));
-      return [x * k, y, z * k - sag * t * t * (1 - 0.5 * Math.cos(a))];
+      const under = Math.max(0, -Math.cos(a));
+      const k = 1 + 0.1 * t * Math.sin(folds_ * a + 1.3 * Math.sin(2 * a)) * (0.4 + under);
+      return [x * k * (1 - 0.25 * under * t), y + sag * 0.6 * under * t * t, z * k * (1 - 0.15 * (1 - under) * t) - sag * under * t * t];
     },
   });
 }
@@ -158,7 +161,7 @@ export function plateLames(len, r, n, flare = 1.12) {
     const g = sculpt(-h * 1.08, 0, (u) => {
       const t = 1 - u; // 0 at the top of the lame
       return R(t) * (1.02 + (flare - 1) * (t < 0.12 ? t / 0.12 : 1 - 0.4 * (t - 0.12))) * (t > 0.92 ? 1 - (t - 0.92) * 1.2 : 1);
-    }, { rad: 18, rings: 4, capTop: false, capBottom: false });
+    }, { rad: 28, rings: 6, capTop: false, capBottom: false });
     g.translate(0, -i * h, 0);
     geos.push(g);
   }
@@ -205,7 +208,7 @@ export function headShape(H, { female = false, beard = false } = {}) {
     return d;
   };
   // the skull: a light egg
-  const g = new THREE.SphereGeometry(1, 28, 20);
+  const g = new THREE.SphereGeometry(1, 40, 30);
   const sp = g.attributes.position;
   for (let i = 0; i < sp.count; i++) {
     const y = sp.getY(i) * 1.08, x = sp.getX(i) * width(y);
@@ -215,7 +218,7 @@ export function headShape(H, { female = false, beard = false } = {}) {
   }
   g.computeVertexNormals();
   // the face: a dense patch laid on the front, carved
-  const nx = 32, ny_ = 36, x0 = -0.62, x1 = 0.62, y0 = -0.94, y1 = 0.5;
+  const nx = 54, ny_ = 60, x0 = -0.62, x1 = 0.62, y0 = -0.94, y1 = 0.5;
   const pos = [], idx = [];
   for (let j = 0; j <= ny_; j++) {
     for (let i = 0; i <= nx; i++) {
@@ -223,7 +226,7 @@ export function headShape(H, { female = false, beard = false } = {}) {
       const xs = width(y) * 0.9;
       const x = (x0 + ((x1 - x0) * i) / nx) * xs / 0.62 * 0.62 / W;
       // feather the carving out toward the patch edge so it meets the skull
-      const e = Math.min(i, nx - i, j, ny_ - j) / 6;
+      const e = Math.min(i, nx - i, j, ny_ - j) / 12;
       const z = surf(x, y) + relief(x, y) * Math.min(1, e);
       pos.push(x * S, y * S + 0.05 * H, z * S);
     }
@@ -256,10 +259,11 @@ export function headShape(H, { female = false, beard = false } = {}) {
  * A skirt or gown hanging from y=0 down to -len: radius from r0 at the waist to r1 at the hem,
  * with gravity folds (deeper and wider toward the hem), a flared hem and a train behind.
  */
-export function gown(H, len, r0, r1, { folds = 12, depth = 0.08, train = 0.0, open = 0, seed = 1, rad = 96, rings = 36 } = {}) {
+export function gown(H, len, r0, r1, { folds = 12, depth = 0.08, train = 0.0, open = 0, seed = 1, rad = 96, rings = 36, hip = 0, zs = 1 } = {}) {
   const r = (t) => {
     const k = t; // 0 waist .. 1 hem
-    return r0 + (r1 - r0) * (0.15 * k + 0.85 * k * k) + 0.012 * H * sm(0.92, 1, k);
+    // over the hips the cloth swells, then falls and flares to the hem
+    return r0 + (r1 - r0) * (0.15 * k + 0.85 * k * k) + 0.012 * H * sm(0.92, 1, k) + hip * Math.sin(Math.PI * Math.min(1, k / 0.32)) * (1 - k);
   };
   const g = sculpt(-len, 0, (u) => r(1 - u), {
     rad,
@@ -268,9 +272,10 @@ export function gown(H, len, r0, r1, { folds = 12, depth = 0.08, train = 0.0, op
     capBottom: true,
     shape: (x, y, z, a, u, R) => {
       const t = 1 - u;
+      z *= zs + (1 - zs) * t; // oval at the waist, round at the hem
       // folds: big ones from the waist, with smaller ones between, swaying with depth
       const w = Math.sin(folds * a + Math.sin(2 * a + seed) * 1.2 + t * 0.6) * 0.65 + Math.sin(folds * 2.17 * a + seed * 3) * 0.25 + Math.sin(folds * 3.9 * a + seed) * 0.1;
-      let k = 1 + depth * (0.15 + 0.85 * t) * w;
+      let k = 1 + depth * (0.04 + 0.96 * t * t) * w;
       // the hem rolls and the train sweeps behind
       if (Math.cos(a) < 0) k *= 1 + train * t * t * -Math.cos(a);
       let nx = x * k, nz = z * k;
@@ -299,11 +304,12 @@ export function cloak(H, len, r0, r1, { span = 1.9, folds = 7, depth = 0.1, seed
       const u = j / rad;
       const a = Math.PI + (u * 2 - 1) * span * (0.85 + 0.15 * t);
       const w = Math.sin(folds * a + Math.sin(3 * a + seed) + t) * 0.7 + Math.sin(folds * 2.3 * a + seed) * 0.3;
-      const k = 1 + depth * t * w;
+      const k = 1 + depth * (0.3 + 0.7 * t) * w;
       // the edges curl in toward the body
       const edge = Math.min(u, 1 - u);
-      const rr = R * k * (1 - 0.12 * Math.exp(-edge * 30));
-      pos.push(Math.sin(a) * rr, y, Math.cos(a) * rr * 0.85);
+      const rr = R * k * (1 - 0.18 * Math.exp(-edge * 22));
+      // the hem rises and falls with the folds
+      pos.push(Math.sin(a) * rr, y + 0.02 * H * w * t ** 4, Math.cos(a) * rr * 0.85);
     }
   }
   for (let i = 0; i < rings; i++) {
@@ -317,18 +323,42 @@ export function cloak(H, len, r0, r1, { span = 1.9, folds = 7, depth = 0.1, seed
   g.setIndex(idx);
   g.computeVertexNormals();
   carve(g, 0.0015 * H, 50);
-  // give it thickness: a second, slightly smaller shell facing in
+  // give it thickness: a second, slightly smaller shell facing in, joined at the edges
   const inner = g.clone();
   const ip = inner.attributes.position;
   for (let k = 0; k < ip.count; k++) {
     const x = ip.getX(k), z = ip.getZ(k);
     const l = Math.hypot(x, z) || 1;
-    ip.setXYZ(k, x - (x / l) * 0.006 * H, ip.getY(k), z - (z / l) * 0.006 * H);
+    ip.setXYZ(k, x - (x / l) * 0.011 * H, ip.getY(k), z - (z / l) * 0.011 * H);
   }
   const ii = inner.index.array;
   for (let k = 0; k < ii.length; k += 3) [ii[k + 1], ii[k + 2]] = [ii[k + 2], ii[k + 1]];
   inner.computeVertexNormals();
-  return [g, inner];
+  // the edges: a strip joining the outer and inner shells all round the border
+  const op = g.attributes.position;
+  const ep = [], ei = [];
+  const border = [];
+  for (let j = 0; j <= rad; j++) border.push(j); // top
+  for (let i = 1; i <= rings; i++) border.push(i * (rad + 1) + rad); // right side
+  for (let j = rad - 1; j >= 0; j--) border.push(rings * (rad + 1) + j); // hem
+  for (let i = rings - 1; i >= 0; i--) border.push(i * (rad + 1)); // left side
+  for (let k = 0; k < border.length; k++) {
+    const v = border[k];
+    ep.push(op.getX(v), op.getY(v), op.getZ(v), ip.getX(v), ip.getY(v), ip.getZ(v));
+  }
+  for (let k = 0; k < border.length - 1; k++) {
+    const a = k * 2, b = a + 1, c = a + 2, d = a + 3;
+    ei.push(a, c, b, b, c, d);
+  }
+  const edge = new THREE.BufferGeometry();
+  edge.setAttribute('position', new THREE.Float32BufferAttribute(ep, 3));
+  edge.setIndex(ei);
+  edge.computeVertexNormals();
+  const edge2 = edge.clone();
+  const e2 = edge2.index.array;
+  for (let k = 0; k < e2.length; k += 3) [e2[k + 1], e2[k + 2]] = [e2[k + 2], e2[k + 1]];
+  edge2.computeVertexNormals();
+  return [g, inner, edge, edge2];
 }
 
 // ------------------------------------------------------------------ hair
@@ -379,9 +409,9 @@ export function locks(H, n, { from = 0.06, len = 0.2, spread = 0.06, wave = 0.01
 /** A crown that reads at a small size: a deep band, big fleurs, pearls, and jewels. */
 export function crownGeos(r, h, { points = 8, arches = false } = {}) {
   const out = [];
-  out.push(sculpt(0, h * 0.42, () => r, { rad: 48, rings: 3, capTop: false, capBottom: false, shape: (x, y, z, a, t) => [x * (1 + 0.04 * t), y, z * (1 + 0.04 * t)] }));
+  out.push(sculpt(0, h * 0.42, () => r, { rad: 96, rings: 6, capTop: false, capBottom: false, shape: (x, y, z, a, t) => [x * (1 + 0.04 * t), y, z * (1 + 0.04 * t)] }));
   const lip = (y, t) => {
-    const g = new THREE.TorusGeometry(r * 1.03, t, 6, 48);
+    const g = new THREE.TorusGeometry(r * 1.03, t, 8, 64);
     g.rotateX(Math.PI / 2);
     g.translate(0, y, 0);
     return g;
@@ -396,15 +426,15 @@ export function crownGeos(r, h, { points = 8, arches = false } = {}) {
     fleur.quadraticCurveTo(-h * 0.14, h * 0.6, 0, h * 0.85);
     fleur.quadraticCurveTo(h * 0.14, h * 0.6, h * 0.12, h * 0.35);
     fleur.quadraticCurveTo(h * 0.35, h * 0.3, h * 0.2, 0);
-    const fg = new THREE.ExtrudeGeometry(fleur, { depth: h * 0.06, bevelEnabled: true, bevelThickness: h * 0.03, bevelSize: h * 0.03, bevelSegments: 1, curveSegments: 5 });
+    const fg = new THREE.ExtrudeGeometry(fleur, { depth: h * 0.06, bevelEnabled: true, bevelThickness: h * 0.03, bevelSize: h * 0.03, bevelSegments: 1, curveSegments: 8 });
     fg.translate(0, 0, -h * 0.03);
     fg.rotateY(a);
     fg.translate(x, h * 0.42, z);
     out.push(fg);
-    const pearl = new THREE.SphereGeometry(h * 0.07, 8, 6);
+    const pearl = new THREE.SphereGeometry(h * 0.07, 10, 8);
     pearl.translate(x, h * 1.3, z);
     out.push(pearl);
-    const jewel = new THREE.OctahedronGeometry(h * 0.08, 0);
+    const jewel = new THREE.OctahedronGeometry(h * 0.08, 1);
     jewel.scale(1, 1.3, 0.6);
     jewel.rotateY(a);
     const b = a + Math.PI / points;
@@ -413,13 +443,13 @@ export function crownGeos(r, h, { points = 8, arches = false } = {}) {
   }
   if (arches) {
     for (let i = 0; i < 2; i++) {
-      const g = new THREE.TorusGeometry(r * 0.98, h * 0.05, 6, 32, Math.PI);
+      const g = new THREE.TorusGeometry(r * 0.98, h * 0.05, 10, 64, Math.PI);
       g.rotateY((i * Math.PI) / 2);
       g.scale(1, 0.9, 1);
       g.translate(0, h * 0.45, 0);
       out.push(g);
     }
-    const orb = new THREE.SphereGeometry(h * 0.16, 14, 10);
+    const orb = new THREE.SphereGeometry(h * 0.16, 24, 16);
     orb.translate(0, h * 0.45 + r * 0.9 + h * 0.1, 0);
     out.push(orb);
     const cross = new THREE.BoxGeometry(h * 0.06, h * 0.32, h * 0.06);
@@ -436,7 +466,7 @@ export function crownGeos(r, h, { points = 8, arches = false } = {}) {
 /** A hand closed round a grip (the grip runs along local z through the palm). */
 export function fist(s, side, { gauntlet = false } = {}) {
   const out = [];
-  const palm = sculpt(-0.55 * s, 0, profile([[0, 0.22 * s], [0.3, 0.3 * s], [0.7, 0.3 * s], [1, 0.26 * s]]), { rad: 16, rings: 8, shape: (x, y, z) => [x * 1.15, y, z * 0.75] });
+  const palm = sculpt(-0.55 * s, 0, profile([[0, 0.22 * s], [0.3, 0.3 * s], [0.7, 0.3 * s], [1, 0.26 * s]]), { rad: 28, rings: 14, shape: (x, y, z) => [x * 1.15, y, z * 0.75] });
   out.push(palm);
   for (let i = 0; i < 4; i++) {
     // each finger curls round: three phalanges
@@ -447,7 +477,7 @@ export function fist(s, side, { gauntlet = false } = {}) {
       const a = t * Math.PI * 1.1;
       return v.set(fx, -0.5 * s - Math.sin(a) * L * 0.55, Math.cos(a) * L * 0.55 - L * 0.55 + 0.18 * s);
     };
-    out.push(new THREE.TubeGeometry(c, 10, (gauntlet ? 0.075 : 0.062) * s, 7, false));
+    out.push(new THREE.TubeGeometry(c, 18, (gauntlet ? 0.075 : 0.062) * s, 10, false));
     if (gauntlet) for (let k = 1; k < 3; k++) {
       const knuckle = new THREE.SphereGeometry(0.08 * s, 8, 6);
       knuckle.translate(...c.getPoint(k / 3).toArray());
