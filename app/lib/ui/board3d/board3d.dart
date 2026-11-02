@@ -30,6 +30,9 @@ class Board3D extends StatefulWidget {
     this.onMove,
     this.matedKing = -1,
     this.onImpact,
+    this.cinema,
+    this.speed = 1,
+    this.onIdle,
   });
 
   final Position position;
@@ -41,6 +44,16 @@ class Board3D extends StatefulWidget {
   final void Function(Move)? onMove;
   final int matedKing;
   final void Function(bool heavy)? onImpact;
+
+  /// Camera: 'fights' (close-ups of captures), 'all' (follow every move: replays) or 'off'.
+  /// Defaults to the player's setting.
+  final String? cinema;
+
+  /// Animation speed (replays: 0.5, 1 or 2).
+  final double speed;
+
+  /// Called when the board has finished acting out everything it was given.
+  final VoidCallback? onIdle;
 
   @override
   State<Board3D> createState() => _Board3DState();
@@ -88,6 +101,8 @@ class _Board3DState extends State<Board3D> {
         _tap(m['square'] as int);
       case 'impact':
         widget.onImpact?.call(m['heavy'] == true);
+      case 'idle':
+        widget.onIdle?.call();
     }
   }
 
@@ -146,6 +161,8 @@ class _Board3DState extends State<Board3D> {
       'check': p.inCheck ? p.kingSquare(p.turn) : -1,
       'mated': widget.matedKing,
       'sound': Settings.shared.moveSounds,
+      'cinema': widget.cinema ?? (Settings.shared.cinematic ? 'fights' : 'off'),
+      'speed': widget.speed,
     });
     if (msg == _lastSent) return;
     _lastSent = msg;

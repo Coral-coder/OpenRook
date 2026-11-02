@@ -42,6 +42,7 @@ class Settings extends ChangeNotifier {
   bool battleView = true; // 3D board with fighting pieces
   bool announce = true; // say every move out loud
   bool haptics = true;
+  bool cinematic = true; // close-up camera for fights
   List<SavedRoom> rooms = [];
   String? savedComputerGame; // json: {fen, moves, color, level}
 
@@ -64,6 +65,7 @@ class Settings extends ChangeNotifier {
     battleView = _p.getBool('battleView') ?? true;
     announce = _p.getBool('announce') ?? true;
     haptics = _p.getBool('haptics') ?? true;
+    cinematic = _p.getBool('cinematic') ?? true;
     savedComputerGame = _p.getString('computerGame');
     try {
       rooms = [for (final r in jsonDecode(_p.getString('rooms') ?? '[]') as List) SavedRoom.fromJson(r as Map<String, dynamic>)];
@@ -85,6 +87,7 @@ class Settings extends ChangeNotifier {
     await _p.setBool('battleView', battleView);
     await _p.setBool('announce', announce);
     await _p.setBool('haptics', haptics);
+    await _p.setBool('cinematic', cinematic);
     await _p.setString('rooms', jsonEncode([for (final r in rooms) r.toJson()]));
     if (savedComputerGame == null) {
       await _p.remove('computerGame');

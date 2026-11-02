@@ -36,6 +36,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (v) => setState(() => s.announce = v),
           ),
           SwitchListTile(
+            title: const Text('Cinematic camera'),
+            subtitle: const Text('Swoop in close for every fight'),
+            value: s.cinematic,
+            onChanged: (v) => setState(() => s.cinematic = v),
+          ),
+          SwitchListTile(
             title: const Text('Battle sounds'),
             subtitle: const Text('Clashing steel, crumbling stone, footsteps'),
             value: s.moveSounds,

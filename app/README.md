@@ -31,9 +31,20 @@ tells the board how to play your opponent's.
   with dust, a flash, a camera shake, a crash and a haptic thump. Nearby pieces turn to watch,
   and between moves the army fidgets: soldiers shoulder spears, horses paw the ground.
   Sound effects are synthesised in the page (WebAudio, no audio files).
+  Every piece has its own finisher, and the victim dies to match: the soldier's stab and
+  trip (the victim topples), the knight's trample (crushed flat) or joust (thrown into the
+  air), the bishop's lightning from the sky (charred, then crumbling to ash), the tower's
+  ground-pound (a shockwave flings the victim up), the queen's whirlwind (lifted, spinning,
+  bursting in mid-air) and the king's spinning slash. Defenders parry, dodge and stagger,
+  weapons leave glowing trails, feet kick up dust, and the killing blow plays in slow motion.
   Castling rooks vault the king, promoted pawns transform in a shower of sparks, and a
-  checkmated king topples and crumbles. Drag to look around the board; tap a piece, then a
-  square. The grid button switches to a flat board. Windows and Linux (no WebView) use a
+  checkmated king topples and crumbles.
+  **Camera**: the cinematic camera films each fight side-on, circling the fighters (Settings →
+  Cinematic camera). Drag to orbit, pinch or mouse-wheel to zoom into the board, two fingers
+  (or right-drag) to pan, double-tap to reset. Tap a piece, then a square.
+- **Replay** (`lib/ui/replay_screen.dart`): from the game menu, or when a game ends, watch the
+  whole game again with every battle acted out and the camera following each move. Play,
+  pause, step, scrub, ½×/1×/2× speed, with the announcer calling the moves. The grid button switches to a flat board. Windows and Linux (no WebView) use a
   2.5D painted version (`lib/ui/battle_board.dart`).
   To change the scene: edit `board3d/src/*.js`, then `cd board3d && npm install && npm run build`
   rebuilds `assets/board3d/board3d.html` (commit it; the app doesn't need Node to build).

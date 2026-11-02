@@ -53,5 +53,12 @@ class _Board3DViewState extends State<Board3DView> {
   }
 
   @override
-  Widget build(BuildContext context) => HtmlElementView(viewType: _type);
+  Widget build(BuildContext context) {
+    // A menu or dialog on top of the board is another route; while one is open the iframe
+    // must not take the clicks meant for it (on the web a platform view sits above Flutter's
+    // own hit testing).
+    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+    _frame.style.pointerEvents = onTop ? 'auto' : 'none';
+    return HtmlElementView(viewType: _type);
+  }
 }

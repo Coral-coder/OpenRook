@@ -13,6 +13,7 @@ import '../voice/voice.dart';
 import 'battle_board.dart';
 import 'board3d/board3d.dart';
 import 'board_view.dart';
+import 'replay_screen.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.controller});
@@ -54,6 +55,21 @@ class _GameScreenState extends State<GameScreen> {
     if (voice.error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(voice.error!)));
     }
+  }
+
+  void _openReplay() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReplayScreen(
+          startFen: c.game.startFen,
+          moves: c.game.uciMoves,
+          whiteName: c.whiteName,
+          blackName: c.blackName,
+          flipped: c.flipped,
+        ),
+      ),
+    );
   }
 
   void _impact(bool heavy) {
@@ -168,6 +184,8 @@ class _GameScreenState extends State<GameScreen> {
                   await c.offerDraw();
                 case 'undo':
                   await c.takeBack();
+                case 'replay':
+                  _openReplay();
                 case 'pgn':
                   await Clipboard.setData(ClipboardData(text: c.game.pgnMoves));
                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Moves copied')));
@@ -181,6 +199,7 @@ class _GameScreenState extends State<GameScreen> {
                 const PopupMenuItem(value: 'draw', child: Text('Offer draw')),
               if (c.opponent == Opponent.computer || c.opponent == Opponent.sameBoard)
                 const PopupMenuItem(value: 'undo', child: Text('Take back')),
+              if (c.game.ply > 0) const PopupMenuItem(value: 'replay', child: Text('Replay the battles')),
               const PopupMenuItem(value: 'pgn', child: Text('Copy moves (PGN)')),
               if (board.connected) const PopupMenuItem(value: 'stop', child: Text('Emergency stop board')),
             ],
@@ -276,7 +295,17 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
           ),
-          if (c.error != null)
+          if (c.over && c.game.ply > 0)
+          Card(
+            color: const Color(0xFF3A2E1F),
+            child: ListTile(
+              leading: const Icon(Icons.movie_filter, color: Color(0xFFE0B84A)),
+              title: const Text('Watch the replay'),
+              subtitle: const Text('The whole game, every battle, the camera in the thick of it'),
+              onTap: _openReplay,
+            ),
+          ),
+        if (c.error != null)
             Card(
               color: Colors.red.shade900,
               child: Padding(padding: const EdgeInsets.all(12), child: Text(c.error!)),
