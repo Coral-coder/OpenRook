@@ -1,0 +1,18 @@
+{
+  "name": "openrook-board3d",
+  "private": true,
+  "description": "The 3D battle board (three.js), bundled into one HTML file that the app embeds.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.1.1",
+    "@gltf-transform/extensions": "^4.1.1",
+    "@gltf-transform/functions": "^4.1.1",
+    "esbuild": "0.24.0",
+    "meshoptimizer": "^0.22.0"
+  }
+}

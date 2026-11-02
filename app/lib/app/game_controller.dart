@@ -11,6 +11,8 @@ import '../chess/position.dart';
 import '../net/chesscom.dart';
 import '../net/lichess.dart';
 import '../net/match.dart';
+import '../voice/speech_moves.dart';
+import '../voice/voice.dart';
 import 'settings.dart';
 
 enum Opponent { computer, sameBoard, friend, random, lichess, chessCom }
@@ -44,6 +46,7 @@ class GameController extends ChangeNotifier {
     final c = GameController._(Opponent.sameBoard, myColor: null, title: 'Over the board');
     c.whiteName = 'White';
     c.blackName = 'Black';
+    c._positionChanged();
     return c;
   }
 
@@ -123,6 +126,7 @@ class GameController extends ChangeNotifier {
     if (!game.play(m)) return;
     choices = [];
     error = null;
+    _announce(before, m);
     _positionChanged();
     // Tell the other side.
     switch (opponent) {
@@ -153,6 +157,7 @@ class GameController extends ChangeNotifier {
     final captured = [game.captured[0].length, game.captured[1].length];
     if (!game.play(m)) return;
     choices = [];
+    _announce(before, m);
     _positionChanged();
     await _drag(before, m, captured);
     _saveLocal();
@@ -219,8 +224,40 @@ class GameController extends ChangeNotifier {
 
   String get _opponentName => myColor == white ? blackName : whiteName;
 
-  /// The player picked one of several candidate moves.
-  void choose(Move m) => playLocal(m, fromBoard: true);
+  /// The player picked one of several candidate moves (from the board's sensors or a spoken
+  /// move that could mean more than one thing).
+  bool choicesFromBoard = true;
+  void choose(Move m) => playLocal(m, fromBoard: choicesFromBoard);
+
+  /// Square of a checkmated king (for the crumbling animation), or -1.
+  int get matedKing => over && game.resultReason == 'checkmate' ? game.position.kingSquare(game.turn) : -1;
+
+  void _announce(Position before, Move m) {
+    if (!Settings.shared.announce) return;
+    var text = spokenMove(before, m);
+    if (over && game.resultReason == 'checkmate') {
+      text += '. Checkmate!';
+    } else if (game.position.inCheck) {
+      text += '. Check!';
+    }
+    Voice.shared.say(text);
+  }
+
+  /// A move said out loud. Returns what happened, for the screen to show.
+  String voiceMove(List<String> transcripts) {
+    if (!canPlay) return 'Not your move';
+    final found = movesFromTranscripts(transcripts, game.position);
+    final heard = transcripts.isEmpty ? '' : transcripts.first;
+    if (found.isEmpty) return 'Didn\'t catch a move in "$heard". Try "knight to f3".';
+    if (found.length == 1) {
+      playLocal(found.first);
+      return '';
+    }
+    choices = found;
+    choicesFromBoard = false;
+    notifyListeners();
+    return '';
+  }
 
   // ------------------------------------------------------------------ physical board
   void _onBoardChanged() {
@@ -242,6 +279,7 @@ class GameController extends ChangeNotifier {
       return;
     }
     final found = detector.feed(occ);
+    choicesFromBoard = true;
     if (found.length == 1) {
       playLocal(found.first, fromBoard: true);
     } else if (found.length > 1) {

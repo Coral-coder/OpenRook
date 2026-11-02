@@ -39,6 +39,10 @@ class Settings extends ChangeNotifier {
   bool autoFlip = true;
   int captureSlots = 8; // per side: 8 standard build, 16 wide build
   bool moveSounds = true;
+  bool battleView = true; // 3D board with fighting pieces
+  bool announce = true; // say every move out loud
+  bool haptics = true;
+  bool cinematic = true; // close-up camera for fights
   List<SavedRoom> rooms = [];
   String? savedComputerGame; // json: {fen, moves, color, level}
 
@@ -58,6 +62,10 @@ class Settings extends ChangeNotifier {
     autoFlip = _p.getBool('autoFlip') ?? true;
     captureSlots = _p.getInt('captureSlots') ?? 8;
     moveSounds = _p.getBool('moveSounds') ?? true;
+    battleView = _p.getBool('battleView') ?? true;
+    announce = _p.getBool('announce') ?? true;
+    haptics = _p.getBool('haptics') ?? true;
+    cinematic = _p.getBool('cinematic') ?? true;
     savedComputerGame = _p.getString('computerGame');
     try {
       rooms = [for (final r in jsonDecode(_p.getString('rooms') ?? '[]') as List) SavedRoom.fromJson(r as Map<String, dynamic>)];
@@ -76,6 +84,10 @@ class Settings extends ChangeNotifier {
     await _p.setBool('autoFlip', autoFlip);
     await _p.setInt('captureSlots', captureSlots);
     await _p.setBool('moveSounds', moveSounds);
+    await _p.setBool('battleView', battleView);
+    await _p.setBool('announce', announce);
+    await _p.setBool('haptics', haptics);
+    await _p.setBool('cinematic', cinematic);
     await _p.setString('rooms', jsonEncode([for (final r in rooms) r.toJson()]));
     if (savedComputerGame == null) {
       await _p.remove('computerGame');

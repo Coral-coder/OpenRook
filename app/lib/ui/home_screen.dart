@@ -42,8 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(12), children: [
-        const _BoardCard(),
-        const SizedBox(height: 8),
         if (settings.savedComputerGame != null)
           _Tile(
             icon: Icons.play_circle,
@@ -93,6 +91,8 @@ class _HomeScreenState extends State<HomeScreen> {
           subtitle: 'Mirror your daily games on the board',
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChessComScreen())),
         ),
+        const Padding(padding: EdgeInsets.fromLTRB(4, 16, 4, 4), child: Text('Smart board (optional)')),
+        const _BoardCard(),
         if (settings.rooms.any((r) => !r.finished)) ...[
           const Padding(padding: EdgeInsets.fromLTRB(4, 16, 4, 4), child: Text('Games with friends')),
           for (final r in settings.rooms.where((r) => !r.finished))
@@ -193,13 +193,13 @@ class _BoardCard extends StatelessWidget {
       builder: (context, _) {
         final connected = board.connected;
         return Card(
-          color: connected ? Colors.green.shade900 : null,
+          color: connected ? Colors.green.shade900 : const Color(0xFF221D18),
           child: ListTile(
             leading: Icon(connected ? Icons.grid_on : Icons.bluetooth_searching, size: 32),
-            title: Text(connected ? '${board.boardName ?? 'Board'} connected' : 'No board connected'),
+            title: Text(connected ? '${board.boardName ?? 'Board'} connected' : 'Connect an OpenRook board'),
             subtitle: Text(connected
                 ? 'Firmware ${board.firmware ?? '?'}${board.sensorsOk ? '' : ' · sensor board missing!'}'
-                : (board.supported ? 'Tap to find your OpenRook board' : 'Boards connect from the phone/desktop app')),
+                : 'Everything works on the phone. A built board adds real pieces that move by themselves.'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BoardScreen())),
           ),

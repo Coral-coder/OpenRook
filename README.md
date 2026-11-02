@@ -1,6 +1,6 @@
 # OpenRook
 
-**A real chess board that plays people anywhere in the world.** An ESP32 senses the pieces on a
+**A chess game where the pieces fight, and a real board that plays people anywhere in the world.** An ESP32 senses the pieces on a
 3D-printed board and moves them with a magnet underneath, and a phone app connects it to the
 computer, a friend, a random opponent, lichess.org or your chess.com Daily games. You move a
 piece by hand; on the other side of the world it glides across your opponent's board. No
@@ -17,7 +17,7 @@ servers: games travel through public relays, and nothing needs to be hosted.
 | Folder | What |
 | --- | --- |
 | [`3d-prints/`](3d-prints/) | Every printable part: STLs ready to slice, plus parametric OpenSCAD sources. |
-| [`hardware/`](hardware/) | What to buy ([BOM](hardware/BOM.md)), the [wiring / schematic](hardware/WIRING.md), and the [build guide](hardware/ASSEMBLY.md). |
+| [`hardware/`](hardware/) | What to buy ([BOM](hardware/BOM.md) + a Mouser cart file), the [circuit / schematic](hardware/WIRING.md), and the [build guide](hardware/ASSEMBLY.md). |
 | [`firmware/`](firmware/) | The ESP32 Arduino sketch and the [board protocol](firmware/PROTOCOL.md). |
 | [`app/`](app/) | The cross-platform Flutter app (Android, iOS, desktop, web). |
 
@@ -37,14 +37,17 @@ servers: games travel through public relays, and nothing needs to be hosted.
 
 ## Get started
 
-1. Order the parts in [hardware/BOM.md](hardware/BOM.md) (about $110–150).
+1. Order the parts: upload [hardware/mouser-bom.csv](hardware/mouser-bom.csv) to Mouser's BOM tool for all the
+   electronics, and get the frame hardware and magnets on the short list in [hardware/BOM.md](hardware/BOM.md).
 2. Print the parts in [3d-prints/](3d-prints/).
 3. Build it with [hardware/ASSEMBLY.md](hardware/ASSEMBLY.md) and [hardware/WIRING.md](hardware/WIRING.md).
 4. Flash the [firmware](firmware/README.md).
 5. Install the app (Releases has the Android APK; iPhone via TestFlight), tap *No board connected*,
    connect, calibrate, and play.
 
-No board yet? The app is fully playable on screen.
+No board yet? The app is a complete game on its own: a real 3D battle board where the pieces
+are animated fantasy characters (heroes against an army of skeletons) who march, leap and fight, and captured pieces are smashed to rubble, every move announced out loud, and you can
+call out your moves ("knight to f3") instead of tapping. The board is a bonus.
 
 ## Releases
 
@@ -55,4 +58,5 @@ tests, compiles the firmware and renders the STLs.
 
 ## License
 
-MIT.
+MIT. The 3D characters are KayKit's Adventurers and Skeletons packs by Kay Lousberg
+(www.kaylousberg.com), CC0: see `app/board3d/models/LICENSE.txt`.

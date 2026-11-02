@@ -1,0 +1,514 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="1260" viewBox="0 0 1660 1260" font-family="Helvetica, Arial, sans-serif">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="30" y="36" font-size="22" text-anchor="start" fill="#000" font-weight="bold">OpenRook controller — sheet 1 of 2</text>
+<text x="30" y="58" font-size="12" text-anchor="start" fill="#444" font-weight="normal">Modules plug into female headers on one perfboard. Labels with the same name are connected; × = not connected. Parts: hardware/mouser-bom.csv.</text>
+<text x="30" y="100" font-size="15" text-anchor="start" fill="#000" font-weight="bold">POWER</text>
+<rect x="80" y="150" width="120" height="76" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="140.0" y="128" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">J1 DC jack</text>
+<text x="140.0" y="143" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">12 V in, 5.5 × 2.1 mm</text>
+<text x="194" y="178" font-size="12" text-anchor="end" fill="#000" font-weight="normal">+ centre</text>
+<line x1="200" y1="174" x2="234" y2="174" stroke="#b22222" stroke-width="1.6"/>
+<text x="238" y="178" font-size="12" text-anchor="start" fill="#b22222" font-weight="bold">+12V</text>
+<text x="194" y="202" font-size="12" text-anchor="end" fill="#000" font-weight="normal">− sleeve</text>
+<line x1="200" y1="198" x2="234" y2="198" stroke="#000" stroke-width="1.6"/>
+<line x1="234" y1="198" x2="234" y2="206" stroke="#000" stroke-width="1.6"/>
+<line x1="225" y1="206" x2="243" y2="206" stroke="#000" stroke-width="2"/>
+<line x1="229" y1="210" x2="239" y2="210" stroke="#000" stroke-width="2"/>
+<line x1="232" y1="214" x2="236" y2="214" stroke="#000" stroke-width="2"/>
+<text x="360" y="134" font-size="12" text-anchor="middle" fill="#b22222" font-weight="bold">+12V</text>
+<line x1="360" y1="140" x2="360" y2="171.0" stroke="#000" stroke-width="1.6"/>
+<line x1="360" y1="179.0" x2="360" y2="210" stroke="#000" stroke-width="1.6"/>
+<line x1="346" y1="171.0" x2="374" y2="171.0" stroke="#000" stroke-width="2.4"/>
+<path d="M346,184.0 Q360,176.0 374,184.0" fill="none" stroke="#000" stroke-width="2.4"/>
+<text x="340" y="167.0" font-size="14" text-anchor="start" fill="#000" font-weight="normal">+</text>
+<text x="380" y="173.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">C1</text>
+<text x="380" y="188.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">100 µF 35 V</text>
+<line x1="360" y1="210" x2="360" y2="218" stroke="#000" stroke-width="1.6"/>
+<line x1="351" y1="218" x2="369" y2="218" stroke="#000" stroke-width="2"/>
+<line x1="355" y1="222" x2="365" y2="222" stroke="#000" stroke-width="2"/>
+<line x1="358" y1="226" x2="362" y2="226" stroke="#000" stroke-width="2"/>
+<rect x="80" y="300" width="120" height="100" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="140.0" y="278" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">U1 TSR 2-2450</text>
+<text x="140.0" y="293" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">12 V → 5 V, 2 A</text>
+<text x="194" y="328" font-size="12" text-anchor="end" fill="#000" font-weight="normal">1 VIN</text>
+<line x1="200" y1="324" x2="234" y2="324" stroke="#b22222" stroke-width="1.6"/>
+<text x="238" y="328" font-size="12" text-anchor="start" fill="#b22222" font-weight="bold">+12V</text>
+<text x="194" y="352" font-size="12" text-anchor="end" fill="#000" font-weight="normal">2 GND</text>
+<line x1="200" y1="348" x2="234" y2="348" stroke="#000" stroke-width="1.6"/>
+<line x1="234" y1="348" x2="234" y2="356" stroke="#000" stroke-width="1.6"/>
+<line x1="225" y1="356" x2="243" y2="356" stroke="#000" stroke-width="2"/>
+<line x1="229" y1="360" x2="239" y2="360" stroke="#000" stroke-width="2"/>
+<line x1="232" y1="364" x2="236" y2="364" stroke="#000" stroke-width="2"/>
+<text x="194" y="376" font-size="12" text-anchor="end" fill="#000" font-weight="normal">3 VOUT</text>
+<line x1="200" y1="372" x2="234" y2="372" stroke="#d2691e" stroke-width="1.6"/>
+<text x="238" y="376" font-size="12" text-anchor="start" fill="#d2691e" font-weight="bold">+5V</text>
+<text x="360" y="294" font-size="12" text-anchor="middle" fill="#d2691e" font-weight="bold">+5V</text>
+<line x1="360" y1="300" x2="360" y2="331.0" stroke="#000" stroke-width="1.6"/>
+<line x1="360" y1="339.0" x2="360" y2="370" stroke="#000" stroke-width="1.6"/>
+<line x1="346" y1="331.0" x2="374" y2="331.0" stroke="#000" stroke-width="2.4"/>
+<path d="M346,344.0 Q360,336.0 374,344.0" fill="none" stroke="#000" stroke-width="2.4"/>
+<text x="340" y="327.0" font-size="14" text-anchor="start" fill="#000" font-weight="normal">+</text>
+<text x="380" y="333.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">C2</text>
+<text x="380" y="348.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">100 µF 35 V</text>
+<line x1="360" y1="370" x2="360" y2="378" stroke="#000" stroke-width="1.6"/>
+<line x1="351" y1="378" x2="369" y2="378" stroke="#000" stroke-width="2"/>
+<line x1="355" y1="382" x2="365" y2="382" stroke="#000" stroke-width="2"/>
+<line x1="358" y1="386" x2="362" y2="386" stroke="#000" stroke-width="2"/>
+<text x="80" y="450" font-size="11" text-anchor="start" fill="#444" font-weight="normal">+3V3 comes from the ESP32 board's own regulator</text>
+<text x="80" y="465" font-size="11" text-anchor="start" fill="#444" font-weight="normal">(its 3V3 pin); it feeds U5 and the drivers' logic.</text>
+<rect x="590" y="150" width="180" height="316" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="680.0" y="128" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">U2 ESP32-DevKitC-32E</text>
+<text x="680.0" y="143" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">in 2 × 19-pin female headers</text>
+<text x="596" y="178" font-size="12" text-anchor="start" fill="#000" font-weight="normal">5V</text>
+<line x1="556" y1="174" x2="590" y2="174" stroke="#d2691e" stroke-width="1.6"/>
+<text x="552" y="178" font-size="12" text-anchor="end" fill="#d2691e" font-weight="bold">+5V</text>
+<text x="596" y="202" font-size="12" text-anchor="start" fill="#000" font-weight="normal">3V3</text>
+<line x1="556" y1="198" x2="590" y2="198" stroke="#b8860b" stroke-width="1.6"/>
+<text x="552" y="202" font-size="12" text-anchor="end" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="596" y="226" font-size="12" text-anchor="start" fill="#000" font-weight="normal">GND</text>
+<line x1="556" y1="222" x2="590" y2="222" stroke="#000" stroke-width="1.6"/>
+<line x1="556" y1="222" x2="556" y2="230" stroke="#000" stroke-width="1.6"/>
+<line x1="547" y1="230" x2="565" y2="230" stroke="#000" stroke-width="2"/>
+<line x1="551" y1="234" x2="561" y2="234" stroke="#000" stroke-width="2"/>
+<line x1="554" y1="238" x2="558" y2="238" stroke="#000" stroke-width="2"/>
+<text x="764" y="178" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO25</text>
+<line x1="770" y1="174" x2="804" y2="174" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="178" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">A_STEP</text>
+<text x="764" y="202" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO26</text>
+<line x1="770" y1="198" x2="804" y2="198" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="202" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">A_DIR</text>
+<text x="764" y="226" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO27</text>
+<line x1="770" y1="222" x2="804" y2="222" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="226" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">B_STEP</text>
+<text x="764" y="250" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO14</text>
+<line x1="770" y1="246" x2="804" y2="246" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="250" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">B_DIR</text>
+<text x="764" y="274" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO13</text>
+<line x1="770" y1="270" x2="804" y2="270" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="274" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MOT_EN</text>
+<text x="764" y="298" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO32</text>
+<line x1="770" y1="294" x2="804" y2="294" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="298" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">X_MIN</text>
+<text x="764" y="322" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO33</text>
+<line x1="770" y1="318" x2="804" y2="318" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="322" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">Y_MIN</text>
+<text x="764" y="346" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO18</text>
+<line x1="770" y1="342" x2="804" y2="342" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="346" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">SERVO</text>
+<text x="764" y="370" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO21</text>
+<line x1="770" y1="366" x2="804" y2="366" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="370" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">SDA</text>
+<text x="764" y="394" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO22</text>
+<line x1="770" y1="390" x2="804" y2="390" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="394" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">SCL</text>
+<text x="764" y="418" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO23</text>
+<line x1="770" y1="414" x2="804" y2="414" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="418" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">LED_DIN</text>
+<text x="764" y="442" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GPIO19</text>
+<line x1="770" y1="438" x2="804" y2="438" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="442" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">BUZZ</text>
+<rect x="1110" y="150" width="170" height="220" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="1195.0" y="128" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">U3 TMC2209 module, motor A</text>
+<text x="1195.0" y="143" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">StepStick pinout, 2 × 8-pin headers</text>
+<text x="1116" y="178" font-size="12" text-anchor="start" fill="#000" font-weight="normal">EN</text>
+<line x1="1076" y1="174" x2="1110" y2="174" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="178" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">MOT_EN</text>
+<text x="1116" y="202" font-size="12" text-anchor="start" fill="#000" font-weight="normal">MS1</text>
+<line x1="1076" y1="198" x2="1110" y2="198" stroke="#b8860b" stroke-width="1.6"/>
+<text x="1072" y="202" font-size="12" text-anchor="end" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="1116" y="226" font-size="12" text-anchor="start" fill="#000" font-weight="normal">MS2</text>
+<line x1="1076" y1="222" x2="1110" y2="222" stroke="#b8860b" stroke-width="1.6"/>
+<text x="1072" y="226" font-size="12" text-anchor="end" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="1116" y="250" font-size="12" text-anchor="start" fill="#000" font-weight="normal">PDN/RX</text>
+<text x="1098" y="251" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="1116" y="274" font-size="12" text-anchor="start" fill="#000" font-weight="normal">TX</text>
+<text x="1098" y="275" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="1116" y="298" font-size="12" text-anchor="start" fill="#000" font-weight="normal">CLK</text>
+<text x="1098" y="299" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="1116" y="322" font-size="12" text-anchor="start" fill="#000" font-weight="normal">STEP</text>
+<line x1="1076" y1="318" x2="1110" y2="318" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="322" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">A_STEP</text>
+<text x="1116" y="346" font-size="12" text-anchor="start" fill="#000" font-weight="normal">DIR</text>
+<line x1="1076" y1="342" x2="1110" y2="342" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="346" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">A_DIR</text>
+<text x="1274" y="178" font-size="12" text-anchor="end" fill="#000" font-weight="normal">VM</text>
+<line x1="1280" y1="174" x2="1314" y2="174" stroke="#b22222" stroke-width="1.6"/>
+<text x="1318" y="178" font-size="12" text-anchor="start" fill="#b22222" font-weight="bold">+12V</text>
+<text x="1274" y="202" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GND</text>
+<line x1="1280" y1="198" x2="1314" y2="198" stroke="#000" stroke-width="1.6"/>
+<line x1="1314" y1="198" x2="1314" y2="206" stroke="#000" stroke-width="1.6"/>
+<line x1="1305" y1="206" x2="1323" y2="206" stroke="#000" stroke-width="2"/>
+<line x1="1309" y1="210" x2="1319" y2="210" stroke="#000" stroke-width="2"/>
+<line x1="1312" y1="214" x2="1316" y2="214" stroke="#000" stroke-width="2"/>
+<text x="1274" y="226" font-size="12" text-anchor="end" fill="#000" font-weight="normal">2B</text>
+<line x1="1280" y1="222" x2="1314" y2="222" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="226" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MA_2B</text>
+<text x="1274" y="250" font-size="12" text-anchor="end" fill="#000" font-weight="normal">2A</text>
+<line x1="1280" y1="246" x2="1314" y2="246" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="250" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MA_2A</text>
+<text x="1274" y="274" font-size="12" text-anchor="end" fill="#000" font-weight="normal">1A</text>
+<line x1="1280" y1="270" x2="1314" y2="270" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="274" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MA_1A</text>
+<text x="1274" y="298" font-size="12" text-anchor="end" fill="#000" font-weight="normal">1B</text>
+<line x1="1280" y1="294" x2="1314" y2="294" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="298" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MA_1B</text>
+<text x="1274" y="322" font-size="12" text-anchor="end" fill="#000" font-weight="normal">VDD</text>
+<line x1="1280" y1="318" x2="1314" y2="318" stroke="#b8860b" stroke-width="1.6"/>
+<text x="1318" y="322" font-size="12" text-anchor="start" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="1274" y="346" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GND</text>
+<line x1="1280" y1="342" x2="1314" y2="342" stroke="#000" stroke-width="1.6"/>
+<line x1="1314" y1="342" x2="1314" y2="350" stroke="#000" stroke-width="1.6"/>
+<line x1="1305" y1="350" x2="1323" y2="350" stroke="#000" stroke-width="2"/>
+<line x1="1309" y1="354" x2="1319" y2="354" stroke="#000" stroke-width="2"/>
+<line x1="1312" y1="358" x2="1316" y2="358" stroke="#000" stroke-width="2"/>
+<text x="1560" y="164" font-size="12" text-anchor="middle" fill="#b22222" font-weight="bold">+12V</text>
+<line x1="1560" y1="170" x2="1560" y2="201.0" stroke="#000" stroke-width="1.6"/>
+<line x1="1560" y1="209.0" x2="1560" y2="240" stroke="#000" stroke-width="1.6"/>
+<line x1="1546" y1="201.0" x2="1574" y2="201.0" stroke="#000" stroke-width="2.4"/>
+<path d="M1546,214.0 Q1560,206.0 1574,214.0" fill="none" stroke="#000" stroke-width="2.4"/>
+<text x="1540" y="197.0" font-size="14" text-anchor="start" fill="#000" font-weight="normal">+</text>
+<text x="1580" y="203.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">C4</text>
+<text x="1580" y="218.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">100 µF 35 V</text>
+<line x1="1560" y1="240" x2="1560" y2="248" stroke="#000" stroke-width="1.6"/>
+<line x1="1551" y1="248" x2="1569" y2="248" stroke="#000" stroke-width="2"/>
+<line x1="1555" y1="252" x2="1565" y2="252" stroke="#000" stroke-width="2"/>
+<line x1="1558" y1="256" x2="1562" y2="256" stroke="#000" stroke-width="2"/>
+<rect x="1110" y="440" width="170" height="220" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="1195.0" y="418" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">U4 TMC2209 module, motor B</text>
+<text x="1195.0" y="433" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">StepStick pinout, 2 × 8-pin headers</text>
+<text x="1116" y="468" font-size="12" text-anchor="start" fill="#000" font-weight="normal">EN</text>
+<line x1="1076" y1="464" x2="1110" y2="464" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="468" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">MOT_EN</text>
+<text x="1116" y="492" font-size="12" text-anchor="start" fill="#000" font-weight="normal">MS1</text>
+<line x1="1076" y1="488" x2="1110" y2="488" stroke="#b8860b" stroke-width="1.6"/>
+<text x="1072" y="492" font-size="12" text-anchor="end" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="1116" y="516" font-size="12" text-anchor="start" fill="#000" font-weight="normal">MS2</text>
+<line x1="1076" y1="512" x2="1110" y2="512" stroke="#b8860b" stroke-width="1.6"/>
+<text x="1072" y="516" font-size="12" text-anchor="end" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="1116" y="540" font-size="12" text-anchor="start" fill="#000" font-weight="normal">PDN/RX</text>
+<text x="1098" y="541" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="1116" y="564" font-size="12" text-anchor="start" fill="#000" font-weight="normal">TX</text>
+<text x="1098" y="565" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="1116" y="588" font-size="12" text-anchor="start" fill="#000" font-weight="normal">CLK</text>
+<text x="1098" y="589" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="1116" y="612" font-size="12" text-anchor="start" fill="#000" font-weight="normal">STEP</text>
+<line x1="1076" y1="608" x2="1110" y2="608" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="612" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">B_STEP</text>
+<text x="1116" y="636" font-size="12" text-anchor="start" fill="#000" font-weight="normal">DIR</text>
+<line x1="1076" y1="632" x2="1110" y2="632" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="636" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">B_DIR</text>
+<text x="1274" y="468" font-size="12" text-anchor="end" fill="#000" font-weight="normal">VM</text>
+<line x1="1280" y1="464" x2="1314" y2="464" stroke="#b22222" stroke-width="1.6"/>
+<text x="1318" y="468" font-size="12" text-anchor="start" fill="#b22222" font-weight="bold">+12V</text>
+<text x="1274" y="492" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GND</text>
+<line x1="1280" y1="488" x2="1314" y2="488" stroke="#000" stroke-width="1.6"/>
+<line x1="1314" y1="488" x2="1314" y2="496" stroke="#000" stroke-width="1.6"/>
+<line x1="1305" y1="496" x2="1323" y2="496" stroke="#000" stroke-width="2"/>
+<line x1="1309" y1="500" x2="1319" y2="500" stroke="#000" stroke-width="2"/>
+<line x1="1312" y1="504" x2="1316" y2="504" stroke="#000" stroke-width="2"/>
+<text x="1274" y="516" font-size="12" text-anchor="end" fill="#000" font-weight="normal">2B</text>
+<line x1="1280" y1="512" x2="1314" y2="512" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="516" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MB_2B</text>
+<text x="1274" y="540" font-size="12" text-anchor="end" fill="#000" font-weight="normal">2A</text>
+<line x1="1280" y1="536" x2="1314" y2="536" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="540" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MB_2A</text>
+<text x="1274" y="564" font-size="12" text-anchor="end" fill="#000" font-weight="normal">1A</text>
+<line x1="1280" y1="560" x2="1314" y2="560" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="564" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MB_1A</text>
+<text x="1274" y="588" font-size="12" text-anchor="end" fill="#000" font-weight="normal">1B</text>
+<line x1="1280" y1="584" x2="1314" y2="584" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="588" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">MB_1B</text>
+<text x="1274" y="612" font-size="12" text-anchor="end" fill="#000" font-weight="normal">VDD</text>
+<line x1="1280" y1="608" x2="1314" y2="608" stroke="#b8860b" stroke-width="1.6"/>
+<text x="1318" y="612" font-size="12" text-anchor="start" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="1274" y="636" font-size="12" text-anchor="end" fill="#000" font-weight="normal">GND</text>
+<line x1="1280" y1="632" x2="1314" y2="632" stroke="#000" stroke-width="1.6"/>
+<line x1="1314" y1="632" x2="1314" y2="640" stroke="#000" stroke-width="1.6"/>
+<line x1="1305" y1="640" x2="1323" y2="640" stroke="#000" stroke-width="2"/>
+<line x1="1309" y1="644" x2="1319" y2="644" stroke="#000" stroke-width="2"/>
+<line x1="1312" y1="648" x2="1316" y2="648" stroke="#000" stroke-width="2"/>
+<text x="1560" y="454" font-size="12" text-anchor="middle" fill="#b22222" font-weight="bold">+12V</text>
+<line x1="1560" y1="460" x2="1560" y2="491.0" stroke="#000" stroke-width="1.6"/>
+<line x1="1560" y1="499.0" x2="1560" y2="530" stroke="#000" stroke-width="1.6"/>
+<line x1="1546" y1="491.0" x2="1574" y2="491.0" stroke="#000" stroke-width="2.4"/>
+<path d="M1546,504.0 Q1560,496.0 1574,504.0" fill="none" stroke="#000" stroke-width="2.4"/>
+<text x="1540" y="487.0" font-size="14" text-anchor="start" fill="#000" font-weight="normal">+</text>
+<text x="1580" y="493.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">C5</text>
+<text x="1580" y="508.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">100 µF 35 V</text>
+<line x1="1560" y1="530" x2="1560" y2="538" stroke="#000" stroke-width="1.6"/>
+<line x1="1551" y1="538" x2="1569" y2="538" stroke="#000" stroke-width="2"/>
+<line x1="1555" y1="542" x2="1565" y2="542" stroke="#000" stroke-width="2"/>
+<line x1="1558" y1="546" x2="1562" y2="546" stroke="#000" stroke-width="2"/>
+<text x="1080" y="735" font-size="11" text-anchor="start" fill="#444" font-weight="normal">MS1 = MS2 = 3V3 → 16 microsteps = 80 steps/mm (firmware config.h).</text>
+<text x="1080" y="750" font-size="11" text-anchor="start" fill="#444" font-weight="normal">C4 / C5 right at each driver's VM and GND pins.</text>
+<text x="1080" y="765" font-size="11" text-anchor="start" fill="#444" font-weight="normal">Motor current: turn the module's trimmer to Vref ≈ 0.5 V (≈ 0.35 A).</text>
+<text x="1080" y="780" font-size="11" text-anchor="start" fill="#444" font-weight="normal">Motor coils to screw terminals J7 (MA_*) and J8 (MB_*): 1A/1B = coil 1, 2A/2B = coil 2.</text>
+<rect x="590" y="580" width="180" height="412" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="680.0" y="558" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">U5 MCP23017-E/SP</text>
+<text x="680.0" y="573" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">28-pin DIP socket, I²C address 0x20</text>
+<text x="596" y="608" font-size="12" text-anchor="start" fill="#000" font-weight="normal">9 VDD</text>
+<line x1="556" y1="604" x2="590" y2="604" stroke="#b8860b" stroke-width="1.6"/>
+<text x="552" y="608" font-size="12" text-anchor="end" fill="#b8860b" font-weight="bold">+3V3</text>
+<text x="596" y="632" font-size="12" text-anchor="start" fill="#000" font-weight="normal">10 VSS</text>
+<line x1="556" y1="628" x2="590" y2="628" stroke="#000" stroke-width="1.6"/>
+<line x1="556" y1="628" x2="556" y2="636" stroke="#000" stroke-width="1.6"/>
+<line x1="547" y1="636" x2="565" y2="636" stroke="#000" stroke-width="2"/>
+<line x1="551" y1="640" x2="561" y2="640" stroke="#000" stroke-width="2"/>
+<line x1="554" y1="644" x2="558" y2="644" stroke="#000" stroke-width="2"/>
+<text x="596" y="656" font-size="12" text-anchor="start" fill="#000" font-weight="normal">12 SCL</text>
+<line x1="556" y1="652" x2="590" y2="652" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="552" y="656" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">SCL</text>
+<text x="596" y="680" font-size="12" text-anchor="start" fill="#000" font-weight="normal">13 SDA</text>
+<line x1="556" y1="676" x2="590" y2="676" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="552" y="680" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">SDA</text>
+<text x="596" y="704" font-size="12" text-anchor="start" fill="#000" font-weight="normal">15 A0</text>
+<line x1="556" y1="700" x2="590" y2="700" stroke="#000" stroke-width="1.6"/>
+<line x1="556" y1="700" x2="556" y2="708" stroke="#000" stroke-width="1.6"/>
+<line x1="547" y1="708" x2="565" y2="708" stroke="#000" stroke-width="2"/>
+<line x1="551" y1="712" x2="561" y2="712" stroke="#000" stroke-width="2"/>
+<line x1="554" y1="716" x2="558" y2="716" stroke="#000" stroke-width="2"/>
+<text x="596" y="728" font-size="12" text-anchor="start" fill="#000" font-weight="normal">16 A1</text>
+<line x1="556" y1="724" x2="590" y2="724" stroke="#000" stroke-width="1.6"/>
+<line x1="556" y1="724" x2="556" y2="732" stroke="#000" stroke-width="1.6"/>
+<line x1="547" y1="732" x2="565" y2="732" stroke="#000" stroke-width="2"/>
+<line x1="551" y1="736" x2="561" y2="736" stroke="#000" stroke-width="2"/>
+<line x1="554" y1="740" x2="558" y2="740" stroke="#000" stroke-width="2"/>
+<text x="596" y="752" font-size="12" text-anchor="start" fill="#000" font-weight="normal">17 A2</text>
+<line x1="556" y1="748" x2="590" y2="748" stroke="#000" stroke-width="1.6"/>
+<line x1="556" y1="748" x2="556" y2="756" stroke="#000" stroke-width="1.6"/>
+<line x1="547" y1="756" x2="565" y2="756" stroke="#000" stroke-width="2"/>
+<line x1="551" y1="760" x2="561" y2="760" stroke="#000" stroke-width="2"/>
+<line x1="554" y1="764" x2="558" y2="764" stroke="#000" stroke-width="2"/>
+<text x="596" y="776" font-size="12" text-anchor="start" fill="#000" font-weight="normal">18 RESET</text>
+<line x1="556" y1="772" x2="590" y2="772" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="552" y="776" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RESET</text>
+<text x="596" y="800" font-size="12" text-anchor="start" fill="#000" font-weight="normal">19 INTB</text>
+<text x="578" y="801" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="596" y="824" font-size="12" text-anchor="start" fill="#000" font-weight="normal">20 INTA</text>
+<text x="578" y="825" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="596" y="848" font-size="12" text-anchor="start" fill="#000" font-weight="normal">11, 14</text>
+<text x="578" y="849" font-size="13" text-anchor="middle" fill="#999" font-weight="normal">×</text>
+<text x="764" y="608" font-size="12" text-anchor="end" fill="#000" font-weight="normal">21 GPA0</text>
+<line x1="770" y1="604" x2="804" y2="604" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="608" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK1</text>
+<text x="764" y="632" font-size="12" text-anchor="end" fill="#000" font-weight="normal">22 GPA1</text>
+<line x1="770" y1="628" x2="804" y2="628" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="632" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK2</text>
+<text x="764" y="656" font-size="12" text-anchor="end" fill="#000" font-weight="normal">23 GPA2</text>
+<line x1="770" y1="652" x2="804" y2="652" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="656" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK3</text>
+<text x="764" y="680" font-size="12" text-anchor="end" fill="#000" font-weight="normal">24 GPA3</text>
+<line x1="770" y1="676" x2="804" y2="676" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="680" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK4</text>
+<text x="764" y="704" font-size="12" text-anchor="end" fill="#000" font-weight="normal">25 GPA4</text>
+<line x1="770" y1="700" x2="804" y2="700" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="704" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK5</text>
+<text x="764" y="728" font-size="12" text-anchor="end" fill="#000" font-weight="normal">26 GPA5</text>
+<line x1="770" y1="724" x2="804" y2="724" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="728" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK6</text>
+<text x="764" y="752" font-size="12" text-anchor="end" fill="#000" font-weight="normal">27 GPA6</text>
+<line x1="770" y1="748" x2="804" y2="748" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="752" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK7</text>
+<text x="764" y="776" font-size="12" text-anchor="end" fill="#000" font-weight="normal">28 GPA7</text>
+<line x1="770" y1="772" x2="804" y2="772" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="776" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">RANK8</text>
+<text x="764" y="800" font-size="12" text-anchor="end" fill="#000" font-weight="normal">1 GPB0</text>
+<line x1="770" y1="796" x2="804" y2="796" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="800" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_A</text>
+<text x="764" y="824" font-size="12" text-anchor="end" fill="#000" font-weight="normal">2 GPB1</text>
+<line x1="770" y1="820" x2="804" y2="820" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="824" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_B</text>
+<text x="764" y="848" font-size="12" text-anchor="end" fill="#000" font-weight="normal">3 GPB2</text>
+<line x1="770" y1="844" x2="804" y2="844" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="848" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_C</text>
+<text x="764" y="872" font-size="12" text-anchor="end" fill="#000" font-weight="normal">4 GPB3</text>
+<line x1="770" y1="868" x2="804" y2="868" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="872" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_D</text>
+<text x="764" y="896" font-size="12" text-anchor="end" fill="#000" font-weight="normal">5 GPB4</text>
+<line x1="770" y1="892" x2="804" y2="892" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="896" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_E</text>
+<text x="764" y="920" font-size="12" text-anchor="end" fill="#000" font-weight="normal">6 GPB5</text>
+<line x1="770" y1="916" x2="804" y2="916" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="920" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_F</text>
+<text x="764" y="944" font-size="12" text-anchor="end" fill="#000" font-weight="normal">7 GPB6</text>
+<line x1="770" y1="940" x2="804" y2="940" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="944" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_G</text>
+<text x="764" y="968" font-size="12" text-anchor="end" fill="#000" font-weight="normal">8 GPB7</text>
+<line x1="770" y1="964" x2="804" y2="964" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="808" y="968" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_H</text>
+<text x="100" y="594" font-size="12" text-anchor="middle" fill="#b8860b" font-weight="bold">+3V3</text>
+<path d="M100,600 L100,610 L108,614.1666666666666 L92,622.5 L108,630.8333333333334 L92,639.1666666666666 L108,647.5 L92,655.8333333333334 L100,660 L100,670" fill="none" stroke="#000" stroke-width="1.6"/>
+<text x="120" y="633.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">R1</text>
+<text x="120" y="648.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">4.7 kΩ</text>
+<text x="100" y="685" font-size="12" text-anchor="middle" fill="#1f3a93" font-weight="bold">SDA</text>
+<text x="210" y="594" font-size="12" text-anchor="middle" fill="#b8860b" font-weight="bold">+3V3</text>
+<path d="M210,600 L210,610 L218,614.1666666666666 L202,622.5 L218,630.8333333333334 L202,639.1666666666666 L218,647.5 L202,655.8333333333334 L210,660 L210,670" fill="none" stroke="#000" stroke-width="1.6"/>
+<text x="230" y="633.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">R2</text>
+<text x="230" y="648.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">4.7 kΩ</text>
+<text x="210" y="685" font-size="12" text-anchor="middle" fill="#1f3a93" font-weight="bold">SCL</text>
+<text x="320" y="594" font-size="12" text-anchor="middle" fill="#b8860b" font-weight="bold">+3V3</text>
+<path d="M320,600 L320,610 L328,614.1666666666666 L312,622.5 L328,630.8333333333334 L312,639.1666666666666 L328,647.5 L312,655.8333333333334 L320,660 L320,670" fill="none" stroke="#000" stroke-width="1.6"/>
+<text x="340" y="633.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">R3</text>
+<text x="340" y="648.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">10 kΩ</text>
+<text x="320" y="685" font-size="12" text-anchor="middle" fill="#1f3a93" font-weight="bold">RESET</text>
+<text x="430" y="594" font-size="12" text-anchor="middle" fill="#b8860b" font-weight="bold">+3V3</text>
+<line x1="430" y1="600" x2="430" y2="631.0" stroke="#000" stroke-width="1.6"/>
+<line x1="430" y1="639.0" x2="430" y2="670" stroke="#000" stroke-width="1.6"/>
+<line x1="416" y1="631.0" x2="444" y2="631.0" stroke="#000" stroke-width="2.4"/>
+<line x1="416" y1="639.0" x2="444" y2="639.0" stroke="#000" stroke-width="2.4"/>
+<text x="450" y="633.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">C3</text>
+<text x="450" y="648.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">100 nF</text>
+<line x1="430" y1="670" x2="430" y2="678" stroke="#000" stroke-width="1.6"/>
+<line x1="421" y1="678" x2="439" y2="678" stroke="#000" stroke-width="2"/>
+<line x1="425" y1="682" x2="435" y2="682" stroke="#000" stroke-width="2"/>
+<line x1="428" y1="686" x2="432" y2="686" stroke="#000" stroke-width="2"/>
+<text x="80" y="730" font-size="11" text-anchor="start" fill="#444" font-weight="normal">C3 right across U5 pins 9 and 10.</text>
+<rect x="1110" y="850" width="170" height="220" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="1195.0" y="828" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">J5 ranks · J6 files</text>
+<text x="1195.0" y="843" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">2 × 8-pin male headers → tiles (sheet 2)</text>
+<text x="1116" y="878" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-1</text>
+<line x1="1076" y1="874" x2="1110" y2="874" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="878" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK1</text>
+<text x="1116" y="902" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-2</text>
+<line x1="1076" y1="898" x2="1110" y2="898" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="902" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK2</text>
+<text x="1116" y="926" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-3</text>
+<line x1="1076" y1="922" x2="1110" y2="922" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="926" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK3</text>
+<text x="1116" y="950" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-4</text>
+<line x1="1076" y1="946" x2="1110" y2="946" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="950" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK4</text>
+<text x="1116" y="974" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-5</text>
+<line x1="1076" y1="970" x2="1110" y2="970" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="974" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK5</text>
+<text x="1116" y="998" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-6</text>
+<line x1="1076" y1="994" x2="1110" y2="994" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="998" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK6</text>
+<text x="1116" y="1022" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-7</text>
+<line x1="1076" y1="1018" x2="1110" y2="1018" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="1022" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK7</text>
+<text x="1116" y="1046" font-size="12" text-anchor="start" fill="#000" font-weight="normal">J5-8</text>
+<line x1="1076" y1="1042" x2="1110" y2="1042" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1072" y="1046" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">RANK8</text>
+<text x="1274" y="878" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-1</text>
+<line x1="1280" y1="874" x2="1314" y2="874" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="878" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_A</text>
+<text x="1274" y="902" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-2</text>
+<line x1="1280" y1="898" x2="1314" y2="898" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="902" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_B</text>
+<text x="1274" y="926" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-3</text>
+<line x1="1280" y1="922" x2="1314" y2="922" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="926" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_C</text>
+<text x="1274" y="950" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-4</text>
+<line x1="1280" y1="946" x2="1314" y2="946" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="950" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_D</text>
+<text x="1274" y="974" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-5</text>
+<line x1="1280" y1="970" x2="1314" y2="970" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="974" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_E</text>
+<text x="1274" y="998" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-6</text>
+<line x1="1280" y1="994" x2="1314" y2="994" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="998" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_F</text>
+<text x="1274" y="1022" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-7</text>
+<line x1="1280" y1="1018" x2="1314" y2="1018" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="1022" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_G</text>
+<text x="1274" y="1046" font-size="12" text-anchor="end" fill="#000" font-weight="normal">J6-8</text>
+<line x1="1280" y1="1042" x2="1314" y2="1042" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="1318" y="1046" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">FILE_H</text>
+<text x="30" y="800" font-size="15" text-anchor="start" fill="#000" font-weight="bold">CONNECTORS</text>
+<rect x="80" y="850" width="140" height="100" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="150.0" y="828" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">J2 servo</text>
+<text x="150.0" y="843" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">3-pin male header</text>
+<text x="214" y="878" font-size="12" text-anchor="end" fill="#000" font-weight="normal">signal (orange)</text>
+<line x1="220" y1="874" x2="254" y2="874" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="258" y="878" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">SERVO</text>
+<text x="214" y="902" font-size="12" text-anchor="end" fill="#000" font-weight="normal">+ (red)</text>
+<line x1="220" y1="898" x2="254" y2="898" stroke="#d2691e" stroke-width="1.6"/>
+<text x="258" y="902" font-size="12" text-anchor="start" fill="#d2691e" font-weight="bold">+5V</text>
+<text x="214" y="926" font-size="12" text-anchor="end" fill="#000" font-weight="normal">− (brown)</text>
+<line x1="220" y1="922" x2="254" y2="922" stroke="#000" stroke-width="1.6"/>
+<line x1="254" y1="922" x2="254" y2="930" stroke="#000" stroke-width="1.6"/>
+<line x1="245" y1="930" x2="263" y2="930" stroke="#000" stroke-width="2"/>
+<line x1="249" y1="934" x2="259" y2="934" stroke="#000" stroke-width="2"/>
+<line x1="252" y1="938" x2="256" y2="938" stroke="#000" stroke-width="2"/>
+<rect x="80" y="1010" width="140" height="76" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="150.0" y="988" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">J3 X endstop</text>
+<text x="150.0" y="1003" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">microswitch</text>
+<text x="214" y="1038" font-size="12" text-anchor="end" fill="#000" font-weight="normal">C</text>
+<line x1="220" y1="1034" x2="254" y2="1034" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="258" y="1038" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">X_MIN</text>
+<text x="214" y="1062" font-size="12" text-anchor="end" fill="#000" font-weight="normal">NO</text>
+<line x1="220" y1="1058" x2="254" y2="1058" stroke="#000" stroke-width="1.6"/>
+<line x1="254" y1="1058" x2="254" y2="1066" stroke="#000" stroke-width="1.6"/>
+<line x1="245" y1="1066" x2="263" y2="1066" stroke="#000" stroke-width="2"/>
+<line x1="249" y1="1070" x2="259" y2="1070" stroke="#000" stroke-width="2"/>
+<line x1="252" y1="1074" x2="256" y2="1074" stroke="#000" stroke-width="2"/>
+<rect x="80" y="1130" width="140" height="76" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="150.0" y="1108" font-size="14" text-anchor="middle" fill="#000" font-weight="bold">J4 Y endstop</text>
+<text x="150.0" y="1123" font-size="11" text-anchor="middle" fill="#555" font-weight="normal">microswitch</text>
+<text x="214" y="1158" font-size="12" text-anchor="end" fill="#000" font-weight="normal">C</text>
+<line x1="220" y1="1154" x2="254" y2="1154" stroke="#1f3a93" stroke-width="1.6"/>
+<text x="258" y="1158" font-size="12" text-anchor="start" fill="#1f3a93" font-weight="bold">Y_MIN</text>
+<text x="214" y="1182" font-size="12" text-anchor="end" fill="#000" font-weight="normal">NO</text>
+<line x1="220" y1="1178" x2="254" y2="1178" stroke="#000" stroke-width="1.6"/>
+<line x1="254" y1="1178" x2="254" y2="1186" stroke="#000" stroke-width="1.6"/>
+<line x1="245" y1="1186" x2="263" y2="1186" stroke="#000" stroke-width="2"/>
+<line x1="249" y1="1190" x2="259" y2="1190" stroke="#000" stroke-width="2"/>
+<line x1="252" y1="1194" x2="256" y2="1194" stroke="#000" stroke-width="2"/>
+<text x="400" y="1000" font-size="13" text-anchor="start" fill="#000" font-weight="bold">STATUS LED</text>
+<text x="540" y="1024" font-size="12" text-anchor="middle" fill="#d2691e" font-weight="bold">+5V</text>
+<line x1="540" y1="1030" x2="540" y2="1056.0" stroke="#000" stroke-width="1.6"/>
+<line x1="540" y1="1074.0" x2="540" y2="1100" stroke="#000" stroke-width="1.6"/>
+<path d="M530,1057.0 L550,1057.0 L540,1073.0 Z" fill="#fff" stroke="#000" stroke-width="1.6"/>
+<line x1="529" y1="1074.0" x2="551" y2="1074.0" stroke="#000" stroke-width="2.4"/>
+<text x="560" y="1063.0" font-size="12" text-anchor="start" fill="#000" font-weight="bold">D1</text>
+<text x="560" y="1078.0" font-size="11" text-anchor="start" fill="#444" font-weight="normal">1N4148</text>
+<text x="540" y="1115" font-size="12" text-anchor="middle" fill="#1f3a93" font-weight="bold"></text>
+<text x="560" y="1088" font-size="10" text-anchor="start" fill="#444" font-weight="normal">(LED gets ≈ 4.3 V)</text>
+<rect x="490" y="1120" width="100" height="66" fill="#fffbe9" stroke="#000" stroke-width="1.8" rx="3"/>
+<line x1="540" y1="1100" x2="540" y2="1120" stroke="#000" stroke-width="1.6"/>
+<text x="540" y="1150" font-size="13" text-anchor="middle" fill="#000" font-weight="bold">LED1</text>
+<text x="540" y="1166" font-size="11" text-anchor="middle" fill="#000" font-weight="normal">WS2812 5 mm</text>
+<text x="544" y="1133" font-size="10" text-anchor="start" fill="#000" font-weight="normal">VDD</text>
+<text x="494" y="1157" font-size="10" text-anchor="start" fill="#000" font-weight="normal">DIN</text>
+<line x1="540" y1="1186" x2="540" y2="1200" stroke="#000" stroke-width="1.6"/>
+<line x1="540" y1="1200" x2="540" y2="1208" stroke="#000" stroke-width="1.6"/>
+<line x1="531" y1="1208" x2="549" y2="1208" stroke="#000" stroke-width="2"/>
+<line x1="535" y1="1212" x2="545" y2="1212" stroke="#000" stroke-width="2"/>
+<line x1="538" y1="1216" x2="542" y2="1216" stroke="#000" stroke-width="2"/>
+<text x="380" y="1157" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">LED_DIN</text>
+<path d="M384,1153 L394,1153 L401.1666666666667,1161 L415.5,1145 L429.8333333333333,1161 L444.1666666666667,1145 L458.5,1161 L472.83333333333337,1145 L480,1153 L490,1153" fill="none" stroke="#000" stroke-width="1.6"/>
+<text x="437" y="1138" font-size="11" text-anchor="middle" fill="#000" font-weight="bold">R4 330 Ω</text>
+<text x="790" y="1030" font-size="13" text-anchor="start" fill="#000" font-weight="bold">BUZZER</text>
+<text x="830" y="1046" font-size="12" text-anchor="middle" fill="#d2691e" font-weight="bold">+5V</text>
+<line x1="830" y1="1050" x2="830" y2="1070" stroke="#000" stroke-width="1.6"/>
+<rect x="812" y="1070" width="36" height="50" fill="#fff" stroke="#000" stroke-width="1.8" rx="3"/>
+<text x="830" y="1100" font-size="11" text-anchor="middle" fill="#000" font-weight="bold">BZ1</text>
+<text x="806" y="1090" font-size="10" text-anchor="end" fill="#444" font-weight="normal">CEM-1203(42)</text>
+<line x1="830" y1="1120" x2="830" y2="1150" stroke="#000" stroke-width="1.6"/>
+<line x1="830" y1="1060" x2="900" y2="1060" stroke="#000" stroke-width="1.6"/>
+<line x1="830" y1="1140" x2="900" y2="1140" stroke="#000" stroke-width="1.6"/>
+<line x1="900" y1="1060" x2="900" y2="1091.0" stroke="#000" stroke-width="1.6"/>
+<line x1="900" y1="1109.0" x2="900" y2="1140" stroke="#000" stroke-width="1.6"/>
+<path d="M890,1108.0 L910,1108.0 L900,1092.0 Z" fill="#fff" stroke="#000" stroke-width="1.6"/>
+<line x1="889" y1="1091.0" x2="911" y2="1091.0" stroke="#000" stroke-width="2.4"/>
+<circle cx="830" cy="1060" r="3.2" fill="#000"/>
+<circle cx="830" cy="1140" r="3.2" fill="#000"/>
+<text x="916" y="1096" font-size="12" text-anchor="start" fill="#000" font-weight="bold">D2 1N4148</text>
+<text x="916" y="1110" font-size="10" text-anchor="start" fill="#444" font-weight="normal">flyback</text>
+<circle cx="822" cy="1190" r="22" fill="none" stroke="#000" stroke-width="1.6"/>
+<line x1="812" y1="1176" x2="812" y2="1204" stroke="#000" stroke-width="2.6"/>
+<line x1="812" y1="1184" x2="830" y2="1170" stroke="#000" stroke-width="1.6"/>
+<line x1="830" y1="1170" x2="830" y2="1150" stroke="#000" stroke-width="1.6"/>
+<line x1="812" y1="1196" x2="830" y2="1210" stroke="#000" stroke-width="1.6"/>
+<path d="M823,1209 L830,1210 L827,1203" fill="none" stroke="#000" stroke-width="1.6"/>
+<line x1="830" y1="1210" x2="830" y2="1226" stroke="#000" stroke-width="1.6"/>
+<line x1="830" y1="1226" x2="830" y2="1234" stroke="#000" stroke-width="1.6"/>
+<line x1="821" y1="1234" x2="839" y2="1234" stroke="#000" stroke-width="2"/>
+<line x1="825" y1="1238" x2="835" y2="1238" stroke="#000" stroke-width="2"/>
+<line x1="828" y1="1242" x2="832" y2="1242" stroke="#000" stroke-width="2"/>
+<text x="852" y="1194" font-size="12" text-anchor="start" fill="#000" font-weight="bold">Q1 2N3904</text>
+<line x1="800" y1="1190" x2="812" y2="1190" stroke="#000" stroke-width="1.6"/>
+<path d="M720,1190 L730,1190 L735.0,1198 L745.0,1182 L755.0,1198 L765.0,1182 L775.0,1198 L785.0,1182 L790,1190 L800,1190" fill="none" stroke="#000" stroke-width="1.6"/>
+<text x="760" y="1176" font-size="11" text-anchor="middle" fill="#000" font-weight="bold">R5 1 kΩ</text>
+<text x="716" y="1194" font-size="12" text-anchor="end" fill="#1f3a93" font-weight="bold">BUZZ</text>
+</svg>
