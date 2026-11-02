@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/settings.dart';
 import '../../chess/position.dart';
 import '../battle_board.dart';
 import '../stone_pieces.dart';
@@ -144,6 +145,7 @@ class _Board3DState extends State<Board3D> {
       'mismatch': widget.mismatch.toList(),
       'check': p.inCheck ? p.kingSquare(p.turn) : -1,
       'mated': widget.matedKing,
+      'sound': Settings.shared.moveSounds,
     });
     if (msg == _lastSent) return;
     _lastSent = msg;

@@ -24,9 +24,13 @@ tells the board how to play your opponent's.
   and king in velvet capes, white marble against black obsidian, under real lights and shadows.
   They breathe and look around while they wait. A move is acted out: the piece turns, walks or
   gallops (knights leap), and a capture is a fight: the attacker closes in, winds up and
-  strikes (spear thrust, sword or crook blow, the tower's two-fisted slam, the horse rearing)
-  while the victim braces and trembles, then bursts into chunks of stone that bounce and
-  scatter across the board in a flash of light, with dust, a camera shake and a haptic thump.
+  strikes (spear thrust, sword blow, the tower's two-fisted slam, the horse rearing, bishops
+  and queens hurling a glowing magic bolt). The camera swoops down for a close-up, the two
+  trade blows with parries, sparks and the clang of steel, and the finishing blow knocks the
+  victim back before it bursts into chunks of stone that bounce and scatter across the board,
+  with dust, a flash, a camera shake, a crash and a haptic thump. Nearby pieces turn to watch,
+  and between moves the army fidgets: soldiers shoulder spears, horses paw the ground.
+  Sound effects are synthesised in the page (WebAudio, no audio files).
   Castling rooks vault the king, promoted pawns transform in a shower of sparks, and a
   checkmated king topples and crumbles. Drag to look around the board; tap a piece, then a
   square. The grid button switches to a flat board. Windows and Linux (no WebView) use a
