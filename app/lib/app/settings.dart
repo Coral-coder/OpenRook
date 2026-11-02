@@ -43,6 +43,12 @@ class Settings extends ChangeNotifier {
   bool announce = true; // say every move out loud
   bool haptics = true;
   bool cinematic = true; // close-up camera for fights
+  String style = 'wizard'; // 'wizard' (living stone statues) or 'toon' (KayKit, for kids)
+  bool topDown = false; // overhead view of the battle board
+  bool announceOwn = true; // also say the moves made on this phone
+  bool alwaysListen = false; // the mic stays on for the whole game
+  String voiceName = ''; // chosen text-to-speech voice ('' = the best one on the device)
+  String voiceLocale = '';
   List<SavedRoom> rooms = [];
   String? savedComputerGame; // json: {fen, moves, color, level}
 
@@ -66,6 +72,12 @@ class Settings extends ChangeNotifier {
     announce = _p.getBool('announce') ?? true;
     haptics = _p.getBool('haptics') ?? true;
     cinematic = _p.getBool('cinematic') ?? true;
+    style = _p.getString('style') ?? 'wizard';
+    topDown = _p.getBool('topDown') ?? false;
+    announceOwn = _p.getBool('announceOwn') ?? true;
+    alwaysListen = _p.getBool('alwaysListen') ?? false;
+    voiceName = _p.getString('voiceName') ?? '';
+    voiceLocale = _p.getString('voiceLocale') ?? '';
     savedComputerGame = _p.getString('computerGame');
     try {
       rooms = [for (final r in jsonDecode(_p.getString('rooms') ?? '[]') as List) SavedRoom.fromJson(r as Map<String, dynamic>)];
@@ -88,6 +100,12 @@ class Settings extends ChangeNotifier {
     await _p.setBool('announce', announce);
     await _p.setBool('haptics', haptics);
     await _p.setBool('cinematic', cinematic);
+    await _p.setString('style', style);
+    await _p.setBool('topDown', topDown);
+    await _p.setBool('announceOwn', announceOwn);
+    await _p.setBool('alwaysListen', alwaysListen);
+    await _p.setString('voiceName', voiceName);
+    await _p.setString('voiceLocale', voiceLocale);
     await _p.setString('rooms', jsonEncode([for (final r in rooms) r.toJson()]));
     if (savedComputerGame == null) {
       await _p.remove('computerGame');

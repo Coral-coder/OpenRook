@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/settings.dart';
 import '../net/nostr_pool.dart';
+import '../voice/voice.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -29,12 +30,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: s.battleView,
             onChanged: (v) => setState(() => s.battleView = v),
           ),
+          ListTile(
+            title: const Text('Armies'),
+            subtitle: Text(s.style == 'toon' ? 'Toon: friendly cartoon heroes and skeletons (for kids)' : 'Wizard: living stone statues, light magic against dark'),
+            trailing: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'wizard', label: Text('Wizard')),
+                ButtonSegment(value: 'toon', label: Text('Toon')),
+              ],
+              selected: {s.style},
+              onSelectionChanged: (v) => setState(() => s.style = v.first),
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('Top-down view'),
+            subtitle: const Text('Look straight down on the board (easier to read the position)'),
+            value: s.topDown,
+            onChanged: (v) => setState(() => s.topDown = v),
+          ),
+          const Divider(),
           SwitchListTile(
             title: const Text('Announce moves'),
             subtitle: const Text('Say every move out loud ("Knight takes bishop on E5")'),
             value: s.announce,
             onChanged: (v) => setState(() => s.announce = v),
           ),
+          SwitchListTile(
+            title: const Text('Announce my own moves too'),
+            subtitle: const Text('Off: only your opponent\'s moves are called out'),
+            value: s.announceOwn,
+            onChanged: s.announce ? (v) => setState(() => s.announceOwn = v) : null,
+          ),
+          ListTile(
+            title: const Text('Voice'),
+            subtitle: Text(s.voiceName.isEmpty ? 'Best on this device (automatic)' : s.voiceName),
+            trailing: const Icon(Icons.record_voice_over),
+            onTap: _pickVoice,
+          ),
+          SwitchListTile(
+            title: const Text('Keep the mic on all game'),
+            subtitle: const Text('Tap the mic once and just call your moves; it pauses while the board speaks. '
+                'Also hears "top view", "battle view" and "flip".'),
+            value: s.alwaysListen,
+            onChanged: (v) => setState(() => s.alwaysListen = v),
+          ),
+          const Divider(),
           SwitchListTile(
             title: const Text('Cinematic camera'),
             subtitle: const Text('Swoop in close for every fight'),
@@ -70,11 +110,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
           Text('Your OpenRook ID: ${s.pool.publicKey.substring(0, 16)}…', style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 8),
-          Text('3D characters: KayKit Adventurers and Skeletons by Kay Lousberg (kaylousberg.com), CC0.',
+          Text('3D characters: KayKit Adventurers and Skeletons by Kay Lousberg (kaylousberg.com), CC0, carved into stone for the Wizard armies.',
               style: Theme.of(context).textTheme.bodySmall),
         ]),
       ),
     );
+  }
+
+  Future<void> _pickVoice() async {
+    final voices = await Voice.shared.voices();
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(children: [
+          const ListTile(title: Text('Voice that calls the moves'), subtitle: Text('Premium, enhanced and neural voices sound best. '
+              'On iPhone, download more in Settings > Accessibility > Spoken Content > Voices.')),
+          ListTile(
+            leading: const Icon(Icons.auto_awesome),
+            title: const Text('Best on this device (automatic)'),
+            onTap: () => Navigator.pop(context, const {'name': '', 'locale': ''}),
+          ),
+          for (final v in voices)
+            ListTile(
+              title: Text(v['name'] ?? ''),
+              subtitle: Text([v['locale'], if ((v['quality'] ?? '').isNotEmpty) v['quality']].join(' · ')),
+              trailing: IconButton(
+                icon: const Icon(Icons.play_arrow),
+                onPressed: () async {
+                  await Voice.shared.useVoice(v['name'] ?? '', v['locale'] ?? '');
+                  await Voice.shared.say('Knight takes bishop on e5. Check!');
+                },
+              ),
+              onTap: () => Navigator.pop(context, v),
+            ),
+          if (voices.isEmpty) const ListTile(title: Text('No voices reported by this device')),
+        ]),
+      ),
+    );
+    if (picked != null) await Voice.shared.useVoice(picked['name'] ?? '', picked['locale'] ?? '');
+    if (mounted) setState(() {});
   }
 
   void _save() {

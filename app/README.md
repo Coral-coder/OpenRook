@@ -19,13 +19,19 @@ tells the board how to play your opponent's.
 
 - **Battle view** (`lib/ui/board3d/`, scene in `board3d/src/`): a real 3D board rendered with
   three.js (WebGL) inside the app: a WebView on iPhone, Android and Mac, an iframe on the web.
-  The pieces are rigged, textured, skeletally animated characters (KayKit's Adventurers and
+  The game fills the whole screen; names, clocks, status and the mic float over the battle.
+  The pieces are rigged, skeletally animated characters (built on KayKit's Adventurers and
   Skeletons packs, CC0, by Kay Lousberg; see `board3d/models/LICENSE.txt`): the living against
-  the dead. White: hooded rogues (pawns), the armoured knight, the mage (bishop), the barbarian
+  the dead. In the default **Wizard** style (`board3d/src/stone.js`) they are living chess
+  statues with heroic proportions: White is pale marble veined with glowing gold (light magic),
+  Black is cracked obsidian whose cracks pulse sickly green (dark magic). They fight in a
+  moonlit hall (`board3d/src/atmosphere.js`): braziers burn at the corners, gold motes rise
+  over White's side and green embers over Black's, fog drifts over the floor. Settings →
+  Armies → **Toon** switches to the original cartoon look (for kids). White: hooded rogues (pawns), the armoured knight, the mage (bishop), the barbarian
   with a greataxe (rook), a crowned rogue (queen) and the crowned knight with a greatsword (king).
   Black: skeleton minions, skeleton rogues, the skeleton mage, a hulking minion with axe and
-  shield (rook), and the crowned mage and warrior. Each stands on a pedestal carved with its
-  chess symbol. They move with real animation clips: walks, runs and leaps, one- and two-handed
+  shield (rook), and the crowned mage and warrior. They stand right on the squares (the printed
+  pieces have bases, the screen pieces don't). They move with real animation clips: walks, runs and leaps, one- and two-handed
   sword and axe attacks, spellcasting, blocks, dodges, hit reactions, deaths (skeletons
   collapse into a heap of bones), cheers and taunts.
   They breathe and look around while they wait. A move is acted out: the piece turns, walks or
@@ -45,8 +51,17 @@ tells the board how to play your opponent's.
   weapons leave glowing trails, feet kick up dust, and the killing blow plays in slow motion.
   Castling rooks vault the king, promoted pawns transform in a shower of sparks, and a
   checkmated king topples and crumbles.
-  **Camera**: the cinematic camera films each fight side-on, circling the fighters (Settings →
-  Cinematic camera). Drag to orbit, pinch or mouse-wheel to zoom into the board, two fingers
+  **Death and decay**: blood (White) or black-green ichor (Black) sprays with each blow and
+  stains the squares. A fallen body rots where it lies, its stone darkening while the cracks
+  burn out like embers; a marble statue's rotten flesh then bursts off to leave a bare
+  skeleton, and the bones crumble into dust. Shattered pieces leave their chunks littering the
+  board where they landed; a few moves later the wreckage rots, shrinks and sinks away, and the
+  stains fade. A new game sweeps the board clean.
+  **Camera**: the cinematic camera films each fight from the clearest side (it checks which
+  angles are blocked by other pieces), turns any piece still in the way to glass, and pulls
+  back to keep a victim that's been thrown across the board in frame (Settings → Cinematic
+  camera). The **top-down view** (grid button, or Settings) looks straight down on the board
+  so the position is easy to read. Drag to orbit, pinch or mouse-wheel to zoom into the board, two fingers
   (or right-drag) to pan, double-tap to reset. Tap a piece, then a square.
 - **Replay** (`lib/ui/replay_screen.dart`): from the game menu, or when a game ends, watch the
   whole game again with every battle acted out and the camera following each move. Play,
@@ -60,8 +75,14 @@ tells the board how to play your opponent's.
   kingside", "a8 queen". The phone's own speech recogniser does the listening;
   `lib/voice/speech_moves.dart` turns the words (and common mishearings like "night" and
   "before") into the legal move. If it could mean two moves, the app asks which.
-- **Announcer**: every move is said out loud ("Bishop takes knight on C 6. Check!"). Settings
-  can turn it, the battle view and the vibration off.
+  With Settings → **Keep the mic on all game**, one tap leaves the mic open for the whole game:
+  just call your moves (and "top view", "battle view", "flip"). It pauses while the announcer
+  speaks so it doesn't hear itself.
+- **Announcer**: every move is said out loud ("Bishop takes knight on C 6. Check!") in the
+  most natural voice the phone has (premium, enhanced or neural voices first; pick another in
+  Settings → Voice). Settings → **Announce my own moves too** chooses whether your moves are
+  called or only your opponent's. Settings can also turn off the announcer, the battle view and
+  the vibration.
 
 ## No server
 

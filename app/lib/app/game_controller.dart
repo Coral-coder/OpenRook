@@ -126,7 +126,7 @@ class GameController extends ChangeNotifier {
     if (!game.play(m)) return;
     choices = [];
     error = null;
-    _announce(before, m);
+    _announce(before, m, mine: true);
     _positionChanged();
     // Tell the other side.
     switch (opponent) {
@@ -232,8 +232,10 @@ class GameController extends ChangeNotifier {
   /// Square of a checkmated king (for the crumbling animation), or -1.
   int get matedKing => over && game.resultReason == 'checkmate' ? game.position.kingSquare(game.turn) : -1;
 
-  void _announce(Position before, Move m) {
+  void _announce(Position before, Move m, {bool mine = false}) {
     if (!Settings.shared.announce) return;
+    // the player's own moves are only called out if they want them
+    if (mine && !Settings.shared.announceOwn && !(over && game.resultReason == 'checkmate')) return;
     var text = spokenMove(before, m);
     if (over && game.resultReason == 'checkmate') {
       text += '. Checkmate!';

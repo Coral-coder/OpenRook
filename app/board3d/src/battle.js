@@ -155,8 +155,8 @@ const glowTex = (() => {
   return new THREE.CanvasTexture(c);
 })();
 
-export function glowSprite(color, size) {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+export function glowSprite(color, size, solid = false) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, blending: solid ? THREE.NormalBlending : THREE.AdditiveBlending, depthWrite: false }));
   s.scale.setScalar(size);
   return s;
 }
@@ -167,9 +167,9 @@ export class Particles {
     this.scene = scene;
     this.list = [];
   }
-  burst(pos, { color = 0xffd27a, n = 18, speed = 2.2, up = 1.2, size = 0.07, life = 0.5, gravity = 6 } = {}) {
+  burst(pos, { color = 0xffd27a, n = 18, speed = 2.2, up = 1.2, size = 0.07, life = 0.5, gravity = 6, solid = false } = {}) {
     for (let i = 0; i < n; i++) {
-      const s = glowSprite(color, size * (0.6 + Math.random() * 0.8));
+      const s = glowSprite(color, size * (0.6 + Math.random() * 0.8), solid);
       s.position.copy(pos);
       this.scene.add(s);
       const a = Math.random() * Math.PI * 2, e = (Math.random() - 0.3) * Math.PI * 0.6;

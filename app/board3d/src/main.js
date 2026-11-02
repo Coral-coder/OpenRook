@@ -8,7 +8,9 @@
 // Bridge: the app calls window.openrook.receive(json). This page posts JSON strings back
 // through window.OpenRook.postMessage (WebView channel) or window.parent.postMessage (web).
 import * as THREE from 'three';
-import { buildFigure, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
+import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
+import { setupAtmosphere } from './atmosphere.js';
+import { stoneMaterial, stoneTime } from './stone.js';
 import { Particles, chime, clang, crash, glowSprite, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
 
 // ------------------------------------------------------------------ bridge
@@ -29,13 +31,13 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x15110e);
-scene.fog = new THREE.Fog(0x15110e, 14, 30);
+const atmosphere = setupAtmosphere(scene);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
 
-scene.add(new THREE.HemisphereLight(0xfff1dc, 0x2a2018, 0.75));
-const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
+scene.add(new THREE.HemisphereLight(0xb9c4ff, 0x1a1418, 0.45));
+// moonlight
+const sun = new THREE.DirectionalLight(0xc4ceff, 1.7);
 sun.position.set(-5, 11, 6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -46,7 +48,7 @@ sun.shadow.camera.bottom = -6;
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.02;
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0x9db8ff, 0.9);
+const rim = new THREE.DirectionalLight(0x9d7bff, 0.6);
 rim.position.set(6, 6, -8);
 scene.add(rim);
 const flash = new THREE.PointLight(0xffd59a, 0, 6, 1.6);
@@ -58,15 +60,16 @@ scene.add(checkLight);
 const SQ_TOP = 0.0; // pieces stand on y = 0
 const squareMeshes = [];
 const sqLight = new THREE.MeshStandardMaterial({ color: 0xd8cfbe, roughness: 0.35 });
-const sqDark = new THREE.MeshStandardMaterial({ color: 0x4b4038, roughness: 0.32 });
+const sqDark = new THREE.MeshStandardMaterial({ color: 0x2c2522, roughness: 0.3 });
 {
   const g = new THREE.BoxGeometry(1, 0.16, 1);
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
       const light = (f + r) % 2 === 1;
-      const m = new THREE.Mesh(g, (light ? sqLight : sqDark).clone());
-      const tone = 0.94 + (((f * 73 + r * 151) % 13) / 13) * 0.1;
-      m.material.color.multiplyScalar(tone);
+      // each square cut from marble or obsidian, the veins running on from square to square
+      const m = new THREE.Mesh(g, stoneMaterial(null, light ? 'white' : 'black', 0, { offset: [f - 3.5, 0, 3.5 - r], scale: 1.6 }));
+      m.material.roughness = light ? 0.3 : 0.18;
+      if (light) m.material.color.setScalar(0.62); // keep the marble from glaring
       m.position.set(f - 3.5, SQ_TOP - 0.08, 3.5 - r);
       m.receiveShadow = true;
       m.userData.square = r * 8 + f;
@@ -188,6 +191,13 @@ function receive(json) {
   const msg = typeof json === 'string' ? JSON.parse(json) : json;
   if (msg.type !== 'state') return;
   setSound(msg.sound !== false);
+  if ((msg.style || 'stone') !== getStyle()) {
+    // a different look: rebuild every figure
+    setStyle(msg.style);
+    for (const p of pieces.values()) removePiece(p);
+    pieces.clear();
+    if (state.ply >= 0) syncTo(state.board);
+  }
   const prevPly = state.ply;
   const prev = state.board;
   state = msg;
@@ -196,6 +206,7 @@ function receive(json) {
   } else if (msg.ply !== prevPly || prevPly < 0) {
     queue.length = 0;
     if (current) finishCurrent();
+    clearWreckage();
     syncTo(msg.board);
     matedDone = -1;
   }
@@ -261,10 +272,12 @@ let shotsSuppressed = false;
 
 let shake = 0;
 const _v = new THREE.Vector3();
+const topDown = () => state.view === 'top';
 function playerView() {
   const az = azimuth + user.az;
-  const el = Math.min(1.4, Math.max(0.22, BASE_EL + user.el));
-  const dist = boardDist() * user.zoom;
+  // the top-down view looks almost straight down, so every piece is easy to read
+  const el = topDown() ? Math.min(1.53, Math.max(1.0, 1.5 + user.el)) : Math.min(1.4, Math.max(0.22, BASE_EL + user.el));
+  const dist = boardDist() * user.zoom * (topDown() ? 0.86 : 1);
   const target = new THREE.Vector3(0, -0.2, 0.25 * Math.cos(azimuth)).add(user.pan);
   const pos = target.clone().add(_v.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(dist));
   return { pos, target, az };
@@ -284,6 +297,31 @@ function updateCamera(dt) {
   }
   camera.lookAt(look);
   for (const l of window.__labels) l.rotation.z = view.az; // coordinates read the right way up
+}
+
+// Any piece standing between the camera and the action turns to glass for the moment.
+const _look = new THREE.Vector3();
+function fadeBlockers(dt) {
+  const k = clamp01(shot.k);
+  camera.getWorldDirection(_look);
+  const look = shot.target.clone();
+  const seg = look.clone().sub(camera.position);
+  const len2 = seg.lengthSq();
+  for (const p of pieces.values()) {
+    let want = 1;
+    if (k > 0.05 && !(current && (p === current.mover || p === current.cap))) {
+      const c = p.fig.group.position.clone().setY(0.6);
+      const t = c.clone().sub(camera.position).dot(seg) / len2;
+      if (t > 0 && t < 0.92) {
+        const d = camera.position.clone().addScaledVector(seg, t).distanceTo(c);
+        if (d < 0.7) want = 1 - 0.8 * k;
+      }
+    }
+    p.fade = p.fade ?? 1;
+    p.fade += (want - p.fade) * Math.min(1, dt * 8);
+    if (Math.abs(p.fade - 1) < 0.01) p.fade = 1;
+    setOpacity(p.fig, p.fade);
+  }
 }
 
 // ------------------------------------------------------------------ input
@@ -423,47 +461,75 @@ const dustTex = (() => {
 })();
 const puffs = [];
 
-function shatter(p, from, power = 1) {
-  // Every visible part of the figure bursts into chunks of its own material.
+// Wreckage stays where it falls and litters the board, then rots away over the next moves.
+const MAX_SHARDS = 360;
+const stains = [];
+const stainTex = {};
+function splatterTexture(color) {
+  if (stainTex[color]) return stainTex[color];
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = color;
+  for (let i = 0; i < 26; i++) {
+    const r = 6 + Math.random() * 22, a = Math.random() * Math.PI * 2, d = Math.random() * 38;
+    x.globalAlpha = 0.35 + Math.random() * 0.5;
+    x.beginPath();
+    x.ellipse(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, r, r * (0.4 + Math.random() * 0.6), a, 0, Math.PI * 2);
+    x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  return (stainTex[color] = t);
+}
+// a dark stain soaks into the squares where a piece fell
+function stain(pos, isWhite, size = 1) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.3 * size, 1.3 * size),
+    new THREE.MeshStandardMaterial({ map: splatterTexture(isWhite ? '#2a0202' : '#06180a'), transparent: true, opacity: 0.9, roughness: 0.2, metalness: 0.1, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  m.rotation.z = Math.random() * Math.PI * 2;
+  m.position.set(pos.x, 0.007 + stains.length * 0.0002, pos.z);
+  scene.add(m);
+  stains.push({ m, ply: state.ply });
+}
+
+function shatter(p, from, power = 1, { chunk = 1, dustColor = 0xcfc3ae, rot = 0.85, splat = true } = {}) {
+  // Every visible part of the figure bursts into chunks of its own (now rotting) stone.
   const fig = p.fig;
+  if (rot) setRot(fig, rot);
   fig.group.updateMatrixWorld(true);
   const box = new THREE.Box3();
-  const center = new THREE.Vector3();
   fig.group.traverse((o) => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || !o.visible) return;
     box.setFromObject(o);
     const size = box.getSize(new THREE.Vector3());
     const vol = Math.max(0.0005, size.x * size.y * size.z);
-    const n = Math.min(14, Math.max(2, Math.round(vol * 900)));
-    box.getCenter(center);
+    const n = Math.min(16, Math.max(3, Math.round(vol * 1400)));
     for (let i = 0; i < n; i++) {
-      const s = 0.025 + Math.random() * 0.05;
+      const sz = (0.02 + Math.random() * 0.055) * chunk;
       const m = new THREE.Mesh(shardGeos[(Math.random() * 3) | 0], o.material);
-      m.scale.setScalar(s);
-      m.castShadow = true;
-      m.position.set(
-        box.min.x + Math.random() * size.x,
-        box.min.y + Math.random() * size.y,
-        box.min.z + Math.random() * size.z);
+      m.scale.setScalar(sz);
+      m.castShadow = sz > 0.045; // only the big chunks: shadows cost a draw each
+      m.position.set(box.min.x + Math.random() * size.x, box.min.y + Math.random() * size.y, box.min.z + Math.random() * size.z);
       const out = m.position.clone().sub(from).setY(0).normalize();
-      const sp = (0.8 + Math.random() * 2.2) * power;
+      const sp = (0.7 + Math.random() * 2.2) * power;
       scene.add(m);
       shards.push({
-        m, s,
-        v: new THREE.Vector3(out.x * sp + (Math.random() - 0.5), 1.5 + Math.random() * 3 * power, out.z * sp + (Math.random() - 0.5)),
+        m, s: sz, ply: state.ply,
+        v: new THREE.Vector3(out.x * sp + (Math.random() - 0.5), 1.2 + Math.random() * 3 * power, out.z * sp + (Math.random() - 0.5)),
         w: new THREE.Vector3(Math.random() * 14 - 7, Math.random() * 14 - 7, Math.random() * 14 - 7),
-        age: 0,
+        age: 0, rot: 0,
       });
     }
   });
+  while (shards.length > MAX_SHARDS) scene.remove(shards.shift().m);
   removePiece(p);
-  // dust
-  for (let i = 0; i < 10; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, color: 0xcfc3ae, transparent: true, opacity: 0.55, depthWrite: false }));
-    sp.position.copy(fig.group.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.15 + Math.random() * 0.4, (Math.random() - 0.5) * 0.4));
-    sp.scale.setScalar(0.3);
+  if (splat) stain(fig.group.position, fig.isWhite, 1 + 0.3 * power);
+  for (let i = 0; i < 14; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, color: dustColor, transparent: true, opacity: 0.6, depthWrite: false }));
+    sp.position.copy(fig.group.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.1 + Math.random() * 0.6, (Math.random() - 0.5) * 0.5));
+    sp.scale.setScalar(0.35);
     scene.add(sp);
-    puffs.push({ sp, v: new THREE.Vector3((Math.random() - 0.5) * 1.2, 0.3 + Math.random() * 0.5, (Math.random() - 0.5) * 1.2), age: 0 });
+    puffs.push({ sp, v: new THREE.Vector3((Math.random() - 0.5) * 1.2, 0.25 + Math.random() * 0.5, (Math.random() - 0.5) * 1.2), age: 0 });
   }
   flash.position.copy(fig.group.position).setY(0.7);
   flash.intensity = 30 * power;
@@ -471,33 +537,62 @@ function shatter(p, from, power = 1) {
   send({ type: 'impact', heavy: power > 1.05 });
 }
 
+// a new game or a jump in the replay: sweep the board clean
+function clearWreckage() {
+  for (const sh of shards) scene.remove(sh.m);
+  shards.length = 0;
+  for (const st of stains) scene.remove(st.m);
+  stains.length = 0;
+  for (const d of deaths) {
+    scene.remove(d.p.fig.group);
+    if (d.remains) scene.remove(d.remains.group);
+  }
+  deaths.length = 0;
+}
+
 function updateRubble(dt) {
   for (let i = shards.length - 1; i >= 0; i--) {
     const s = shards[i];
     s.age += dt;
-    s.v.y -= 11 * dt;
-    s.m.position.addScaledVector(s.v, dt);
-    const floor = s.s * 0.6;
-    const onBoard = Math.abs(s.m.position.x) < 4.5 && Math.abs(s.m.position.z) < 4.5;
-    const groundY = onBoard ? floor : -0.6 + floor;
-    if (s.m.position.y < groundY) {
-      s.m.position.y = groundY;
-      if (s.v.y < -0.5) {
-        s.v.y *= -0.3;
-      } else {
-        s.v.y = 0;
+    if (!s.rest) {
+      s.v.y -= 11 * dt;
+      s.m.position.addScaledVector(s.v, dt);
+      const floor = s.s * 0.55;
+      const onBoard = Math.abs(s.m.position.x) < 4.5 && Math.abs(s.m.position.z) < 4.5;
+      const groundY = onBoard ? floor : -0.6 + floor;
+      if (s.m.position.y < groundY) {
+        s.m.position.y = groundY;
+        if (s.v.y < -0.6) s.v.y *= -0.28;
+        else s.v.y = 0;
+        s.v.x *= 0.55;
+        s.v.z *= 0.55;
+        s.w.multiplyScalar(0.5);
+        if (s.v.lengthSq() < 0.01) s.rest = true; // settled: it lies there now
       }
-      s.v.x *= 0.6;
-      s.v.z *= 0.6;
-      s.w.multiplyScalar(0.6);
+      s.m.rotation.x += s.w.x * dt;
+      s.m.rotation.y += s.w.y * dt;
+      s.m.rotation.z += s.w.z * dt;
     }
-    s.m.rotation.x += s.w.x * dt;
-    s.m.rotation.y += s.w.y * dt;
-    s.m.rotation.z += s.w.z * dt;
-    if (s.age > 2.6) s.m.scale.setScalar(s.s * Math.max(0, 1 - (s.age - 2.6) / 0.8));
-    if (s.age > 3.4) {
-      scene.remove(s.m);
-      shards.splice(i, 1);
+    // after a few more moves the wreckage rots and sinks into the board
+    const movesSince = state.ply - s.ply;
+    if (movesSince >= 4 || s.age > 120) {
+      s.rot = Math.min(1, s.rot + dt * 0.12);
+      s.m.scale.setScalar(s.s * (1 - 0.7 * s.rot));
+      s.m.position.y -= dt * 0.01;
+      if (s.rot >= 1) {
+        scene.remove(s.m);
+        shards.splice(i, 1);
+      }
+    }
+  }
+  for (let i = stains.length - 1; i >= 0; i--) {
+    const st = stains[i];
+    if (state.ply - st.ply >= 6) {
+      st.m.material.opacity -= dt * 0.08;
+      if (st.m.material.opacity <= 0) {
+        scene.remove(st.m);
+        stains.splice(i, 1);
+      }
     }
   }
   for (let i = puffs.length - 1; i >= 0; i--) {
@@ -569,20 +664,64 @@ function idle(p) {
 }
 
 // ------------------------------------------------------------------ cinematic shots
-const cinema = () => state.cinema || 'fights';
+const cinema = () => (topDown() ? 'off' : state.cinema || 'fights');
+
+// How many bystanders stand between a camera at `cam` and the point it looks at.
+function blockers(cam, look, skip) {
+  let n = 0;
+  const seg = look.clone().sub(cam);
+  const len2 = seg.lengthSq();
+  for (const p of pieces.values()) {
+    if (skip.includes(p)) continue;
+    const c = p.fig.group.position.clone().setY(0.6);
+    const k = clamp01(c.clone().sub(cam).dot(seg) / len2);
+    const d = cam.clone().addScaledVector(seg, k).distanceTo(c);
+    if (d < 0.55) n += 1 + (0.55 - d) * 3;
+  }
+  return n;
+}
+
+// Pick the side to film a fight from: the clearest line of sight, preferring the
+// player's own side of the board, and a little higher when the board is crowded.
+function chooseDuelAngle(a, mid, dist) {
+  const view = playerView();
+  const toPlayer = view.pos.clone().sub(mid).setY(0).normalize();
+  const skip = [a.mover, a.cap];
+  let best = null;
+  for (let i = 0; i < 16; i++) {
+    const ang = (i / 16) * Math.PI * 2;
+    const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
+    // a side-on view of the duel reads best; head-on is fine if it's the only clear one
+    const across = Math.abs(dir.dot(a.dir));
+    for (const h of [1.5, 2.3]) {
+      const cam = mid.clone().addScaledVector(dir, dist).setY(h);
+      const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h > 2 ? 0.6 : 0) +
+        (Math.abs(cam.x) > 7 || Math.abs(cam.z) > 7 ? 2 : 0);
+      if (!best || score < best.score) best = { score, dir, h };
+    }
+  }
+  return best;
+}
 
 function duelShot(a) {
+  // frame the attacker, the victim, and wherever the victim's body is flying
   const mid = a.capPos.clone().lerp(a.approach, 0.5);
-  const side = new THREE.Vector3(a.dir.z, 0, -a.dir.x);
-  const view = playerView();
-  if (side.dot(view.pos.clone().sub(mid)) < 0) side.negate(); // stay on the player's side
-  const orbit = (a.t - a.shotStart) * 0.16 * a.shotSpin;
+  let spread = 0;
+  const dg = a.death?.p.fig.group;
+  if (dg && dg.parent) {
+    const vp = dg.position.clone();
+    spread = Math.min(4, vp.distanceTo(mid) + Math.max(0, vp.y) * 0.6);
+    mid.lerp(vp.setY(0), 0.45);
+  }
   const close = a.slowed ? 0.84 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (3.3 / Math.sqrt(aspect)) * close;
-  const off = side.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
-  shot.pos.copy(mid).add(off).add(new THREE.Vector3(0, 1.6 * close, 0)).addScaledVector(a.dir, -0.4);
-  shot.target.copy(mid).setY(0.6);
+  const dist = (3.1 / Math.sqrt(aspect)) * close + spread * 0.9;
+  if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
+  // a slow dolly around the fight, never swinging far from the clear side
+  const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
+  const off = a.angle.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
+  shot.pos.copy(mid).add(off).setY(a.angle.h * close + spread * 0.5);
+  shot.target.copy(mid).setY(0.55 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
   shot.want = 1;
 }
 
@@ -701,6 +840,9 @@ function kill(p, style, from, power = 1) {
   const g = p.fig.group;
   const away = g.position.clone().sub(from).setY(0).normalize();
   const d = { p, style, t: 0, away, power, v: null, deathLen: 0 };
+  // the blow lands: blood for the living army, black-green ichor for the dead one
+  const gore = p.fig.isWhite ? [0x7a0606, 0xb01010] : [0x0f3a18, 0x3dbb5a];
+  for (const c of gore) particles.burst(g.position.clone().add(away.clone().multiplyScalar(-0.15)).setY(0.75), { color: c, n: 22, speed: 2.2 * power, up: 1.6, size: 0.055, life: 0.9, gravity: 9, solid: true });
   if (style === 'launch') {
     d.v = away.clone().multiplyScalar(1.8).setY(5.2);
     act(p, 'hit2');
@@ -716,19 +858,43 @@ function kill(p, style, from, power = 1) {
     act(p, 'hit');
   }
   deaths.push(d);
+  return d;
 }
 
-function sinkAway(d, dt) {
-  // the body sinks into the board in a swirl of dust
-  const g = d.p.fig.group;
-  d.sinkT = (d.sinkT || 0) + dt;
-  g.position.y = -d.sinkT * 0.9;
-  if (Math.random() < 0.35) dustRing(g.position.clone().setY(0), 3, 0.35);
-  if (d.sinkT > 1.0) {
-    removePiece(d.p);
+// The slow death: the body falls, the stone rots and its cracks burn out, the flesh of the
+// statue falls away to a bare skeleton, and the skeleton crumbles into dust on the board.
+function decay(d, dt) {
+  const fig = d.p.fig;
+  const T = d.t - d.deathLen - 0.3; // time since the body came to rest
+  if (T < 0) return false;
+  d.lingering = true; // the game can go on while the corpse rots
+  if (!d.stained) {
+    d.stained = true;
+    stain(fig.group.position, fig.isWhite, 1.2);
+  }
+  if (T < 1.6) {
+    setRot(fig, T / 1.6);
+    if (Math.random() < 0.3) particles.burst(fig.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.15, (Math.random() - 0.5) * 0.6)), { color: fig.isWhite ? 0x6a1010 : 0x1d6b33, n: 1, speed: 0.2, up: 0.3, size: 0.05, life: 0.7, gravity: 3, solid: true });
+    return false;
+  }
+  if (fig.isWhite && !d.remains && fig.stone) {
+    // the rotten stone flesh bursts off the statue, leaving the skeleton beneath
+    fig.group.updateMatrixWorld(true);
+    d.remains = buildRemains(fig);
+    scene.add(d.remains.group);
+    d.remainsAt = T;
+    shatter(d.p, fig.group.position.clone().add(new THREE.Vector3(0, -0.3, 0)), 0.45, { chunk: 0.8, rot: 1, splat: false });
+    return false;
+  }
+  if (d.remains) {
+    if (T - d.remainsAt < 2.4) return false;
+    // ... and the bones crumble to dust
+    shatter({ fig: d.remains }, d.remains.group.position.clone().add(new THREE.Vector3(0, 0.2, 0)), 0.25, { chunk: 0.55, rot: 0, splat: false, dustColor: 0xb8ad94 });
     return true;
   }
-  return false;
+  if (T < 2.6) return false;
+  shatter(d.p, fig.group.position.clone().add(new THREE.Vector3(0, 0.2, 0)), 0.25, { chunk: 0.55, rot: 0, splat: false, dustColor: 0x6f6a62 });
+  return true;
 }
 
 function updateDeaths(dt, t) {
@@ -746,8 +912,7 @@ function updateDeaths(dt, t) {
         }
         break;
       case 'fall':
-        // the death animation plays out, then the body is swallowed by the board
-        if (d.t > d.deathLen + 0.5) done = sinkAway(d, dt);
+        done = decay(d, dt);
         break;
       case 'launch':
         d.v.y -= 11 * dt;
@@ -891,7 +1056,7 @@ function finishCurrent() {
   const g = a.mover.fig.group;
   g.position.copy(a.to);
   g.rotation.y = homeFacing(a.mover.code);
-  a.mover.fig.parts.inner.position.set(0, 0.08, 0);
+  a.mover.fig.parts.inner.position.set(0, 0, 0);
   a.mover.sq = job.m.to;
   pieces.set(job.m.to, a.mover);
   idle(a.mover);
@@ -1012,7 +1177,7 @@ function stepMove(a, dt) {
           crash(0.35);
           send({ type: 'impact', heavy: true });
           if (fin.pound) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
-          kill(a.cap, fin.style, g.position.clone(), a.cap.fig.type >= ROOK ? 1.35 : 1.1);
+          a.death = kill(a.cap, fin.style, g.position.clone(), a.cap.fig.type >= ROOK ? 1.35 : 1.1);
           pieces.delete(a.job.m.cap);
           a.cap = null;
         }
@@ -1086,6 +1251,7 @@ window.__manual = () => {
   manual = true;
 };
 window.__advance = (dt) => tick(dt);
+window.__dbg = () => ({ shards: shards.length, stains: stains.length, deaths: deaths.map((d) => ({ style: d.style, t: +d.t.toFixed(2), len: d.deathLen, remains: !!d.remains, lingering: !!d.lingering })) });
 window.__isIdle = () => !wasBusy && !current && !queue.length && !deaths.length;
 
 function tick(realDt) {
@@ -1141,7 +1307,7 @@ function tick(realDt) {
       if (p.grow >= 1) delete p.grow;
     }
   }
-  const busy = !!current || queue.length > 0 || deaths.length > 0;
+  const busy = !!current || queue.length > 0 || deaths.some((d) => !d.lingering);
   if (!busy && state.check >= 0) {
     checkLight.position.copy(sqPos(state.check)).setY(0.6);
     checkLight.intensity = 6 + 4 * Math.sin(t * 6);
@@ -1172,12 +1338,15 @@ function tick(realDt) {
     releaseAt = 0;
     releaseShot();
   }
+  stoneTime.value = t;
+  atmosphere.update(dt, t);
   updateDeaths(dt, t);
   for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(dt)) fx.splice(i, 1);
   updateRubble(dt);
   updateSparks(dt);
   particles.update(dt);
   updateCamera(realDt);
+  fadeBlockers(realDt);
   renderer.render(scene, camera);
   const nowBusy = busy || slowLeft > 0;
   if (wasBusy && !nowBusy) send({ type: 'idle', ply: state.ply });
