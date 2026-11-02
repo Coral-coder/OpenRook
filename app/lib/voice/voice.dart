@@ -6,6 +6,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../app/settings.dart';
+import 'neural_voice.dart';
 
 /// Listening for spoken moves and announcing moves out loud. Both run on the device's own
 /// speech engines (Apple / Google); nothing of ours is involved.
@@ -153,7 +154,7 @@ class Voice extends ChangeNotifier {
       final raw = await _tts.getVoices as List? ?? const [];
       _voices = [
         for (final v in raw)
-          if (v is Map) {for (final e in v.entries) '${e.key}': '${e.value}'}
+          if (v is Map) {for (final e in v.entries) '${e.key}': '${e.value}'},
       ];
     } catch (_) {
       _voices = [];
@@ -236,8 +237,18 @@ class Voice extends ChangeNotifier {
       _speaking = true;
       await _stt.stop();
     }
+    _speaking = true;
+    final neural = NeuralVoice.shared;
+    if (Settings.shared.voiceName.isEmpty && neural.canSay(text)) {
+      // the board's own neural voice
+      await _tts.stop();
+      try {
+        await neural.speak(text);
+      } catch (_) {}
+      _doneSpeaking();
+      return;
+    }
     try {
-      _speaking = true;
       await _tts.speak(text);
     } catch (_) {
       _doneSpeaking();
@@ -245,6 +256,7 @@ class Voice extends ChangeNotifier {
   }
 
   Future<void> stopSpeaking() async {
+    await NeuralVoice.shared.stop();
     try {
       await _tts.stop();
     } catch (_) {}
