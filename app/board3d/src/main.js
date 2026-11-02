@@ -561,6 +561,25 @@ function shatter(p, from, power = 1, { chunk = 1, dustColor = 0xcfc3ae, rot = 0.
 }
 
 // a new game or a jump in the replay: sweep the board clean
+// a statue rocked back by a blow it parried: its body jolts away and settles back
+const recoils = [];
+function recoil(p, dir, amount) {
+  recoils.push({ inner: p.fig.parts.inner, dir: dir.clone(), amount, t: 0 });
+}
+function updateRecoils(dt) {
+  for (let i = recoils.length - 1; i >= 0; i--) {
+    const r = recoils[i];
+    r.t += dt;
+    const k = r.t < 0.05 ? r.t / 0.05 : Math.exp(-(r.t - 0.05) * 9) * Math.cos((r.t - 0.05) * 14);
+    r.inner.position.copy(r.dir).multiplyScalar(r.amount * k);
+    r.inner.rotation.x = 0;
+    if (r.t > 0.6) {
+      r.inner.position.set(0, 0, 0);
+      recoils.splice(i, 1);
+    }
+  }
+}
+
 function clearWreckage() {
   rubble.clear();
   for (const sh of shards) scene.remove(sh.m);
@@ -861,7 +880,19 @@ const charred = new THREE.MeshStandardMaterial({ color: 0x18120e, roughness: 0.9
 // ------------------------------------------------------------------ deaths
 const deaths = [];
 const rubble = new Rubble(scene);
-function kill(p, style, from, power = 1) {
+// the statues still standing (and the ones moving), for the rubble to pile up against
+rubble.setObstacles(() => {
+  const out = [];
+  const add = (p, moving = false) => p && p.fig.group.parent && out.push({ x: p.fig.group.position.x, z: p.fig.group.position.z, h: p.fig.height || 1, moving });
+  for (const p of pieces.values()) add(p);
+  if (current) {
+    add(current.mover, true);
+    add(current.cap);
+    if (current.rook) add(current.rook.p, true);
+  }
+  return out;
+});
+function kill(p, style, from, power = 1, blow = null) {
   const g = p.fig.group;
   const away = g.position.clone().sub(from).setY(0).normalize();
   const d = { p, style, t: 0, away, power, v: null, deathLen: 0 };
@@ -869,14 +900,22 @@ function kill(p, style, from, power = 1) {
     // stone on stone: the statue breaks at its joints and the pieces fly, chips burst from
     // where the blow landed, and dust rolls out across the board
     const fig = p.fig;
-    const hit = g.position.clone().addScaledVector(away, -0.14).setY(0.55 + 0.25 * Math.min(1, fig.height / 1.2));
-    rubble.chips(hit, away, fig.materials[0], 26, power, state.ply);
+    // where the weapon landed (on the victim, at the height of the blow) and which way it swung
+    const top = 0.25 + fig.height * 0.85;
+    const hit = blow
+      ? g.position.clone().addScaledVector(away, -0.12).setY(Math.min(top, Math.max(0.3, blow.at.y)))
+      : g.position.clone().addScaledVector(away, -0.14).setY(0.55 + 0.25 * Math.min(1, fig.height / 1.2));
+    const swing = blow ? blow.dir.clone() : away.clone();
+    swing.y = Math.max(-0.45, Math.min(0.3, swing.y));
+    swing.normalize();
+    rubble.chips(hit, swing, fig.materials[0], 30, power, state.ply);
     const parts = [];
     fig.group.traverse((o) => {
       if (o.isMesh) parts.push(o);
     });
     setRot(fig, 0.35);
-    rubble.breakApart(parts, hit, away, power * 1.15, state.ply);
+    fig.group.updateMatrixWorld(true);
+    rubble.breakApart(parts, hit, swing, power, state.ply);
     scene.remove(g);
     for (let i = 0; i < 18; i++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, color: fig.isWhite ? 0xcfc8ba : 0x55555a, transparent: true, opacity: 0.55, depthWrite: false }));
@@ -1202,6 +1241,13 @@ function stepMove(a, dt) {
           } else {
             const at = weaponPoint(striker).lerp(defender.fig.group.position.clone().setY(0.8), 0.3);
             particles.burst(at, { color: 0xffe2a0, n: 26, speed: 2.6, up: 1, size: 0.07, life: 0.45 });
+            if (defender.fig.statue) {
+              // stone on stone: chips fly from the parry, and both statues rock back from it
+              const push = defender.fig.group.position.clone().sub(striker.fig.group.position).setY(0).normalize();
+              rubble.chips(at, push.clone().setY(0.3), defender.fig.materials[0], 9, 0.55, state.ply);
+              recoil(defender, push, 0.07);
+              recoil(striker, push.clone().negate(), 0.035);
+            }
             flash.position.copy(at);
             flash.color.set(0xffd59a);
             flash.intensity = 14;
@@ -1229,7 +1275,12 @@ function stepMove(a, dt) {
           a.slowed = true;
           slowLeft = 0.75; // slow motion around the killing blow
         }
+        const tipNow = weaponPoint(mover);
         if (k >= strikeAt && once('hit')) {
+          const swingDir = a.prevTip ? tipNow.clone().sub(a.prevTip) : new THREE.Vector3();
+          if (swingDir.lengthSq() < 1e-6) swingDir.copy(a.dir);
+          swingDir.normalize().lerp(a.dir.clone().setY(swingDir.y), 0.35).normalize();
+          const blow = { at: tipNow.clone(), dir: swingDir };
           const at = a.cap.fig.group.position.clone().setY(0.8);
           if (!a.cap.fig.statue) particles.burst(at, { color: 0xfff0c0, n: 36, speed: 3.4, up: 1.4, size: 0.09, life: 0.6 });
           flash.position.copy(at);
@@ -1239,10 +1290,13 @@ function stepMove(a, dt) {
           crash(0.35);
           send({ type: 'impact', heavy: true });
           if (fin.pound) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
-          a.death = kill(a.cap, fin.style, g.position.clone(), a.cap.fig.type >= ROOK ? 1.35 : 1.1);
+          // the heavier the attacker, the harder the blow
+          const weight = { [PAWN]: 0.9, [KNIGHT]: 1.2, [BISHOP]: 1.0, [ROOK]: 1.5, [QUEEN]: 1.3, [KING]: 1.4 }[mover.fig.type] || 1;
+          a.death = kill(a.cap, fin.style, g.position.clone(), weight * (a.cap.fig.type >= ROOK ? 1.1 : 1), blow);
           pieces.delete(a.job.m.cap);
           a.cap = null;
         }
+        a.prevTip = tipNow;
         break;
       }
       case 'wait':
@@ -1410,7 +1464,12 @@ function tick(realDt) {
   updateDeaths(dt, t);
   for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(dt)) fx.splice(i, 1);
   updateRubble(dt);
+  updateRecoils(dt);
   rubble.update(dt, state.ply);
+  window.__physMs = rubble.ms;
+  window.__rubble = rubble;
+  window.__physAwake = rubble.awake;
+  window.__physBodies = rubble.bodies.length;
   updateSparks(dt);
   particles.update(dt);
   updateCamera(realDt);
@@ -1442,6 +1501,16 @@ loadFigures().then(() => {
 if (!window.OpenRook && window.parent === window) {
   const start = [4, 2, 3, 5, 6, 3, 2, 4, 1, 1, 1, 1, 1, 1, 1, 1, ...new Array(32).fill(0), 9, 9, 9, 9, 9, 9, 9, 9, 12, 10, 11, 13, 14, 11, 10, 12];
   receive({ type: 'state', board: start, ply: 0, flipped: false, selected: -1, targets: [], captureTargets: [], mismatch: [], check: -1, mated: -1, last: null, sound: true });
+  // physics test: smash the piece on [sq] as if struck from [fromSq] (standalone page only)
+  window.__smash = (sq, fromSq, power = 1.3) => {
+    const p = pieces.get(sq);
+    if (!p) return false;
+    const from = sqPos(fromSq), to = sqPos(sq);
+    const dir = to.clone().sub(from).normalize().setY(-0.25).normalize();
+    pieces.delete(sq);
+    kill(p, 'smash', from, power, { at: to.clone().addScaledVector(dir, -0.15).setY(0.75), dir });
+    return true;
+  };
   window.__demo = (from, to, cap = -1) => {
     const b = state.board.slice();
     const code = b[from];
