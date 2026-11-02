@@ -26,7 +26,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.45; // gloomy, but the pieces must stay readable on a phone
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
@@ -35,9 +35,9 @@ const atmosphere = setupAtmosphere(scene);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
 
-scene.add(new THREE.HemisphereLight(0xb9c4ff, 0x1a1418, 0.45));
+scene.add(new THREE.HemisphereLight(0xc9d2ff, 0x2a2228, 1.25));
 // moonlight
-const sun = new THREE.DirectionalLight(0xc4ceff, 1.7);
+const sun = new THREE.DirectionalLight(0xd4dcff, 2.8);
 sun.position.set(-5, 11, 6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -48,7 +48,7 @@ sun.shadow.camera.bottom = -6;
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.02;
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0x9d7bff, 0.6);
+const rim = new THREE.DirectionalLight(0xa98bff, 1.1);
 rim.position.set(6, 6, -8);
 scene.add(rim);
 const flash = new THREE.PointLight(0xffd59a, 0, 6, 1.6);
@@ -69,7 +69,7 @@ const sqDark = new THREE.MeshStandardMaterial({ color: 0x2c2522, roughness: 0.3 
       // each square cut from marble or obsidian, the veins running on from square to square
       const m = new THREE.Mesh(g, stoneMaterial(null, light ? 'white' : 'black', 0, { offset: [f - 3.5, 0, 3.5 - r], scale: 1.6 }));
       m.material.roughness = light ? 0.3 : 0.18;
-      if (light) m.material.color.setScalar(0.62); // keep the marble from glaring
+      if (light) m.material.color.setScalar(0.66); // keep the marble from glaring
       m.position.set(f - 3.5, SQ_TOP - 0.08, 3.5 - r);
       m.receiveShadow = true;
       m.userData.square = r * 8 + f;
@@ -276,7 +276,8 @@ const topDown = () => state.view === 'top';
 function playerView() {
   const az = azimuth + user.az;
   // the top-down view looks almost straight down, so every piece is easy to read
-  const el = topDown() ? Math.min(1.53, Math.max(1.0, 1.5 + user.el)) : Math.min(1.4, Math.max(0.22, BASE_EL + user.el));
+  const baseEl = camera.aspect < 0.8 ? 0.9 : BASE_EL; // tall phone screens look down more, so the board fills them
+  const el = topDown() ? Math.min(1.53, Math.max(1.0, 1.5 + user.el)) : Math.min(1.4, Math.max(0.22, baseEl + user.el));
   const dist = boardDist() * user.zoom * (topDown() ? 0.86 : 1);
   const target = new THREE.Vector3(0, -0.2, 0.25 * Math.cos(azimuth)).add(user.pan);
   const pos = target.clone().add(_v.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(dist));
@@ -296,6 +297,8 @@ function updateCamera(dt) {
     shake = Math.max(0, shake - dt * 0.9);
   }
   camera.lookAt(look);
+  // the fog hangs around the edges of the hall, never over the board itself
+  if (scene.fog) scene.fog.density = 0.22 / Math.max(3, camera.position.distanceTo(look));
   for (const l of window.__labels) l.rotation.z = view.az; // coordinates read the right way up
 }
 
