@@ -11,6 +11,7 @@ import '../board/board_link.dart';
 import '../chess/position.dart';
 import '../voice/voice.dart';
 import 'battle_board.dart';
+import 'board3d/board3d.dart';
 import 'board_view.dart';
 
 class GameScreen extends StatefulWidget {
@@ -200,18 +201,31 @@ class _GameScreenState extends State<GameScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _player(top),
-                    BattleBoard(
-                      position: c.game.position,
-                      ply: c.game.ply,
-                      lastMove: c.game.lastMove,
-                      flipped: flipped,
-                      threeD: settings.battleView,
-                      mismatch: board.connected ? c.mismatch : const {},
-                      interactive: c.canPlay,
-                      onMove: (m) => c.playLocal(m),
-                      matedKing: c.matedKing,
-                      onImpact: _impact,
-                    ),
+                    if (settings.battleView)
+                      Board3D(
+                        position: c.game.position,
+                        ply: c.game.ply,
+                        lastMove: c.game.lastMove,
+                        flipped: flipped,
+                        mismatch: board.connected ? c.mismatch : const {},
+                        interactive: c.canPlay,
+                        onMove: (m) => c.playLocal(m),
+                        matedKing: c.matedKing,
+                        onImpact: _impact,
+                      )
+                    else
+                      BattleBoard(
+                        position: c.game.position,
+                        ply: c.game.ply,
+                        lastMove: c.game.lastMove,
+                        flipped: flipped,
+                        threeD: false,
+                        mismatch: board.connected ? c.mismatch : const {},
+                        interactive: c.canPlay,
+                        onMove: (m) => c.playLocal(m),
+                        matedKing: c.matedKing,
+                        onImpact: _impact,
+                      ),
                     _player(bottom),
                   ],
                 ),

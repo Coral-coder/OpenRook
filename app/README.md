@@ -17,12 +17,22 @@ tells the board how to play your opponent's.
 
 ## On the phone
 
-- **Battle view** (`lib/ui/battle_board.dart`): a tilted stone board with carved pieces
-  (`lib/ui/stone_pieces.dart`, vector drawings, no fonts). Pieces march to their squares and
-  knights leap; a capture is a fight: the attacker advances, rears back and strikes, and the
-  victim bursts into stone shards and dust with a flash, a board shake and a haptic thump.
-  Castling rooks vault the king, promotions burst into golden light, and a checkmated king
-  crumbles. The grid button in the game toolbar switches to a flat board.
+- **Battle view** (`lib/ui/board3d/`, scene in `board3d/src/`): a real 3D board rendered with
+  three.js (WebGL) inside the app: a WebView on iPhone, Android and Mac, an iframe on the web.
+  The pieces are little sculpted characters: foot soldiers with spears and shields, knights on
+  horseback with lances, mitred bishops with crooks, walking stone towers, and a crowned queen
+  and king in velvet capes, white marble against black obsidian, under real lights and shadows.
+  They breathe and look around while they wait. A move is acted out: the piece turns, walks or
+  gallops (knights leap), and a capture is a fight: the attacker closes in, winds up and
+  strikes (spear thrust, sword or crook blow, the tower's two-fisted slam, the horse rearing)
+  while the victim braces and trembles, then bursts into chunks of stone that bounce and
+  scatter across the board in a flash of light, with dust, a camera shake and a haptic thump.
+  Castling rooks vault the king, promoted pawns transform in a shower of sparks, and a
+  checkmated king topples and crumbles. Drag to look around the board; tap a piece, then a
+  square. The grid button switches to a flat board. Windows and Linux (no WebView) use a
+  2.5D painted version (`lib/ui/battle_board.dart`).
+  To change the scene: edit `board3d/src/*.js`, then `cd board3d && npm install && npm run build`
+  rebuilds `assets/board3d/board3d.html` (commit it; the app doesn't need Node to build).
 - **Say a move**: press the mic and say "knight to f3", "e4", "bishop takes c6", "castle
   kingside", "a8 queen". The phone's own speech recogniser does the listening;
   `lib/voice/speech_moves.dart` turns the words (and common mishearings like "night" and

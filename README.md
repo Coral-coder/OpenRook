@@ -45,8 +45,9 @@ servers: games travel through public relays, and nothing needs to be hosted.
 5. Install the app (Releases has the Android APK; iPhone via TestFlight), tap *No board connected*,
    connect, calibrate, and play.
 
-No board yet? The app is a complete game on its own: a 3D "battle view" where stone pieces march,
-knights leap and captured pieces are smashed to rubble, every move announced out loud, and you can
+No board yet? The app is a complete game on its own: a real 3D battle board where the pieces
+are sculpted soldiers, knights on horseback, bishops, walking towers and a king and queen who
+march, gallop and fight, and captured pieces are smashed to rubble, every move announced out loud, and you can
 call out your moves ("knight to f3") instead of tapping. The board is a bonus.
 
 ## Releases
