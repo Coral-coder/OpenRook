@@ -8,7 +8,7 @@
 // Bridge: the app calls window.openrook.receive(json). This page posts JSON strings back
 // through window.OpenRook.postMessage (WebView channel) or window.parent.postMessage (web).
 import * as THREE from 'three';
-import { buildFigure, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
+import { buildFigure, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
 import { Particles, chime, clang, crash, glowSprite, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
 
 // ------------------------------------------------------------------ bridge
@@ -181,6 +181,10 @@ function syncTo(board) {
 }
 
 function receive(json) {
+  if (!ready) {
+    pendingState = json; // the models are still loading
+    return;
+  }
   const msg = typeof json === 'string' ? JSON.parse(json) : json;
   if (msg.type !== 'state') return;
   setSound(msg.sound !== false);
@@ -296,6 +300,14 @@ function resetView() {
   user.zoom = 1;
   user.pan.set(0, 0, 0);
 }
+
+// For recording previews: aim the camera (pan to x/z, zoom, orbit).
+window.__view = (x, z, zoom = 1, az = 0, el = 0) => {
+  user.pan.set(x, 0, z);
+  user.zoom = zoom;
+  user.az = az;
+  user.el = el;
+};
 
 function panBy(dx, dy) {
   const scale = ((boardDist() * user.zoom) / window.innerHeight) * 1.1;
@@ -531,10 +543,9 @@ function updateSparks(dt) {
   }
 }
 
-// ------------------------------------------------------------------ animation of the figures
+// ------------------------------------------------------------------ animation helpers
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const easeOut = (x) => 1 - Math.pow(1 - x, 3);
-const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const angleTo = (from, to) => Math.atan2(to.x - from.x, to.z - from.z);
 function turnToward(cur, target, k) {
@@ -544,128 +555,49 @@ function turnToward(cur, target, k) {
   return cur + d * k;
 }
 
-// The weapon arm through one blow, attack 0..1: wind up (to 0.5), strike (to 0.65), recover.
-function swing(attack, rest = -0.35) {
-  if (attack <= 0) return rest;
-  if (attack < 0.5) return lerp(rest, -2.8, ease(attack / 0.5));
-  if (attack < 0.65) return lerp(-2.8, 0.45, (attack - 0.5) / 0.15);
-  return lerp(0.45, rest, (attack - 0.65) / 0.35);
+// Each piece plays one named action at a time; one-shots fall back to idle when they end.
+function act(p, action, opts = {}) {
+  const name = hasClip(action) ? action : clipFor(p.fig, action);
+  p.anim = action;
+  const d = play(p.fig, name, opts);
+  p.until = opts.loop ? 0 : simT + d;
+  return d;
 }
-
-// Sets every joint of a figure. walk: 0 standing .. 1 striding (phase p.walkPhase);
-// attack: 0..1 through a blow; block: 0..1 guard raised; gesture: 0..1 idle flourish.
-function pose(p, t, walk, attack, block = 0, gesture = 0) {
-  const parts = p.fig.parts;
-  const type = p.fig.type;
-  const ph = p.walkPhase || 0;
-  const breathe = Math.sin(t * 1.6 + p.seed) * 0.5 + 0.5;
-  const gest = Math.sin(Math.PI * gesture);
-  if (type === KNIGHT) {
-    const g = Math.sin(ph * 2);
-    // rearing for an attack: body tips back, front legs kick
-    const rear = attack > 0 ? (attack < 0.55 ? ease(attack / 0.55) : attack < 0.7 ? 1 - (attack - 0.55) / 0.15 : 0) : block * 0.4;
-    const kick = Math.sin(t * 22) * 0.6 * rear;
-    parts.legs[0].rotation.x = walk * g * 0.9 - rear * 1.3 + kick - gest * 0.9 * Math.max(0, Math.sin(t * 12));
-    parts.legs[1].rotation.x = walk * Math.sin(ph * 2 + 0.6) * 0.9 - rear * 1.1 - kick;
-    parts.legs[2].rotation.x = walk * -g * 0.8 + rear * 0.3;
-    parts.legs[3].rotation.x = walk * -Math.sin(ph * 2 + 0.6) * 0.8 + rear * 0.3;
-    parts.body.rotation.x = walk * Math.sin(ph * 2) * 0.12 - rear * 0.75;
-    parts.body.position.y = 0.36 + walk * Math.abs(Math.sin(ph * 2)) * 0.05 + rear * 0.12;
-    parts.neck.rotation.x = Math.sin(t * 1.3 + p.seed) * 0.06 - walk * 0.15 + rear * 0.45 + gest * 0.3;
-    parts.head.rotation.x = Math.sin(t * 0.9 + p.seed) * 0.1;
-    parts.tail.rotation.x = Math.sin(t * 2 + p.seed) * 0.15 + walk * 0.5 + rear * 0.6;
-    parts.tail.rotation.z = Math.sin(t * 1.7 + p.seed) * 0.3;
-    // the rider's lance: couched, raised to guard, driven forward on the strike
-    const strike = attack >= 0.55 && attack < 0.8 ? Math.sin(Math.PI * (attack - 0.55) / 0.25) : 0;
-    parts.armR.rotation.x = -rear * 0.5 - block * 1.2 + strike * 0.7;
-    parts.armR.position.z = strike * 0.06;
-    parts.rider.rotation.x = rear * 0.4 - strike * 0.25;
-    return;
-  }
-  if (type === ROOK) {
-    parts.legL.rotation.x = walk * Math.sin(ph) * 0.7 - gest * 0.6;
-    parts.legR.rotation.x = -walk * Math.sin(ph) * 0.7;
-    parts.body.rotation.z = walk * Math.sin(ph) * 0.14 + gest * 0.08;
-    parts.body.rotation.x = attack > 0.5 && attack < 0.75 ? 0.35 * Math.sin(Math.PI * (attack - 0.5) / 0.25) : -block * 0.1;
-    parts.body.position.y = 0.17 + walk * Math.abs(Math.cos(ph)) * 0.03 + breathe * 0.005;
-    const up = attack > 0 ? (attack < 0.5 ? ease(attack / 0.5) : attack < 0.62 ? 1 - (attack - 0.5) / 0.12 : 0) : block * 0.7;
-    parts.armL.rotation.x = -up * 2.8 + walk * Math.sin(ph) * 0.4;
-    parts.armR.rotation.x = -up * 2.8 - walk * Math.sin(ph) * 0.4;
-    parts.armL.rotation.z = -0.15 - block * 0.5;
-    parts.armR.rotation.z = 0.15 + block * 0.5;
-    return;
-  }
-  // humans
-  const robed = !!parts.robe;
-  if (!robed) {
-    parts.legL.rotation.x = walk * Math.sin(ph) * 0.7 + (attack > 0.5 && attack < 0.8 ? -0.5 : 0);
-    parts.legR.rotation.x = -walk * Math.sin(ph) * 0.7;
-  } else {
-    parts.body.rotation.z = walk * Math.sin(ph) * 0.05;
-    parts.robe.rotation.z = walk * Math.sin(ph) * 0.04;
-  }
-  const baseY = robed ? 0.075 + 0.3 * (type === KING ? 1.12 : type === QUEEN ? 1.05 : 1) : 0.075 + 0.3 * 0.92;
-  parts.body.position.y = baseY + walk * Math.abs(Math.cos(ph)) * 0.025 + breathe * 0.006;
-  // lean into the blow, back for the wind-up, behind the guard when blocking
-  const lean = attack <= 0 ? 0 : attack < 0.5 ? -0.25 * ease(attack / 0.5) : attack < 0.65 ? lerp(-0.25, 0.35, (attack - 0.5) / 0.15) : lerp(0.35, 0, (attack - 0.65) / 0.35);
-  parts.body.rotation.x = walk * 0.1 + lean - block * 0.15;
-  parts.body.rotation.y = attack > 0 ? Math.sin(Math.PI * attack) * 0.35 : 0;
-  parts.head.rotation.y = Math.sin(t * 0.5 + p.seed) * 0.3 * (1 - walk) * (1 - block) + gest * 0.5;
-  // shield / free arm: forward when guarding
-  parts.armL.rotation.x = -walk * Math.sin(ph) * 0.45 + Math.sin(t * 1.6 + p.seed) * 0.03 - block * 1.3;
-  parts.armL.rotation.z = -0.12 + block * 0.4;
-  if (type === PAWN) {
-    // spear: a thrust rather than a chop
-    const k = attack <= 0 ? 0 : attack < 0.5 ? -ease(attack / 0.5) : attack < 0.65 ? lerp(-1, 1.3, (attack - 0.5) / 0.15) : lerp(1.3, 0, (attack - 0.65) / 0.35);
-    parts.armR.rotation.x = -1.1 + walk * Math.sin(ph) * 0.15 - k * 0.55 - gest * 1.0;
-    parts.weapon.rotation.x = 1.25 - gest * 1.2;
-    parts.armR.position.z = k * 0.07;
-  } else if (type === BISHOP || type === QUEEN) {
-    // casting: staff or scepter raised high, then thrust at the target
-    const cast = attack <= 0 ? 0 : attack < 0.5 ? ease(attack / 0.5) : attack < 0.62 ? 1 : lerp(1, 0, (attack - 0.62) / 0.38);
-    parts.armR.rotation.x = -0.35 - cast * 2.3 + (attack > 0.5 && attack < 0.7 ? 1.4 : 0) - block * 1.2 - gest * 0.8 + walk * Math.sin(ph) * 0.25;
-  } else {
-    parts.armR.rotation.x = swing(attack) + walk * Math.sin(ph) * 0.3 * (attack ? 0 : 1) - block * 1.6 - gest * 0.9;
-  }
-  parts.armR.rotation.z = 0.12 + block * 0.3;
-  if (parts.cape) parts.cape.rotation.x = walk * 0.3 + Math.sin(t * 2 + p.seed) * 0.03 + attack * 0.2;
+function idle(p) {
+  if (p.anim === 'idle') return;
+  act(p, 'idle', { loop: true, fade: 0.3 });
 }
 
 // ------------------------------------------------------------------ cinematic shots
-// Fights are filmed side-on, low, slowly circling the two fighters, pushing in for the kill.
-// With cinema 'all' (replays) the camera also follows every ordinary move.
 const cinema = () => state.cinema || 'fights';
 
-function duelShot(a, dt) {
+function duelShot(a) {
   const mid = a.capPos.clone().lerp(a.approach, 0.5);
   const side = new THREE.Vector3(a.dir.z, 0, -a.dir.x);
-  // stay on the player's side of the fight
   const view = playerView();
-  if (side.dot(view.pos.clone().sub(mid)) < 0) side.negate();
-  const orbit = (a.t - a.shotStart) * 0.18 * a.shotSpin;
-  const close = a.slowed ? 0.86 : 1;
+  if (side.dot(view.pos.clone().sub(mid)) < 0) side.negate(); // stay on the player's side
+  const orbit = (a.t - a.shotStart) * 0.16 * a.shotSpin;
+  const close = a.slowed ? 0.84 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (3.4 / Math.sqrt(aspect)) * close;
+  const dist = (3.3 / Math.sqrt(aspect)) * close;
   const off = side.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
-  // high enough to look over the pieces standing around the fight
-  shot.pos.copy(mid).add(off).add(new THREE.Vector3(0, 1.9 * close, 0)).addScaledVector(a.dir, -0.4);
-  shot.target.copy(mid).setY(0.5);
+  shot.pos.copy(mid).add(off).add(new THREE.Vector3(0, 1.6 * close, 0)).addScaledVector(a.dir, -0.4);
+  shot.target.copy(mid).setY(0.6);
   shot.want = 1;
 }
 
 function followShot(p) {
-  // over the shoulder of a marching piece
   const g = p.fig.group;
   const fwd = new THREE.Vector3(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y));
   const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
-  shot.pos.copy(g.position).addScaledVector(fwd, -2.8).addScaledVector(side, 1.0).setY(2.4);
-  shot.target.copy(g.position).addScaledVector(fwd, 1.2).setY(0.35);
+  shot.pos.copy(g.position).addScaledVector(fwd, -2.8).addScaledVector(side, 1.0).setY(2.3);
+  shot.target.copy(g.position).addScaledVector(fwd, 1.2).setY(0.5);
   shot.want = 1;
 }
 
-// ------------------------------------------------------------------ effects: bolts, shockwaves, lightning
+// ------------------------------------------------------------------ effects
 const particles = new Particles(scene);
-const fx = []; // short-lived effect objects with update(dt) -> false when finished
+const fx = [];
 
 function launchBolt(from, to, color) {
   const s = glowSprite(color, 0.35);
@@ -709,12 +641,10 @@ function shockwave(pos, color = 0xffd9a0) {
 }
 
 function lightning(to) {
-  // a jagged bolt from the sky, drawn as a chain of glowing beads, flickering
   const pts = [];
   const top = to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 8, (Math.random() - 0.5) * 2));
   for (let i = 0; i <= 26; i++) {
-    const k = i / 26;
-    const p = top.clone().lerp(to, k);
+    const p = top.clone().lerp(to, i / 26);
     if (i > 0 && i < 26) p.add(new THREE.Vector3((Math.random() - 0.5) * 0.45, 0, (Math.random() - 0.5) * 0.45));
     pts.push(p);
   }
@@ -766,24 +696,39 @@ function footDust(pos) {
 const charred = new THREE.MeshStandardMaterial({ color: 0x18120e, roughness: 0.95, emissive: 0x3a1204, emissiveIntensity: 1 });
 
 // ------------------------------------------------------------------ deaths
-// How a beaten piece goes: each attacker has its own finisher, and the victim dies to match.
 const deaths = [];
 function kill(p, style, from, power = 1) {
   const g = p.fig.group;
   const away = g.position.clone().sub(from).setY(0).normalize();
-  const d = { p, style, t: 0, away, power, v: null };
-  if (style === 'launch') d.v = away.clone().multiplyScalar(1.8).setY(5.2);
-  if (style === 'lightning') {
-    lightning(g.position.clone().setY(0.9));
+  const d = { p, style, t: 0, away, power, v: null, deathLen: 0 };
+  if (style === 'launch') {
+    d.v = away.clone().multiplyScalar(1.8).setY(5.2);
+    act(p, 'hit2');
+  } else if (style === 'lightning') {
+    lightning(g.position.clone().setY(1.0));
     g.traverse((o) => {
-      if (o.isMesh) o.material = charred;
+      if (o.isMesh && o.parent !== g) o.material = charred;
     });
-  }
-  if (style === 'stomp') {
-    crash(0.5);
-    dustRing(g.position, 12, 0.5);
+    d.deathLen = act(p, 'death');
+  } else if (style === 'fall') {
+    d.deathLen = act(p, 'death');
+  } else {
+    act(p, 'hit');
   }
   deaths.push(d);
+}
+
+function sinkAway(d, dt) {
+  // the body sinks into the board in a swirl of dust
+  const g = d.p.fig.group;
+  d.sinkT = (d.sinkT || 0) + dt;
+  g.position.y = -d.sinkT * 0.9;
+  if (Math.random() < 0.35) dustRing(g.position.clone().setY(0), 3, 0.35);
+  if (d.sinkT > 1.0) {
+    removePiece(d.p);
+    return true;
+  }
+  return false;
 }
 
 function updateDeaths(dt, t) {
@@ -791,39 +736,24 @@ function updateDeaths(dt, t) {
     const d = deaths[i];
     const g = d.p.fig.group, inner = d.p.fig.parts.inner;
     d.t += dt;
+    d.p.fig.mixer.update(dt);
     let done = false;
     switch (d.style) {
       case 'shatter':
-        shatter(d.p, g.position.clone().sub(d.away), d.power);
-        done = true;
-        break;
-      case 'topple': {
-        // falls flat on its back, then breaks on the ground
-        const k = clamp01(d.t / 0.55);
-        inner.rotation.x = -(k * k) * 1.5;
-        if (d.t >= 0.6) {
-          crash(0.5);
+        if (d.t > 0.12) {
           shatter(d.p, g.position.clone().sub(d.away), d.power);
           done = true;
         }
         break;
-      }
-      case 'stomp': {
-        // crushed flat under the hooves
-        inner.scale.y = Math.max(0.22, 1 - d.t * 7) * 1.42;
-        inner.scale.x = inner.scale.z = (1 + Math.min(0.35, d.t * 2)) * 1.42;
-        if (d.t >= 0.4) {
-          shatter(d.p, g.position.clone().setY(1), d.power * 0.8);
-          done = true;
-        }
+      case 'fall':
+        // the death animation plays out, then the body is swallowed by the board
+        if (d.t > d.deathLen + 0.5) done = sinkAway(d, dt);
         break;
-      }
-      case 'launch': {
-        // thrown into the air, tumbling, smashed on landing
+      case 'launch':
         d.v.y -= 11 * dt;
         g.position.addScaledVector(d.v, dt);
-        inner.rotation.x -= dt * 9;
-        inner.rotation.z += dt * 4;
+        inner.rotation.x -= dt * 8;
+        inner.rotation.z += dt * 3;
         if (g.position.y <= 0 && d.t > 0.15) {
           g.position.y = 0;
           crash(0.8);
@@ -832,26 +762,22 @@ function updateDeaths(dt, t) {
           done = true;
         }
         break;
-      }
-      case 'lightning': {
-        // charred black, smoking and trembling, then it collapses into ash
-        inner.position.x = Math.sin(t * 80) * 0.015;
+      case 'lightning':
+        inner.position.x = Math.sin(t * 80) * 0.012 * Math.max(0, 1 - d.t);
         if (Math.random() < 0.5) particles.burst(g.position.clone().setY(0.4 + Math.random() * 0.8), { color: 0xff6a20, n: 1, speed: 0.3, up: 0.8, size: 0.05, life: 0.5, gravity: -1 });
-        if (d.t >= 0.85) {
+        if (d.t >= Math.max(1.1, d.deathLen + 0.2)) {
           shatter(d.p, g.position.clone().sub(d.away), 0.7);
           done = true;
         }
         break;
-      }
       case 'vortex': {
-        // lifted in a spinning whirl of light, then it bursts in mid-air
         const k = clamp01(d.t / 1.1);
         g.position.y = easeOut(k) * 1.3;
         g.rotation.y += dt * (5 + 18 * k);
         for (let j = 0; j < 3; j++) {
           const a = t * 9 + j * 2.1;
           const r = 0.55 - 0.25 * k;
-          particles.burst(g.position.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.2 + j * 0.3, Math.sin(a) * r)), { color: 0xc77dff, n: 1, speed: 0.1, up: 0, size: 0.09, life: 0.4, gravity: 0 });
+          particles.burst(g.position.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.2 + j * 0.35, Math.sin(a) * r)), { color: d.p.code & 8 ? 0x9fd8ff : 0xc77dff, n: 1, speed: 0.1, up: 0, size: 0.09, life: 0.4, gravity: 0 });
         }
         if (d.t >= 1.15) {
           particles.burst(g.position.clone().setY(g.position.y + 0.5), { color: 0xe8c5ff, n: 60, speed: 4, up: 1, size: 0.1, life: 0.8, gravity: 2 });
@@ -864,56 +790,45 @@ function updateDeaths(dt, t) {
         }
         break;
       }
-      case 'sink': {
-        // swallowed by the board in a swirl of dust
-        g.position.y = -d.t * 0.95;
-        g.rotation.y += dt * 3;
-        if (Math.random() < 0.4) dustRing(g.position.clone().setY(0), 3, 0.35);
-        if (d.t >= 1.1) {
-          removePiece(d.p);
-          done = true;
-        }
-        break;
-      }
     }
     if (done) deaths.splice(i, 1);
   }
 }
 
 // ------------------------------------------------------------------ choreography
-const STRIKE = 0.6; // point in a blow (0..1) where the weapon lands
-
-function blowTime(type) {
-  return type === ROOK ? 0.75 : type === KNIGHT ? 0.8 : 0.62;
-}
-
-// The finishing move of each kind of piece, and how its victim dies.
-function finisherFor(att, vic) {
+// Every piece has its own finishing move, and the victim dies to match.
+function finisherFor(att) {
   switch (att) {
     case PAWN:
-      return { style: vic === ROOK ? 'sink' : 'topple', hitAt: STRIKE };
+      return { style: 'fall' };
     case KNIGHT:
-      return { style: vic === KNIGHT ? 'launch' : 'stomp', hitAt: 0.66, charge: true };
+      return { style: 'launch' }; // the leaping chop sends the victim flying
     case BISHOP:
-      return { style: 'lightning', hitAt: 0.6, cast: true };
+      return { style: 'lightning', cast: true };
     case ROOK:
-      return { style: 'launch', hitAt: 0.6, pound: true };
+      return { style: 'launch', pound: true };
     case QUEEN:
-      return { style: 'vortex', hitAt: 0.55, cast: true };
+      return { style: 'vortex', cast: true };
     case KING:
-      return { style: vic === QUEEN || vic === KING ? 'topple' : 'shatter', hitAt: 0.62, spin: true };
+      return { style: 'shatter' };
   }
-  return { style: 'shatter', hitAt: STRIKE };
+  return { style: 'fall' };
 }
 
-// world position of a piece's weapon (or fist), for trails and sparks
 const _w = new THREE.Vector3();
 function weaponPoint(p) {
-  const parts = p.fig.parts;
-  const o = parts.weapon || parts.armR;
-  if (!o) return p.fig.group.position.clone().setY(0.7);
-  o.updateWorldMatrix(true, false);
-  return o.localToWorld(_w.set(0, p.fig.type === PAWN ? 0.6 : p.fig.type === KING ? 0.45 : 0.3, 0)).clone();
+  // the right hand slot, where the weapon is held
+  let hand = p.handSlot;
+  if (hand === undefined) {
+    hand = null;
+    p.fig.model.traverse((o) => {
+      if (o.name === 'handslotr') hand = o;
+    });
+    p.handSlot = hand;
+  }
+  if (!hand) return p.fig.group.position.clone().setY(0.8);
+  hand.updateWorldMatrix(true, false);
+  return hand.getWorldPosition(_w).clone();
 }
 
 function startMove(job) {
@@ -928,37 +843,40 @@ function startMove(job) {
   const cap = m.cap >= 0 ? pieces.get(m.cap) : null;
   const capPos = m.cap >= 0 ? sqPos(m.cap) : null;
   const dist = from.distanceTo(capPos || to);
-  const walkTime = Math.max(0.8, dist * 0.45);
-  const act = { job, mover, from, to, cap, capPos, t: 0, knight: mover.fig.type === KNIGHT, phases: [], rook: null, events: {}, shotStart: 0, shotSpin: Math.random() < 0.5 ? 1 : -1 };
+  const knight = mover.fig.type === KNIGHT;
+  const walkTime = Math.max(0.9, dist * (knight ? 0.38 : 0.55));
+  const a = { job, mover, from, to, cap, capPos, t: 0, knight, phases: [], rook: null, events: {}, shotStart: 0, shotSpin: Math.random() < 0.5 ? 1 : -1 };
   pieces.delete(m.from);
-  act.phases.push({ name: 'turn', d: 0.25, face: angleTo(from, capPos || to) });
+  a.phases.push({ name: 'turn', d: 0.3, face: angleTo(from, capPos || to) });
   if (cap) {
     const dir = capPos.clone().sub(from).normalize();
-    act.dir = dir;
-    act.fin = finisherFor(mover.fig.type, cap.fig.type);
-    act.approach = capPos.clone().addScaledVector(dir, mover.fig.type === KNIGHT || cap.fig.type === KNIGHT ? -0.95 : -0.82);
-    act.phases.push({ name: 'walk', d: walkTime, a: from, b: act.approach });
-    const ta = blowTime(mover.fig.type), tv = blowTime(cap.fig.type);
-    // the duel: an attack and a parry each way (or a dodge), then the finisher
-    act.phases.push({ name: 'clash', d: ta, who: 'A', dodge: Math.random() < 0.3 });
-    act.phases.push({ name: 'clash', d: tv, who: 'V', dodge: Math.random() < 0.3 });
-    act.phases.push({ name: 'final', d: ta * 1.5 });
-    act.phases.push({ name: 'wait', d: { launch: 1.2, vortex: 1.3, sink: 1.1, lightning: 0.95, topple: 0.7, stomp: 0.45 }[act.fin.style] || 0.3 });
-    act.phases.push({ name: 'walk', d: 0.6, a: act.approach, b: to, settle: true });
+    a.dir = dir;
+    a.fin = finisherFor(mover.fig.type);
+    a.approach = capPos.clone().addScaledVector(dir, -0.85);
+    a.phases.push({ name: 'walk', d: walkTime, a: from, b: a.approach });
+    // the duel: an attack each way, parried or dodged, then the finisher
+    const atk = clipFor(mover.fig, 'attack'), vatk = clipFor(cap.fig, 'attack');
+    a.phases.push({ name: 'clash', d: clipDuration(atk) * 0.95, who: 'A', clip: atk, dodge: Math.random() < 0.3 });
+    a.phases.push({ name: 'clash', d: clipDuration(vatk) * 0.95, who: 'V', clip: vatk, dodge: Math.random() < 0.3 });
+    const fin = clipFor(mover.fig, 'finish');
+    const finSpeed = fin === '2H_Melee_Attack_Spin' ? 1.4 : 1;
+    a.phases.push({ name: 'final', d: clipDuration(fin) / finSpeed, clip: fin, speed: finSpeed });
+    a.phases.push({ name: 'wait', d: { launch: 1.3, vortex: 1.35, lightning: 1.5, fall: 2.6, shatter: 0.6 }[a.fin.style] || 0.6 });
+    a.phases.push({ name: 'walk', d: 0.7, a: a.approach, b: to, settle: true });
   } else {
-    act.phases.push({ name: 'walk', d: walkTime, a: from, b: to });
+    a.phases.push({ name: 'walk', d: walkTime, a: from, b: to });
   }
-  act.phases.push({ name: 'turnback', d: 0.3 });
+  a.phases.push({ name: 'turnback', d: 0.35 });
   if (m.castleRook) {
     const r = pieces.get(m.castleRook[0]);
     if (r) {
       pieces.delete(m.castleRook[0]);
-      act.rook = { p: r, a: sqPos(m.castleRook[0]), b: sqPos(m.castleRook[1]), t0: 0.45, d: 1.1 };
+      a.rook = { p: r, a: sqPos(m.castleRook[0]), b: sqPos(m.castleRook[1]), t0: 0.5, d: 1.2 };
     }
   }
-  act.total = act.phases.reduce((s, ph) => s + ph.d, 0);
-  if (act.rook) act.total = Math.max(act.total, act.rook.t0 + act.rook.d + 0.3);
-  return act;
+  a.total = a.phases.reduce((s, ph) => s + ph.d, 0);
+  if (a.rook) a.total = Math.max(a.total, a.rook.t0 + a.rook.d + 0.4);
+  return a;
 }
 
 function finishCurrent() {
@@ -973,15 +891,16 @@ function finishCurrent() {
   const g = a.mover.fig.group;
   g.position.copy(a.to);
   g.rotation.y = homeFacing(a.mover.code);
-  a.mover.fig.parts.inner.rotation.set(0, 0, 0);
+  a.mover.fig.parts.inner.position.set(0, 0.08, 0);
   a.mover.sq = job.m.to;
-  a.mover.walkPhase = 0;
   pieces.set(job.m.to, a.mover);
+  idle(a.mover);
   if (a.rook) {
     a.rook.p.fig.group.position.copy(a.rook.b);
     a.rook.p.fig.group.rotation.y = homeFacing(a.rook.p.code);
     a.rook.p.sq = job.m.castleRook[1];
     pieces.set(job.m.castleRook[1], a.rook.p);
+    idle(a.rook.p);
   }
   if (job.m.promo) {
     removePiece(a.mover);
@@ -996,7 +915,7 @@ function finishCurrent() {
   drawOverlays();
 }
 
-function stepMove(a, dt, t) {
+function stepMove(a, dt) {
   a.t += dt;
   let tt = a.t, phase = null, idx = -1;
   for (let i = 0; i < a.phases.length; i++) {
@@ -1008,28 +927,31 @@ function stepMove(a, dt, t) {
     tt -= a.phases[i].d;
   }
   const mover = a.mover, g = mover.fig.group;
-  let walk = 0, attack = 0, block = 0, vAttack = 0, vBlock = 0;
   const once = (key) => (a.events[key] ? false : (a.events[key] = true));
   if (phase) {
     const k = Math.min(1, tt / phase.d);
     switch (phase.name) {
       case 'turn':
-        g.rotation.y = turnToward(g.rotation.y, phase.face, Math.min(1, dt * 14));
-        walk = 0.3;
+        if (once('turn')) act(mover, a.knight ? 'run' : 'walk', { loop: true });
+        g.rotation.y = turnToward(g.rotation.y, phase.face, Math.min(1, dt * 12));
         break;
       case 'walk': {
-        g.position.lerpVectors(phase.a, phase.b, ease(k));
-        const leap = a.knight && !phase.settle;
-        if (leap) g.position.y = Math.sin(Math.PI * k) * Math.min(1.2, 0.5 + phase.a.distanceTo(phase.b) * 0.25);
-        walk = Math.sin(Math.PI * Math.min(1, k * 1.15)) * 0.9 + 0.1;
-        const before = mover.walkPhase || 0;
-        mover.walkPhase = before + dt * (a.knight ? 9 : 11);
-        if (Math.floor(mover.walkPhase / Math.PI) !== Math.floor(before / Math.PI) && !leap) {
-          step(0.12, mover.fig.type === ROOK);
+        const leap = a.knight && !phase.settle && phase.a.distanceTo(phase.b) > 1.2;
+        if (once('walk' + idx)) {
+          if (leap) act(mover, 'leap', { duration: phase.d });
+          else act(mover, a.knight && !phase.settle ? 'run' : 'walk', { loop: true });
+        }
+        g.position.lerpVectors(phase.a, phase.b, leap ? k : ease(k));
+        if (leap) g.position.y = Math.sin(Math.PI * clamp01((k - 0.15) / 0.75)) * Math.min(1.3, 0.6 + phase.a.distanceTo(phase.b) * 0.25);
+        g.rotation.y = turnToward(g.rotation.y, angleTo(phase.a, phase.b), Math.min(1, dt * 10));
+        // footsteps
+        const step2 = Math.floor(a.t / 0.27);
+        if (!leap && step2 !== a.lastStep) {
+          a.lastStep = step2;
+          step(0.1, mover.fig.type === ROOK);
           footDust(g.position);
         }
-        g.rotation.y = turnToward(g.rotation.y, angleTo(phase.a, phase.b), Math.min(1, dt * 10));
-        if (leap && k > 0.97 && once('land' + idx)) {
+        if (leap && k > 0.92 && once('land' + idx)) {
           step(0.3, true);
           dustRing(g.position, 8, 0.4);
         }
@@ -1039,64 +961,49 @@ function stepMove(a, dt, t) {
         // one side strikes; the other parries (sparks and a clang) or dodges aside
         const striker = phase.who === 'A' ? mover : a.cap;
         const defender = phase.who === 'A' ? a.cap : mover;
-        if (phase.who === 'A') attack = k;
-        else vAttack = k;
-        const guard = clamp01(k * 3) * (k < 0.85 ? 1 : (1 - k) / 0.15);
-        if (phase.dodge) {
-          // step aside from the blow and back
-          const side = new THREE.Vector3(a.dir.z, 0, -a.dir.x).multiplyScalar(Math.sin(Math.PI * clamp01((k - 0.35) / 0.5)) * 0.32);
-          defender.fig.parts.inner.position.x = side.length() * (phase.who === 'A' ? 1 : -1);
-          defender.fig.parts.inner.rotation.z = -side.length() * 0.6;
-        } else if (phase.who === 'A') vBlock = guard;
-        else block = guard;
-        if (k > 0.45 && k < 0.7) particles.burst(weaponPoint(striker), { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.07, life: 0.22, gravity: 0 });
-        if (k > 0.35 && once('whoosh' + idx)) whoosh();
-        if (k >= STRIKE && once('clash' + idx)) {
+        const strikeAt = STRIKE_AT[phase.clip] || 0.45;
+        if (once('atk' + idx)) act(striker, phase.clip, { fade: 0.12 });
+        if (k > strikeAt - 0.22 && once('def' + idx)) {
+          if (phase.dodge) act(defender, Math.random() < 0.5 ? 'dodgeL' : 'dodgeR', { fade: 0.08 });
+          else act(defender, 'block', { fade: 0.08 });
+        }
+        if (k > strikeAt - 0.15 && k < strikeAt + 0.1) particles.burst(weaponPoint(striker), { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.08, life: 0.25, gravity: 0 });
+        if (k > strikeAt - 0.15 && once('whoosh' + idx)) whoosh();
+        if (k >= strikeAt && once('clash' + idx)) {
           if (phase.dodge) {
             whoosh(0.35);
           } else {
-            const at = weaponPoint(striker).lerp(defender.fig.group.position.clone().setY(0.7), 0.3);
-            particles.burst(at, { color: 0xffe2a0, n: 24, speed: 2.6, up: 1, size: 0.07, life: 0.45 });
+            const at = weaponPoint(striker).lerp(defender.fig.group.position.clone().setY(0.8), 0.3);
+            particles.burst(at, { color: 0xffe2a0, n: 26, speed: 2.6, up: 1, size: 0.07, life: 0.45 });
             flash.position.copy(at);
             flash.color.set(0xffd59a);
-            flash.intensity = 12;
+            flash.intensity = 14;
             clang();
             send({ type: 'impact', heavy: false });
             shake = Math.max(shake, 0.03);
-            a.stagger = { who: defender, t: 0 };
           }
-        }
-        if (k >= 0.95) {
-          defender.fig.parts.inner.position.x = 0;
-          defender.fig.parts.inner.rotation.z = 0;
         }
         break;
       }
       case 'final': {
-        // the finisher: a slower, bigger wind-up, slow motion on the blow
         const fin = a.fin;
-        attack = k < 0.6 ? (k / 0.6) * 0.5 : 0.5 + ((k - 0.6) / 0.4) * 0.5;
-        vBlock = k < 0.5 ? clamp01(k * 3) : 0;
-        if (fin.charge) {
-          // the knight charges home and rears over its victim
-          const p = clamp01((k - 0.15) / 0.5);
-          g.position.copy(a.approach).addScaledVector(a.dir, easeOut(p) * 0.5);
-          mover.walkPhase = (mover.walkPhase || 0) + dt * 12;
-          walk = p > 0 && p < 1 ? 0.8 : 0;
+        const strikeAt = STRIKE_AT[phase.clip] || 0.55;
+        if (once('fin')) {
+          act(mover, phase.clip, { speed: phase.speed, fade: 0.12 });
+          act(a.cap, 'Blocking', { loop: true, fade: 0.2 });
         }
-        if (fin.spin && attack > 0.5 && attack < 0.7) g.rotation.y += dt * 26; // the king's spinning slash
-        if (fin.cast && attack >= 0.5 && once('cast')) {
-          if (mover.fig.type === QUEEN) launchBolt(weaponPoint(mover), a.cap.fig.group.position.clone().setY(0.6), 0xc77dff);
-          else particles.burst(weaponPoint(mover), { color: 0xbfe4ff, n: 20, speed: 1.2, up: 1, size: 0.08, life: 0.5, gravity: 0 });
+        if (k > strikeAt - 0.2 && k < strikeAt + 0.1) particles.burst(weaponPoint(mover), { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.1, life: 0.28, gravity: 0 });
+        if (fin.cast && k >= strikeAt - 0.12 && once('cast')) {
+          if (mover.fig.type === QUEEN) launchBolt(weaponPoint(mover), a.cap.fig.group.position.clone().setY(0.7), mover.fig.isWhite ? 0x9fd8ff : 0xc77dff);
+          else particles.burst(weaponPoint(mover), { color: 0xbfe4ff, n: 24, speed: 1.2, up: 1, size: 0.08, life: 0.5, gravity: 0 });
         }
-        if (attack > 0.4 && attack < 0.75) particles.burst(weaponPoint(mover), { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.09, life: 0.25, gravity: 0 });
-        if (attack > 0.45 && once('whooshF')) whoosh(0.35);
-        if (attack >= fin.hitAt - 0.06 && once('slow')) {
+        if (k > strikeAt - 0.25 && once('whooshF')) whoosh(0.35);
+        if (k >= strikeAt - 0.05 && once('slow')) {
           a.slowed = true;
-          slowLeft = 0.75; // real seconds of slow motion around the killing blow
+          slowLeft = 0.75; // slow motion around the killing blow
         }
-        if (attack >= fin.hitAt && once('hit')) {
-          const at = a.cap.fig.group.position.clone().setY(0.65);
+        if (k >= strikeAt && once('hit')) {
+          const at = a.cap.fig.group.position.clone().setY(0.8);
           particles.burst(at, { color: 0xfff0c0, n: 36, speed: 3.4, up: 1.4, size: 0.09, life: 0.6 });
           flash.position.copy(at);
           flash.color.set(0xffe0a0);
@@ -1104,7 +1011,7 @@ function stepMove(a, dt, t) {
           shake = 0.1;
           crash(0.35);
           send({ type: 'impact', heavy: true });
-          if (fin.pound) shockwave(g.position.clone().addScaledVector(a.dir, 0.3));
+          if (fin.pound) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
           kill(a.cap, fin.style, g.position.clone(), a.cap.fig.type >= ROOK ? 1.35 : 1.1);
           pieces.delete(a.job.m.cap);
           a.cap = null;
@@ -1112,8 +1019,10 @@ function stepMove(a, dt, t) {
         break;
       }
       case 'wait':
-        break; // the victim's death plays out
+        if (tt > 0.5 && once('cheer')) act(mover, 'cheer');
+        break;
       case 'turnback':
+        if (once('back')) idle(mover);
         g.rotation.y = turnToward(g.rotation.y, homeFacing(mover.code), Math.min(1, dt * 10));
         break;
     }
@@ -1122,34 +1031,34 @@ function stepMove(a, dt, t) {
       (phase.name === 'walk' && !phase.settle && k > 0.35));
     if (fighting && cinema() !== 'off') {
       if (!a.shotStart) a.shotStart = a.t;
-      duelShot(a, dt);
+      duelShot(a);
     } else if (cinema() === 'all' && phase.name !== 'turnback') {
       followShot(mover);
     } else if (shot.want && (!a.dir || phase.name === 'turnback' || (phase.name === 'walk' && phase.settle && k > 0.5))) {
       releaseShot();
     }
   }
-  // a parried fighter is pushed back a little
-  if (a.stagger) {
-    a.stagger.t += dt;
-    const s = Math.sin(Math.PI * clamp01(a.stagger.t / 0.35)) * 0.08;
-    a.stagger.who.fig.parts.inner.position.z = -s;
-    if (a.stagger.t > 0.35) a.stagger = null;
-  }
-  pose(mover, t, walk, attack, block);
+  mover.fig.mixer.update(dt);
   if (a.cap) {
     const cg = a.cap.fig.group;
     cg.rotation.y = turnToward(cg.rotation.y, angleTo(a.capPos, g.position), Math.min(1, dt * 5));
-    pose(a.cap, t, 0, vAttack, vBlock, 0);
+    if (!a.events.vIdle) {
+      a.events.vIdle = true;
+      act(a.cap, '2H_Melee_Idle', { loop: true }); // on guard
+    }
+    a.cap.fig.mixer.update(dt);
   }
   if (a.rook) {
     const r = a.rook;
     const k = clamp01((a.t - r.t0) / r.d);
     const rg = r.p.fig.group;
+    if (k > 0 && !a.events.rookGo) {
+      a.events.rookGo = true;
+      act(r.p, 'leap', { duration: r.d });
+    }
     rg.position.lerpVectors(r.a, r.b, ease(k));
     rg.position.y = Math.sin(Math.PI * k) * 0.9; // the rook vaults the king
-    r.p.walkPhase = (r.p.walkPhase || 0) + dt * 10;
-    pose(r.p, t, k > 0 && k < 1 ? 1 : 0, 0);
+    r.p.fig.mixer.update(dt);
     if (k >= 1 && !a.events.rookLand) {
       a.events.rookLand = true;
       step(0.4, true);
@@ -1159,26 +1068,13 @@ function stepMove(a, dt, t) {
   if (a.t >= a.total) finishCurrent();
 }
 
-// ------------------------------------------------------------------ idle life
-function idleGesture(p, t) {
-  if (p.nextGesture === undefined) p.nextGesture = t + 2 + Math.random() * 8;
-  if (p.gestureAt === undefined && t > p.nextGesture) p.gestureAt = t;
-  if (p.gestureAt === undefined) return 0;
-  const g = (t - p.gestureAt) / 1.4;
-  if (g >= 1) {
-    p.gestureAt = undefined;
-    p.nextGesture = t + 4 + Math.random() * 10;
-    return 0;
-  }
-  return g;
-}
-
 // ------------------------------------------------------------------ main loop
 let last = performance.now();
 let matedDone = -1, matedAt = 0, releaseAt = 0;
-let slowLeft = 0; // real seconds of slow motion remaining
+let slowLeft = 0;
 let wasBusy = false;
-let manual = false, simT = 0; // manual: frames stepped by __advance (for recording videos)
+let manual = false, simT = 0;
+let nextFidget = 3;
 function frame(now) {
   if (manual) return;
   const dt = Math.min(0.05, (now - last) / 1000);
@@ -1193,11 +1089,14 @@ window.__advance = (dt) => tick(dt);
 window.__isIdle = () => !wasBusy && !current && !queue.length && !deaths.length;
 
 function tick(realDt) {
-  // game time runs at the replay speed, and slower around a killing blow
+  if (!ready) {
+    renderer.render(scene, camera);
+    return;
+  }
   let dt = realDt * (state.speed || 1);
   if (slowLeft > 0) {
     slowLeft -= realDt;
-    dt *= 0.28;
+    dt *= 0.3;
   }
   simT += dt;
   const t = simT;
@@ -1205,12 +1104,19 @@ function tick(realDt) {
     current = startMove(queue.shift());
     drawOverlays();
   }
-  if (current) stepMove(current, dt, t);
+  if (current) stepMove(current, dt);
   const fighting = current && current.dir;
+  // an idle piece now and then does something: taunts, checks its weapon, raises its staff
+  if (!current && t > nextFidget && pieces.size) {
+    const all = [...pieces.values()];
+    const p = all[(Math.random() * all.length) | 0];
+    if (p.anim === 'idle') act(p, 'fidget', { fade: 0.25 });
+    nextFidget = t + 2.5 + Math.random() * 4;
+  }
   for (const p of pieces.values()) {
     if (current && (p === current.mover || p === current.cap || (current.rook && p === current.rook.p))) continue;
-    // bystanders turn to watch a fight nearby
     if (fighting) {
+      // bystanders turn to watch a fight nearby
       if (p.fig.group.position.distanceTo(current.capPos) < 2.6) {
         p.fig.group.rotation.y = turnToward(p.fig.group.rotation.y, angleTo(p.fig.group.position, current.capPos), Math.min(1, dt * 2));
         p.watching = true;
@@ -1219,7 +1125,16 @@ function tick(realDt) {
       p.fig.group.rotation.y = turnToward(p.fig.group.rotation.y, homeFacing(p.code), Math.min(1, dt * 3));
       if (Math.abs(p.fig.group.rotation.y - homeFacing(p.code)) < 0.01) p.watching = false;
     }
-    pose(p, t, 0, 0, 0, current ? 0 : idleGesture(p, t));
+    if (!p.anim) {
+      act(p, 'idle', { loop: true });
+      p.fig.mixer.update(Math.random() * 2); // don't all breathe in step
+    } else if (p.until && t > p.until) {
+      idle(p);
+    }
+    // a king in check raises his guard
+    if (!current && state.check === p.sq && p.anim === 'idle') act(p, 'Blocking', { loop: true, fade: 0.3 });
+    if (state.check !== p.sq && p.anim === 'Blocking') idle(p);
+    p.fig.mixer.update(dt);
     if (p.grow !== undefined) {
       p.grow = Math.min(1, p.grow + dt * 1.6);
       p.fig.group.scale.setScalar(ease(p.grow));
@@ -1233,24 +1148,23 @@ function tick(realDt) {
   } else {
     checkLight.intensity = 0;
   }
-  // checkmate: the beaten king topples and crumbles, filmed up close
+  // checkmate: the beaten king falls, filmed up close, and is swallowed by the board
   if (!busy && state.mated >= 0 && matedDone !== state.mated) {
     const k = pieces.get(state.mated);
     if (k) {
-      if (!matedAt) matedAt = t;
-      const g = k.fig.group;
-      shot.pos.copy(g.position).add(new THREE.Vector3(1.6, 1.1, 1.6));
-      shot.target.copy(g.position).setY(0.5);
-      if (cinema() !== 'off') shot.want = 1;
-      const e = Math.min(1, (t - matedAt - 0.6) / 1.1);
-      if (e > 0) k.fig.parts.inner.rotation.z = ease(e) * 1.45;
-      if (e >= 1) {
-        shatter(k, g.position.clone().add(new THREE.Vector3(0.3, 0, 0)), 1.6);
-        crash(0.9);
+      if (!matedAt) {
+        matedAt = t;
+        shot.pos.copy(k.fig.group.position).add(new THREE.Vector3(1.6, 1.2, 1.6));
+        shot.target.copy(k.fig.group.position).setY(0.6);
+        if (cinema() !== 'off') shot.want = 1;
+      }
+      if (t - matedAt > 0.6) {
         pieces.delete(state.mated);
+        kill(k, 'fall', k.fig.group.position.clone().add(new THREE.Vector3(0, 0, 1)), 1.5);
+        crash(0.6);
         matedDone = state.mated;
         matedAt = 0;
-        releaseAt = t + 1.6;
+        releaseAt = t + 3.5;
       }
     }
   }
@@ -1265,12 +1179,20 @@ function tick(realDt) {
   particles.update(dt);
   updateCamera(realDt);
   renderer.render(scene, camera);
-  // tell the app when everything has settled (replays wait for this)
   const nowBusy = busy || slowLeft > 0;
   if (wasBusy && !nowBusy) send({ type: 'idle', ply: state.ply });
   wasBusy = nowBusy;
 }
 requestAnimationFrame(frame);
+
+// The models are decoded first; the app's state waits for them.
+let ready = false;
+let pendingState = null;
+loadFigures().then(() => {
+  ready = true;
+  if (pendingState) receive(pendingState);
+  send({ type: 'ready' });
+});
 
 // Standalone preview (open the page directly): set up a position so there's something to see.
 if (!window.OpenRook && window.parent === window) {
@@ -1285,4 +1207,3 @@ if (!window.OpenRook && window.parent === window) {
     receive({ ...state, board: b, ply: state.ply + 1, last: { from, to, cap: cap >= 0 ? cap : -1, castleRook: null, promo: 0 } });
   };
 }
-send({ type: 'ready' });

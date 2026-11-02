@@ -25,7 +25,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           SwitchListTile(
             title: const Text('Battle view'),
-            subtitle: const Text('3D stone board where pieces march, leap and smash each other'),
+            subtitle: const Text('3D board where the armies march, fight and fall'),
             value: s.battleView,
             onChanged: (v) => setState(() => s.battleView = v),
           ),
@@ -69,6 +69,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
           Text('Your OpenRook ID: ${s.pool.publicKey.substring(0, 16)}…', style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          Text('3D characters: KayKit Adventurers and Skeletons by Kay Lousberg (kaylousberg.com), CC0.',
+              style: Theme.of(context).textTheme.bodySmall),
         ]),
       ),
     );

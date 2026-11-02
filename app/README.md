@@ -19,9 +19,15 @@ tells the board how to play your opponent's.
 
 - **Battle view** (`lib/ui/board3d/`, scene in `board3d/src/`): a real 3D board rendered with
   three.js (WebGL) inside the app: a WebView on iPhone, Android and Mac, an iframe on the web.
-  The pieces are little sculpted characters: foot soldiers with spears and shields, knights on
-  horseback with lances, mitred bishops with crooks, walking stone towers, and a crowned queen
-  and king in velvet capes, white marble against black obsidian, under real lights and shadows.
+  The pieces are rigged, textured, skeletally animated characters (KayKit's Adventurers and
+  Skeletons packs, CC0, by Kay Lousberg; see `board3d/models/LICENSE.txt`): the living against
+  the dead. White: hooded rogues (pawns), the armoured knight, the mage (bishop), the barbarian
+  with a greataxe (rook), a crowned rogue (queen) and the crowned knight with a greatsword (king).
+  Black: skeleton minions, skeleton rogues, the skeleton mage, a hulking minion with axe and
+  shield (rook), and the crowned mage and warrior. Each stands on a pedestal carved with its
+  chess symbol. They move with real animation clips: walks, runs and leaps, one- and two-handed
+  sword and axe attacks, spellcasting, blocks, dodges, hit reactions, deaths (skeletons
+  collapse into a heap of bones), cheers and taunts.
   They breathe and look around while they wait. A move is acted out: the piece turns, walks or
   gallops (knights leap), and a capture is a fight: the attacker closes in, winds up and
   strikes (spear thrust, sword blow, the tower's two-fisted slam, the horse rearing, bishops
@@ -47,7 +53,9 @@ tells the board how to play your opponent's.
   pause, step, scrub, ½×/1×/2× speed, with the announcer calling the moves. The grid button switches to a flat board. Windows and Linux (no WebView) use a
   2.5D painted version (`lib/ui/battle_board.dart`).
   To change the scene: edit `board3d/src/*.js`, then `cd board3d && npm install && npm run build`
-  rebuilds `assets/board3d/board3d.html` (commit it; the app doesn't need Node to build).
+  rebuilds `assets/board3d/board3d.html` (commit it; the app doesn't need Node to build). The
+  models in `board3d/models/` are made by `board3d/tools/pack-models.mjs` from the two KayKit
+  packs (instructions at the top of that file).
 - **Say a move**: press the mic and say "knight to f3", "e4", "bishop takes c6", "castle
   kingside", "a8 queen". The phone's own speech recogniser does the listening;
   `lib/voice/speech_moves.dart` turns the words (and common mishearings like "night" and
