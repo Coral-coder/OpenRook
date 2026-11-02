@@ -41,7 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(
                 s.style == 'toon'
                     ? 'Toon: friendly cartoon heroes and skeletons (for kids)'
-                    : 'Wizard: living stone statues, light magic against dark',
+                    : 'Wizard: stone chess statues that grind across the board and smash each other to rubble',
               ),
               trailing: SegmentedButton<String>(
                 segments: const [

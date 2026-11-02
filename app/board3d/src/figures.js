@@ -1,4 +1,6 @@
-// The armies: rigged, textured, animated characters from KayKit's Adventurers and Skeletons
+// The armies. The default ('stone') look is the Wizard Chess set of carved statues (see the end
+// of this file); the 'toon' look, and the fallback when the statues aren't built in, are
+// rigged, textured, animated characters from KayKit's Adventurers and Skeletons
 // packs (CC0, Kay Lousberg, www.kaylousberg.com), packed by tools/pack-models.mjs.
 //
 // White are the living: hooded rogues (pawns), the armoured knight, the mage (bishop), the
@@ -8,6 +10,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import MODELS from './models_data.gen.js';
 import { stoneMaterial } from './stone.js';
 
@@ -87,6 +90,7 @@ function crown(isWhite) {
 
 /** Builds a figure for a piece code (Dart's: white 1..6, black 9..14). */
 export function buildFigure(code) {
+  if (style === 'stone' && hasStatues()) return buildStatue(code);
   const type = code & 7, isWhite = (code & 8) === 0;
   const spec = ROSTER[isWhite ? 'white' : 'black'][type];
   const group = new THREE.Group();
@@ -212,6 +216,7 @@ export function setRot(fig, r) {
 
 /** Name of the clip a piece uses for an action ('idle', 'walk', 'attack', 'finish' ...). */
 export function clipFor(fig, action) {
+  if (fig.statue) return 'S_' + action;
   const s = fig.spec.style, white = fig.isWhite, t = fig.type;
   switch (action) {
     case 'idle':
@@ -262,6 +267,7 @@ export const STRIKE_AT = {
 
 /** Plays a clip on a figure, cross-fading from whatever it was doing. */
 export function play(fig, name, { loop = false, fade = 0.18, speed = 1, duration = 0 } = {}) {
+  if (fig.statue) return playStatue(fig, name, { loop, speed, duration });
   const clip = loaded.clips[name];
   if (!clip) return 0;
   const action = fig.mixer.clipAction(clip);
@@ -283,6 +289,7 @@ export function hasClip(name) {
 }
 
 export function clipDuration(name) {
+  if (name.startsWith('S_')) return STATUE_MOVES[name.slice(2)]?.d || 1;
   return loaded.clips[name]?.duration || 1;
 }
 
@@ -323,4 +330,225 @@ export function buildRemains(fig) {
   group.updateMatrixWorld(true);
   group.position.y -= new THREE.Box3().setFromObject(group, true).min.y - 0.01;
   return { group, model, materials, isWhite: fig.isWhite, parts: { inner }, opacity: 1 };
+}
+
+// ================================================================== the wizard's chess statues
+//
+// The carved set (models/wizard_*.glb, from tools/import-wizard.mjs): solid stone figures on
+// columned pedestals. Like the pieces in the film they don't walk; they grind across the board,
+// rear back and smash their victims to rubble. They are rigid, so every move is the whole statue
+// rocking, lunging, leaping and toppling, driven by playStatue() / the fake mixer below.
+
+const STATUE_FILES = { [PAWN]: 'pawn', [KNIGHT]: 'knight', [BISHOP]: 'bishop', [ROOK]: 'rook', [QUEEN]: 'queen', [KING]: 'king' };
+const MM = 1.3 / 40; // the real board has 40 mm squares; the statues are a touch larger on screen
+// where each statue holds its weapon (mm, facing +z): sparks fly from here
+const WEAPON = {
+  [PAWN]: [0, 17, 7], [KNIGHT]: [0, 42, 6], [BISHOP]: [7, 47, 1],
+  [ROOK]: [0, 44, 0], [QUEEN]: [0, 36, 4], [KING]: [0, 34, 5],
+};
+// the moves: duration (s), when the blow lands (0..1), and whether they loop
+export const STATUE_MOVES = {
+  idle: { d: 2, loop: true }, walk: { d: 1, loop: true }, run: { d: 1, loop: true }, guard: { d: 1.4, loop: true },
+  leap: { d: 1 }, attack: { d: 1.0, at: 0.5 }, attack2: { d: 1.0, at: 0.5 }, finish: { d: 1.5, at: 0.62 },
+  block: { d: 0.6 }, dodgeL: { d: 0.6 }, dodgeR: { d: 0.6 }, hit: { d: 0.5 }, hit2: { d: 0.6 },
+  death: { d: 1.1 }, cheer: { d: 1.0 }, fidget: { d: 1.8 },
+};
+for (const [k, v] of Object.entries(STATUE_MOVES)) if (v.at) STRIKE_AT['S_' + k] = v.at;
+const RAW = { Blocking: 'guard', '2H_Melee_Idle': 'guard', Idle: 'idle' };
+
+export function hasStatues() {
+  return !!(MODELS.wizard_king && loaded?.byName.wizard_king);
+}
+
+const statueGeo = {};
+function statueGeometry(type) {
+  if (statueGeo[type]) return statueGeo[type];
+  const scene = loaded.byName['wizard_' + STATUE_FILES[type]].scene;
+  scene.updateMatrixWorld(true);
+  let src = null;
+  scene.traverse((o) => {
+    if (o.isMesh && !src) src = o;
+  });
+  // bake the quantisation transform into plain floats, then shade with creased normals so
+  // the carved edges stay crisp and the curved robes stay smooth
+  const a = src.geometry.attributes.position;
+  const pos = new Float32Array(a.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < a.count; i++) {
+    v.fromBufferAttribute(a, i).applyMatrix4(src.matrixWorld);
+    pos[i * 3] = v.x;
+    pos[i * 3 + 1] = v.y;
+    pos[i * 3 + 2] = v.z;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(src.geometry.index.clone());
+  const out = toCreasedNormals(g, (35 * Math.PI) / 180);
+  out.computeBoundingBox();
+  return (statueGeo[type] = out);
+}
+
+function buildStatue(code) {
+  const type = code & 7, isWhite = (code & 8) === 0;
+  const group = new THREE.Group();
+  const inner = new THREE.Group();
+  group.add(inner);
+  const model = new THREE.Group(); // the pose: rocked, lunged and toppled by the moves
+  inner.add(model);
+  const geo = statueGeometry(type);
+  const mat = stoneMaterial(null, isWhite ? 'white' : 'black', 0, { scale: 0.2 });
+  // the stone shader brightens by the base colour: tone the marble down so the carving reads
+  mat.color.set(isWhite ? 0x9c968c : 0xb0b0b0);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.scale.setScalar(MM);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  model.add(mesh);
+  const hand = new THREE.Object3D();
+  hand.name = 'handslotr';
+  hand.position.fromArray(WEAPON[type]).multiplyScalar(MM);
+  model.add(hand);
+  const bb = geo.boundingBox;
+  const fig = {
+    group, type, isWhite, code, spec: {}, model, materials: [mat], stone: false, statue: true,
+    parts: { inner }, current: null, move: { name: 'idle', t: 0, d: 2, loop: true },
+    height: (bb.max.y - bb.min.y) * MM, radius: 10 * MM,
+    pose: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
+  };
+  fig.mixer = { update: (dt) => animateStatue(fig, dt) };
+  return fig;
+}
+
+function playStatue(fig, name, { loop, speed, duration }) {
+  let key = name.startsWith('S_') ? name.slice(2) : RAW[name] || name;
+  if (!STATUE_MOVES[key]) key = 'idle';
+  const m = STATUE_MOVES[key];
+  const d = duration > 0 ? duration : m.d / (speed || 1);
+  // the victim lying in rubble stays down
+  if (fig.move.name === 'death' && key !== 'death') return d;
+  fig.move = { name: key, t: 0, d, loop: loop || !!m.loop, at: m.at || 0.5, side: Math.random() < 0.5 ? 1 : -1 };
+  return d;
+}
+
+const smooth = (x) => x * x * (3 - 2 * x);
+const c01 = (x) => Math.max(0, Math.min(1, x));
+// rise from 0 to 1 between a and b, then fall back to 0 between c and d
+const bump = (k, a, b, c, d) => (k < a ? 0 : k < b ? smooth((k - a) / (b - a)) : k < c ? 1 : k < d ? 1 - smooth((k - c) / (d - c)) : 0);
+
+function strikePose(fig, k, at, big) {
+  // rear back, then hurl the whole statue at the victim and slam down
+  const P = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+  const wind = bump(k, 0.05, at - 0.12, at - 0.12, at - 0.02);
+  const lunge = bump(k, at - 0.12, at, at + 0.12, 0.98);
+  const s = big ? 1.4 : 1;
+  switch (fig.type) {
+    case KNIGHT: // the horse rears up and stamps down
+      P.rx = -0.55 * wind * s + 0.3 * lunge;
+      P.y = 0.1 * wind;
+      P.z = -0.1 * wind + 0.42 * lunge * s;
+      break;
+    case ROOK: // the tower jumps and comes down like a hammer
+      P.y = 0.55 * wind * s;
+      P.rx = -0.12 * wind + 0.18 * lunge;
+      P.z = 0.38 * lunge;
+      break;
+    case PAWN: // a short, low charge
+      P.rx = -0.25 * wind + 0.5 * lunge;
+      P.z = -0.06 * wind + 0.45 * lunge;
+      break;
+    default: // bishop, queen, king: rise up, twist away, and crash down on the victim
+      P.rx = -0.4 * wind * s + 0.55 * lunge;
+      P.ry = 0.6 * wind * (big ? 1 : 0.5) - 0.2 * lunge;
+      P.y = 0.14 * wind * s;
+      P.z = -0.12 * wind + 0.42 * lunge * s;
+  }
+  return P;
+}
+
+function animateStatue(fig, dt) {
+  const m = fig.move;
+  m.t += dt;
+  if (!m.loop && m.t >= m.d && m.name !== 'death') fig.move = { name: 'idle', t: 0, d: 2, loop: true };
+  const k = m.loop ? (m.t % m.d) / m.d : c01(m.t / m.d);
+  const T = m.t;
+  let P = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+  let snap = 14; // how fast the statue follows its pose
+  switch (m.name) {
+    case 'walk':
+    case 'run': {
+      // grinding across the board: leaning into the slide, juddering on the squares
+      const lean = c01(T * 3);
+      P.rx = (m.name === 'run' ? 0.12 : 0.07) * lean;
+      P.rz = Math.sin(T * 47) * 0.012 + Math.sin(T * 7.3) * 0.02;
+      P.x = Math.sin(T * 61) * 0.004;
+      P.y = Math.abs(Math.sin(T * 23)) * 0.006;
+      break;
+    }
+    case 'leap':
+      // crouch, spring, sail rearing back, land leaning in
+      P.rx = -0.45 * Math.sin(Math.PI * c01((k - 0.1) / 0.75)) + 0.15 * bump(k, 0.8, 0.9, 0.9, 1);
+      P.y = -0.03 * bump(k, 0, 0.08, 0.08, 0.15);
+      snap = 22;
+      break;
+    case 'attack':
+    case 'attack2':
+      P = strikePose(fig, k, m.at, false);
+      snap = 30;
+      break;
+    case 'finish':
+      P = strikePose(fig, k, m.at, true);
+      snap = 30;
+      break;
+    case 'block':
+    case 'hit':
+    case 'hit2': {
+      const jolt = bump(k, 0, 0.12, 0.25, 1);
+      P.rx = -(m.name === 'hit2' ? 0.35 : m.name === 'hit' ? 0.25 : 0.12) * jolt;
+      P.z = -0.1 * jolt;
+      P.rz = 0.05 * m.side * jolt;
+      P.x = Math.sin(T * 70) * 0.012 * (1 - k);
+      snap = 35;
+      break;
+    }
+    case 'dodgeL':
+    case 'dodgeR': {
+      const s = m.name === 'dodgeL' ? 1 : -1;
+      const j = bump(k, 0, 0.25, 0.55, 1);
+      P.x = 0.3 * s * j;
+      P.rz = -0.2 * s * j;
+      snap = 30;
+      break;
+    }
+    case 'guard':
+      P.rx = -0.06 + Math.sin(T * 2) * 0.015;
+      P.rz = Math.sin(T * 1.3) * 0.02;
+      break;
+    case 'death': {
+      // topples backwards like a felled statue, bounces once and lies still
+      const f = c01(T / (m.d * 0.7));
+      let a = f * f * (Math.PI / 2);
+      if (T > m.d * 0.7) a = Math.PI / 2 - Math.abs(Math.sin((T - m.d * 0.7) * 14)) * 0.12 * Math.exp(-(T - m.d * 0.7) * 6);
+      // pivot on the back edge of the base
+      const r = fig.radius;
+      P.rx = -a;
+      P.z = -r + r * Math.cos(a);
+      P.y = r * Math.sin(a) * 0.9;
+      P.rz = 0.15 * m.side * f;
+      snap = 60;
+      break;
+    }
+    case 'cheer':
+      P.y = 0.14 * Math.sin(Math.PI * c01(k / 0.6));
+      P.rx = -0.12 * Math.sin(Math.PI * c01(k / 0.6));
+      P.ry = 0.5 * m.side * bump(k, 0.1, 0.4, 0.6, 1);
+      break;
+    case 'fidget':
+      P.ry = 0.2 * m.side * Math.sin(Math.PI * 2 * k);
+      break;
+  }
+  const q = fig.pose, f = 1 - Math.exp(-dt * snap);
+  for (const key in q) q[key] += (P[key] - q[key]) * f;
+  fig.model.position.set(q.x, q.y, q.z);
+  fig.model.rotation.set(q.rx, q.ry, q.rz, 'YXZ');
+  return fig.mixer;
 }

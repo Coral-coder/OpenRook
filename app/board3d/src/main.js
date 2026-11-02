@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
 import { stoneMaterial, stoneTime } from './stone.js';
-import { Particles, chime, clang, crash, glowSprite, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
+import { Particles, chime, clang, crash, glowSprite, grind, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
 
 // ------------------------------------------------------------------ bridge
 function send(msg) {
@@ -506,9 +506,9 @@ function shatter(p, from, power = 1, { chunk = 1, dustColor = 0xcfc3ae, rot = 0.
     box.setFromObject(o);
     const size = box.getSize(new THREE.Vector3());
     const vol = Math.max(0.0005, size.x * size.y * size.z);
-    const n = Math.min(16, Math.max(3, Math.round(vol * 1400)));
+    const n = fig.statue ? 34 : Math.min(16, Math.max(3, Math.round(vol * 1400)));
     for (let i = 0; i < n; i++) {
-      const sz = (0.02 + Math.random() * 0.055) * chunk;
+      const sz = (0.02 + Math.random() * 0.055) * chunk * (fig.statue ? 1.35 : 1);
       const m = new THREE.Mesh(shardGeos[(Math.random() * 3) | 0], o.material);
       m.scale.setScalar(sz);
       m.castShadow = sz > 0.045; // only the big chunks: shadows cost a draw each
@@ -526,7 +526,7 @@ function shatter(p, from, power = 1, { chunk = 1, dustColor = 0xcfc3ae, rot = 0.
   });
   while (shards.length > MAX_SHARDS) scene.remove(shards.shift().m);
   removePiece(p);
-  if (splat) stain(fig.group.position, fig.isWhite, 1 + 0.3 * power);
+  if (splat && !fig.statue) stain(fig.group.position, fig.isWhite, 1 + 0.3 * power);
   for (let i = 0; i < 14; i++) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, color: dustColor, transparent: true, opacity: 0.6, depthWrite: false }));
     sp.position.copy(fig.group.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.1 + Math.random() * 0.6, (Math.random() - 0.5) * 0.5));
@@ -844,7 +844,7 @@ function kill(p, style, from, power = 1) {
   const away = g.position.clone().sub(from).setY(0).normalize();
   const d = { p, style, t: 0, away, power, v: null, deathLen: 0 };
   // the blow lands: blood for the living army, black-green ichor for the dead one
-  const gore = p.fig.isWhite ? [0x7a0606, 0xb01010] : [0x0f3a18, 0x3dbb5a];
+  const gore = p.fig.statue ? (p.fig.isWhite ? [0xd8d2c4, 0xa39b8c] : [0x2a2830, 0x55505a]) : p.fig.isWhite ? [0x7a0606, 0xb01010] : [0x0f3a18, 0x3dbb5a];
   for (const c of gore) particles.burst(g.position.clone().add(away.clone().multiplyScalar(-0.15)).setY(0.75), { color: c, n: 22, speed: 2.2 * power, up: 1.6, size: 0.055, life: 0.9, gravity: 9, solid: true });
   if (style === 'launch') {
     d.v = away.clone().multiplyScalar(1.8).setY(5.2);
@@ -855,7 +855,7 @@ function kill(p, style, from, power = 1) {
       if (o.isMesh && o.parent !== g) o.material = charred;
     });
     d.deathLen = act(p, 'death');
-  } else if (style === 'fall') {
+  } else if (style === 'fall' || style === 'topple') {
     d.deathLen = act(p, 'death');
   } else {
     act(p, 'hit');
@@ -917,6 +917,14 @@ function updateDeaths(dt, t) {
       case 'fall':
         done = decay(d, dt);
         break;
+      case 'topple':
+        // a statue knocked flat cracks apart where it lands
+        if (d.t > d.deathLen + 0.25) {
+          crash(0.5);
+          shatter(d.p, g.position.clone().setY(-0.4), 0.55, { splat: false });
+          done = true;
+        }
+        break;
       case 'launch':
         d.v.y -= 11 * dt;
         g.position.addScaledVector(d.v, dt);
@@ -965,7 +973,14 @@ function updateDeaths(dt, t) {
 
 // ------------------------------------------------------------------ choreography
 // Every piece has its own finishing move, and the victim dies to match.
-function finisherFor(att) {
+function finisherFor(att, statue) {
+  if (statue) {
+    // the film's wizard chess: no magic, just stone smashing stone
+    if (att === PAWN) return { style: 'topple' };
+    if (att === KNIGHT) return { style: 'launch' };
+    if (att === ROOK) return { style: 'launch', pound: true };
+    return { style: 'shatter' };
+  }
   switch (att) {
     case PAWN:
       return { style: 'fall' };
@@ -1019,17 +1034,20 @@ function startMove(job) {
   if (cap) {
     const dir = capPos.clone().sub(from).normalize();
     a.dir = dir;
-    a.fin = finisherFor(mover.fig.type);
+    a.fin = finisherFor(mover.fig.type, mover.fig.statue);
     a.approach = capPos.clone().addScaledVector(dir, -0.85);
     a.phases.push({ name: 'walk', d: walkTime, a: from, b: a.approach });
     // the duel: an attack each way, parried or dodged, then the finisher
-    const atk = clipFor(mover.fig, 'attack'), vatk = clipFor(cap.fig, 'attack');
-    a.phases.push({ name: 'clash', d: clipDuration(atk) * 0.95, who: 'A', clip: atk, dodge: Math.random() < 0.3 });
-    a.phases.push({ name: 'clash', d: clipDuration(vatk) * 0.95, who: 'V', clip: vatk, dodge: Math.random() < 0.3 });
+    // (statues don't duel: like the film's pieces they just slide up and smash)
+    if (!mover.fig.statue) {
+      const atk = clipFor(mover.fig, 'attack'), vatk = clipFor(cap.fig, 'attack');
+      a.phases.push({ name: 'clash', d: clipDuration(atk) * 0.95, who: 'A', clip: atk, dodge: Math.random() < 0.3 });
+      a.phases.push({ name: 'clash', d: clipDuration(vatk) * 0.95, who: 'V', clip: vatk, dodge: Math.random() < 0.3 });
+    }
     const fin = clipFor(mover.fig, 'finish');
     const finSpeed = fin === '2H_Melee_Attack_Spin' ? 1.4 : 1;
     a.phases.push({ name: 'final', d: clipDuration(fin) / finSpeed, clip: fin, speed: finSpeed });
-    a.phases.push({ name: 'wait', d: { launch: 1.3, vortex: 1.35, lightning: 1.5, fall: 2.6, shatter: 0.6 }[a.fin.style] || 0.6 });
+    a.phases.push({ name: 'wait', d: { launch: 1.3, vortex: 1.35, lightning: 1.5, fall: 2.6, shatter: 0.6, topple: 1.6 }[a.fin.style] || 0.6 });
     a.phases.push({ name: 'walk', d: 0.7, a: a.approach, b: to, settle: true });
   } else {
     a.phases.push({ name: 'walk', d: walkTime, a: from, b: to });
@@ -1108,6 +1126,7 @@ function stepMove(a, dt) {
         if (once('walk' + idx)) {
           if (leap) act(mover, 'leap', { duration: phase.d });
           else act(mover, a.knight && !phase.settle ? 'run' : 'walk', { loop: true });
+          if (mover.fig.statue && !leap) grind(phase.d, mover.fig.type >= ROOK ? 0.5 : 0.35);
         }
         g.position.lerpVectors(phase.a, phase.b, leap ? k : ease(k));
         if (leap) g.position.y = Math.sin(Math.PI * clamp01((k - 0.15) / 0.75)) * Math.min(1.3, 0.6 + phase.a.distanceTo(phase.b) * 0.25);
@@ -1116,8 +1135,8 @@ function stepMove(a, dt) {
         const step2 = Math.floor(a.t / 0.27);
         if (!leap && step2 !== a.lastStep) {
           a.lastStep = step2;
-          step(0.1, mover.fig.type === ROOK);
-          footDust(g.position);
+          if (!mover.fig.statue) step(0.1, mover.fig.type === ROOK);
+          footDust(g.position); // statues leave a trail of grit
         }
         if (leap && k > 0.92 && once('land' + idx)) {
           step(0.3, true);

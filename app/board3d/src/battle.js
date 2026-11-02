@@ -103,6 +103,40 @@ export function step(vol = 0.12, heavy = false) {
   n.s.stop(t + 0.25);
 }
 
+/** Stone grinding over stone for `dur` seconds: a statue sliding across the board. */
+export function grind(dur = 1, vol = 0.35) {
+  const c = ctx();
+  if (!c) return;
+  const t = c.currentTime;
+  // a low rumble, roughened by a fast wobble, plus a gritty scrape on top
+  const rumble = noiseSource(c, 'lowpass', 260, 2);
+  const scrape = noiseSource(c, 'bandpass', 1100, 1.5);
+  const wob = c.createOscillator();
+  wob.frequency.value = 17 + Math.random() * 6;
+  const wobGain = c.createGain();
+  wobGain.gain.value = 0.35;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.12);
+  g.gain.setValueAtTime(vol, t + Math.max(0.15, dur - 0.2));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  const sg = c.createGain();
+  sg.gain.value = 0.35;
+  wob.connect(wobGain);
+  wobGain.connect(g.gain);
+  rumble.f.connect(g);
+  scrape.f.connect(sg);
+  sg.connect(g);
+  g.connect(c.destination);
+  for (const n of [rumble.s, scrape.s]) {
+    n.loop = true;
+    n.start(t);
+    n.stop(t + dur + 0.05);
+  }
+  wob.start(t);
+  wob.stop(t + dur + 0.05);
+}
+
 export function whoosh(vol = 0.2) {
   const c = ctx();
   if (!c) return;

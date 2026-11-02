@@ -46,7 +46,8 @@ servers: games travel through public relays, and nothing needs to be hosted.
    connect, calibrate, and play.
 
 No board yet? The app is a complete game on its own: a real 3D battle board where the pieces
-are animated fantasy characters (heroes against an army of skeletons) who march, leap and fight, and captured pieces are smashed to rubble, every move announced out loud, and you can
+are carved Wizard Chess statues that grind across the board, rear up and smash each other to rubble
+(or, in the Toon look, cartoon heroes against an army of skeletons), every move announced out loud, and you can
 call out your moves ("knight to f3") instead of tapping. The board is a bonus.
 
 ## Releases
@@ -58,5 +59,7 @@ tests, compiles the firmware and renders the STLs.
 
 ## License
 
-MIT. The 3D characters are KayKit's Adventurers and Skeletons packs by Kay Lousberg
-(www.kaylousberg.com), CC0: see `app/board3d/models/LICENSE.txt`.
+MIT, except the chess pieces: the Wizard Chess statues (in the app and in `3d-prints/stl/piece_*.stl`)
+are Meyerhouse's remix on MakerWorld and keep that licence, see
+[LICENSE-wizard-chess.md](LICENSE-wizard-chess.md). The Toon characters are KayKit's Adventurers
+and Skeletons packs by Kay Lousberg (www.kaylousberg.com), CC0: see `app/board3d/models/LICENSE.txt`.
