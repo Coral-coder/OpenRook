@@ -5,8 +5,10 @@
 //
 // It writes
 //   models/wizard_<piece>.glb        simplified meshes the 3D board embeds (npm run build)
-//   ../../3d-prints/stl/piece_*.stl  the full-detail pieces scaled to OpenRook's 20 mm base,
-//                                    with the 10x3 mm magnet pocket cut into the bottom
+//   ../../3d-prints/wizard-chess/*.3mf        the designer's file, byte for byte
+//   ../../3d-prints/stl/piece_*.stl           the original models, exactly as published
+//   ../../3d-prints/stl/board-fit/piece_*.stl the same full detail scaled to OpenRook's 20 mm
+//                                             base, with the 10x3 mm magnet pocket cut in
 //
 // The set is the "Wizard Chess" remix by Meyerhouse on MakerWorld; see LICENSE-wizard-chess.md.
 import { Document, NodeIO } from '@gltf-transform/core';
@@ -18,7 +20,7 @@ import Module from 'manifold-3d';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const BASE_MM = 20; // PIECE_BASE in 3d-prints/src/common.scad
-const MAG_D = 10.3, MAG_H = 3.2; // PIECE_MAG_D / PIECE_MAG_H
+const MAG_D = 10.3, MAG_H = 3.2; // PIECE_MAG_D / PIECE_MAG_H (the magnet + clearance)
 // triangles kept in the game per piece (there are 32 figures on the board)
 const GAME_TRIS = { pawn: 5000, rook: 9000, knight: 12000, bishop: 9000, queen: 10000, king: 12000 };
 
@@ -31,6 +33,7 @@ if (!src) {
 // ---- unpack (a .zip holding a .3mf, or the .3mf itself; both are zips)
 let files = unzipSync(readFileSync(src));
 const inner = Object.keys(files).find((f) => f.toLowerCase().endsWith('.3mf'));
+const original3mf = inner ? files[inner] : readFileSync(src);
 if (inner) files = unzipSync(files[inner]);
 
 const pieceOf = (name) => {
@@ -53,7 +56,8 @@ for (const [name, data] of Object.entries(files)) {
   const tre = /<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"/g;
   for (let m; (m = tre.exec(text)); ) idx.push(+m[1], +m[2], +m[3]);
   if (!idx.length) continue;
-  meshes[piece] = { bytes: data.length, ...weld(pos, idx) };
+  // `raw` is the designer's mesh exactly as published; the rest works on a welded copy
+  meshes[piece] = { bytes: data.length, raw: { pos: new Float32Array(pos), idx: new Uint32Array(idx) }, ...weld(pos, idx) };
 }
 const missing = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'].filter((p) => !meshes[p]);
 if (missing.length) {
@@ -134,7 +138,11 @@ function compact(posIn, idx) {
 
 const STL = new URL('../../../3d-prints/stl/', import.meta.url).pathname;
 const MODELS = new URL('../models/', import.meta.url).pathname;
-mkdirSync(STL, { recursive: true });
+mkdirSync(STL + 'board-fit', { recursive: true });
+// and the designer's own project file, untouched (their plates and print settings)
+const ORIG = new URL('../../../3d-prints/wizard-chess/', import.meta.url).pathname;
+mkdirSync(ORIG, { recursive: true });
+writeFileSync(ORIG + 'Harry_Potter_chess_set_.3mf', original3mf);
 const io = new NodeIO().registerExtensions(KHRONOS_EXTENSIONS);
 
 for (const [piece, m] of Object.entries(meshes)) {
@@ -144,12 +152,17 @@ for (const [piece, m] of Object.entries(meshes)) {
   if (solid.volume() < 0) throw new Error(piece + ' is inside out');
   // some pieces (the king) are a thousand overlapping shells: fuse them into one body to print
   const shells = solid.decompose();
-  solid = Manifold.union(shells).simplify(0.01); // 10 µm: below what a printer resolves
 
-  // the printer: magnet pocket cut into the bottom
-  const pocket = Manifold.cylinder(MAG_H + 0.01, MAG_D / 2, MAG_D / 2, 64).translate([0, 0, -0.01]);
-  const printed = solid.subtract(pocket).getMesh();
-  writeStl(STL + `piece_${piece}.stl`, printed.vertProperties, printed.triVerts, printed.numProp);
+  // the printer, 1: the original model, every triangle exactly as the designer published it
+  writeStl(STL + `piece_${piece}.stl`, m.raw.pos, m.raw.idx, 3);
+
+  // the printer, 2: the very same triangles, only scaled to OpenRook's 20 mm base. The designer
+  // already hollowed the underside (3.5 mm deep at this scale), so the 10x3 mm magnet fits as is;
+  // check that, rather than cutting anything
+  const pocket = Manifold.cylinder(MAG_H, MAG_D / 2, MAG_D / 2, 64);
+  const clash = solid.intersect(pocket).volume();
+  const fit = m.raw.pos.map((v) => v * SCALE);
+  writeStl(STL + `board-fit/piece_${piece}.stl`, fit, m.raw.idx, 3);
 
   // the game: each shell simplified on its own (specks under 2 mm³ dropped), y-up
   const kept = shells.filter((p) => p.volume() > 2);
@@ -181,7 +194,7 @@ for (const [piece, m] of Object.entries(meshes)) {
   doc.createScene().addChild(doc.createNode('wizard_' + piece).setMesh(doc.createMesh('wizard_' + piece).addPrimitive(prim)));
   await doc.transform(quantize({ quantizePosition: 14 }));
   await io.write(MODELS + 'wizard_' + piece + '.glb', doc);
-  console.log(`${piece.padEnd(6)} print ${printed.triVerts.length / 3} triangles (magnet pocket cut), game ${s.idx.length / 3} (${kept.length} shells)`);
+  console.log(`${piece.padEnd(6)} original ${m.raw.idx.length / 3} triangles (board-fit x${SCALE.toFixed(4)}, magnet ${clash < 0.5 ? 'fits the base recess' : 'DOES NOT FIT: ' + clash.toFixed(1) + ' mm³ in the way'}), game ${s.idx.length / 3} (${kept.length} shells)`);
 }
 
 function writeStl(path, v, t, np) {
