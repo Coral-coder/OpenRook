@@ -236,7 +236,7 @@ function drawOverlays() {
 // ------------------------------------------------------------------ camera
 // The player's view (orbit, zoom, pan) plus cinematic shots that the battles blend over it.
 let azimuth = 0, azTarget = 0, flippedNow = false;
-const BASE_EL = 0.82;
+const BASE_EL = 0.98; // high enough to see over the front rows of statues to the back ones
 const user = { az: 0, el: 0, zoom: 1, pan: new THREE.Vector3() };
 function setCamera(flipped) {
   if (flipped !== flippedNow) {
@@ -258,7 +258,7 @@ fitCamera();
 function boardDist() {
   // far enough that the whole board fits, whatever the aspect ratio
   const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
-  return Math.max(4.75 / Math.tan(halfFov), 4.75 / (Math.tan(halfFov) * camera.aspect)) * 0.98;
+  return Math.max(4.9 / Math.tan(halfFov), 4.9 / (Math.tan(halfFov) * camera.aspect)) * 0.98;
 }
 
 // A cinematic shot: where the camera wants to be and what it looks at. The battle code
@@ -276,7 +276,7 @@ const topDown = () => state.view === 'top';
 function playerView() {
   const az = azimuth + user.az;
   // the top-down view looks almost straight down, so every piece is easy to read
-  const baseEl = camera.aspect < 0.8 ? 0.9 : BASE_EL; // tall phone screens look down more, so the board fills them
+  const baseEl = camera.aspect < 0.8 ? 1.08 : BASE_EL; // tall phone screens look down more, so the board fills them
   const el = topDown() ? Math.min(1.53, Math.max(1.0, 1.5 + user.el)) : Math.min(1.4, Math.max(0.22, baseEl + user.el));
   const dist = boardDist() * user.zoom * (topDown() ? 0.86 : 1);
   const target = new THREE.Vector3(0, -0.2, 0.25 * Math.cos(azimuth)).add(user.pan);
@@ -696,9 +696,9 @@ function chooseDuelAngle(a, mid, dist) {
     const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
     // a side-on view of the duel reads best; head-on is fine if it's the only clear one
     const across = Math.abs(dir.dot(a.dir));
-    for (const h of [0.55, 0.85, 1.3]) { // down on the board among the pieces, then higher if blocked
+    for (const h of [1.5, 2.3]) {
       const cam = mid.clone().addScaledVector(dir, dist).setY(h);
-      const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h - 0.55) * 0.5 +
+      const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h > 2 ? 0.6 : 0) +
         (Math.abs(cam.x) > 7 || Math.abs(cam.z) > 7 ? 2 : 0);
       if (!best || score < best.score) best = { score, dir, h };
     }
@@ -716,15 +716,15 @@ function duelShot(a) {
     spread = Math.min(4, vp.distanceTo(mid) + Math.max(0, vp.y) * 0.6);
     mid.lerp(vp.setY(0), 0.45);
   }
-  const close = a.slowed ? 0.84 : 1;
+  const close = a.slowed ? 0.92 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (2.5 / Math.sqrt(aspect)) * close + spread * 0.9;
+  const dist = (4.2 / Math.sqrt(aspect)) * close + spread * 0.9; // both fighters fully in frame, even on a tall phone
   if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
   // a slow dolly around the fight, never swinging far from the clear side
   const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
   const off = a.angle.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
   shot.pos.copy(mid).add(off).setY(a.angle.h * close + spread * 0.5);
-  shot.target.copy(mid).setY(0.75 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
+  shot.target.copy(mid).setY(0.6 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
   shot.want = 1;
 }
 
@@ -732,9 +732,8 @@ function followShot(p) {
   const g = p.fig.group;
   const fwd = new THREE.Vector3(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y));
   const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
-  // low, over the shoulder of the piece on the move, looking down the board where it's going
-  shot.pos.copy(g.position).addScaledVector(fwd, -1.9).addScaledVector(side, 0.85).setY(0.95);
-  shot.target.copy(g.position).addScaledVector(fwd, 1.6).setY(0.7);
+  shot.pos.copy(g.position).addScaledVector(fwd, -2.8).addScaledVector(side, 1.0).setY(2.3);
+  shot.target.copy(g.position).addScaledVector(fwd, 1.2).setY(0.5);
   shot.want = 1;
 }
 
@@ -1220,7 +1219,7 @@ function stepMove(a, dt) {
     if (fighting && cinema() !== 'off') {
       if (!a.shotStart) a.shotStart = a.t;
       duelShot(a);
-    } else if (cinema() !== 'off' && phase.name !== 'turnback') {
+    } else if (cinema() === 'all' && phase.name !== 'turnback') {
       followShot(mover);
     } else if (shot.want && (!a.dir || phase.name === 'turnback' || (phase.name === 'walk' && phase.settle && k > 0.5))) {
       releaseShot();

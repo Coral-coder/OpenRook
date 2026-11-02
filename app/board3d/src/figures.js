@@ -341,7 +341,7 @@ export function buildRemains(fig) {
 // rocking, lunging, leaping and toppling, driven by playStatue() / the fake mixer below.
 
 const STATUE_FILES = { [PAWN]: 'pawn', [KNIGHT]: 'knight', [BISHOP]: 'bishop', [ROOK]: 'rook', [QUEEN]: 'queen', [KING]: 'king' };
-const MM = 1.3 / 40; // the real board has 40 mm squares; the statues are a touch larger on screen
+const MM = 1.0 / 40; // true to the 40 mm squares, so the back rows stay visible over the front // the real board has 40 mm squares; the statues are a touch larger on screen
 // where each statue holds its weapon (mm, facing +z): sparks fly from here
 const WEAPON = {
   [PAWN]: [0, 17, 7], [KNIGHT]: [0, 42, 6], [BISHOP]: [7, 47, 1],
