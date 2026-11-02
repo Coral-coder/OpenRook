@@ -22,6 +22,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         appBar: AppBar(title: const Text('Settings')),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           TextField(controller: _name, decoration: const InputDecoration(labelText: 'Your name (shown to opponents)', border: OutlineInputBorder())),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Battle view'),
+            subtitle: const Text('3D stone board where pieces march, leap and smash each other'),
+            value: s.battleView,
+            onChanged: (v) => setState(() => s.battleView = v),
+          ),
+          SwitchListTile(
+            title: const Text('Announce moves'),
+            subtitle: const Text('Say every move out loud ("Knight takes bishop on E5")'),
+            value: s.announce,
+            onChanged: (v) => setState(() => s.announce = v),
+          ),
+          SwitchListTile(
+            title: const Text('Vibrate on captures'),
+            value: s.haptics,
+            onChanged: (v) => setState(() => s.haptics = v),
+          ),
           const SizedBox(height: 24),
           Text('Relays', style: Theme.of(context).textTheme.titleMedium),
           const Text('Online games travel through these public Nostr relays (one per line). '
@@ -30,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextField(controller: _relays, maxLines: 6, decoration: const InputDecoration(border: OutlineInputBorder())),
           TextButton(onPressed: () => _relays.text = defaultRelays.join('\n'), child: const Text('Restore defaults')),
           const SizedBox(height: 24),
-          Text('Board', style: Theme.of(context).textTheme.titleMedium),
+          Text('Smart board (optional)', style: Theme.of(context).textTheme.titleMedium),
           SwitchListTile(
             title: const Text('Wide build (two capture columns per side)'),
             subtitle: Text('${s.captureSlots} capture slots per side'),

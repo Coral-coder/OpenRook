@@ -1,35 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../chess/position.dart';
+import 'stone_pieces.dart';
 
 const lightSquare = Color(0xFFEAD9B5);
 const darkSquare = Color(0xFFB08560);
 
-/// Solid glyphs for both colours (drawn white or black), with U+FE0E so phones don't turn
-/// the pawn into an emoji.
-const _glyphs = ['', '♟︎', '♞︎', '♝︎', '♜︎', '♛︎', '♚︎'];
-
+/// A piece icon (carved stone, same as the battle board).
 class PieceGlyph extends StatelessWidget {
   const PieceGlyph(this.piece, {super.key, required this.size});
   final int piece;
   final double size;
   @override
-  Widget build(BuildContext context) {
-    final isWhite = colorOf(piece) == white;
-    return Text(
-      _glyphs[typeOf(piece)],
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: size,
-        height: 1.0,
-        color: isWhite ? const Color(0xFFFDFCF8) : const Color(0xFF1E1A17),
-        shadows: [
-          Shadow(color: isWhite ? Colors.black : Colors.white38, blurRadius: 1.5),
-          Shadow(color: isWhite ? Colors.black87 : Colors.white24, offset: const Offset(0.6, 0.6)),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => StonePiece(piece, size: size);
 }
 
 /// The on-screen board: shows the game, highlights the last move and any squares where the

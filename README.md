@@ -1,6 +1,6 @@
 # OpenRook
 
-**A real chess board that plays people anywhere in the world.** An ESP32 senses the pieces on a
+**A chess game where the pieces fight, and a real board that plays people anywhere in the world.** An ESP32 senses the pieces on a
 3D-printed board and moves them with a magnet underneath, and a phone app connects it to the
 computer, a friend, a random opponent, lichess.org or your chess.com Daily games. You move a
 piece by hand; on the other side of the world it glides across your opponent's board. No
@@ -44,7 +44,9 @@ servers: games travel through public relays, and nothing needs to be hosted.
 5. Install the app (Releases has the Android APK; iPhone via TestFlight), tap *No board connected*,
    connect, calibrate, and play.
 
-No board yet? The app is fully playable on screen.
+No board yet? The app is a complete game on its own: a 3D "battle view" where stone pieces march,
+knights leap and captured pieces are smashed to rubble, every move announced out loud, and you can
+call out your moves ("knight to f3") instead of tapping. The board is a bonus.
 
 ## Releases
 

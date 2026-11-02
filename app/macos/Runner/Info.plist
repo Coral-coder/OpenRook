@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OpenRook listens when you press "Say a move" so you can call out your moves.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>OpenRook turns what you say ("knight to f3") into chess moves.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>OpenRook connects to your chess board over Bluetooth to sense and move the pieces.</string>
 	<key>CFBundleDevelopmentRegion</key>
