@@ -10,7 +10,9 @@
 import * as THREE from 'three';
 import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
-import { stoneMaterial, stoneTime } from './stone.js';
+import { stoneTime } from './stone.js';
+import { granite } from './granite.js';
+import { Rubble } from './rubble.js';
 import { Particles, chime, clang, crash, glowSprite, grind, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
 
 // ------------------------------------------------------------------ bridge
@@ -26,7 +28,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.45; // gloomy, but the pieces must stay readable on a phone
+renderer.toneMappingExposure = 1.1; // gloomy, but the pieces must stay readable on a phone
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
@@ -35,9 +37,9 @@ const atmosphere = setupAtmosphere(scene);
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
 
-scene.add(new THREE.HemisphereLight(0xc9d2ff, 0x2a2228, 1.25));
-// moonlight
-const sun = new THREE.DirectionalLight(0xd4dcff, 2.8);
+scene.add(new THREE.HemisphereLight(0xb9c3d2, 0x1c1a18, 0.75));
+// cold daylight falling from high windows
+const sun = new THREE.DirectionalLight(0xe2e8f0, 2.3);
 sun.position.set(-5, 11, 6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -48,7 +50,7 @@ sun.shadow.camera.bottom = -6;
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.02;
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0xa98bff, 1.1);
+const rim = new THREE.DirectionalLight(0x8fa0b8, 0.9);
 rim.position.set(6, 6, -8);
 scene.add(rim);
 const flash = new THREE.PointLight(0xffd59a, 0, 6, 1.6);
@@ -66,10 +68,9 @@ const sqDark = new THREE.MeshStandardMaterial({ color: 0x2c2522, roughness: 0.3 
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
       const light = (f + r) % 2 === 1;
-      // each square cut from marble or obsidian, the veins running on from square to square
-      const m = new THREE.Mesh(g, stoneMaterial(null, light ? 'white' : 'black', 0, { offset: [f - 3.5, 0, 3.5 - r], scale: 1.6 }));
-      m.material.roughness = light ? 0.3 : 0.18;
-      if (light) m.material.color.setScalar(0.66); // keep the marble from glaring
+      // each square a slab of pale limestone or dark slate, the grain running on between them
+      const m = new THREE.Mesh(g, granite(light ? 'white' : 'black', { grain: 16, offset: [f - 3.5, 0, 3.5 - r] }));
+      m.material.roughness = light ? 0.55 : 0.4;
       m.position.set(f - 3.5, SQ_TOP - 0.08, 3.5 - r);
       m.receiveShadow = true;
       m.userData.square = r * 8 + f;
@@ -542,6 +543,7 @@ function shatter(p, from, power = 1, { chunk = 1, dustColor = 0xcfc3ae, rot = 0.
 
 // a new game or a jump in the replay: sweep the board clean
 function clearWreckage() {
+  rubble.clear();
   for (const sh of shards) scene.remove(sh.m);
   shards.length = 0;
   for (const st of stains) scene.remove(st.m);
@@ -696,7 +698,7 @@ function chooseDuelAngle(a, mid, dist) {
     const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
     // a side-on view of the duel reads best; head-on is fine if it's the only clear one
     const across = Math.abs(dir.dot(a.dir));
-    for (const h of [1.5, 2.3]) {
+    for (const h of [1.6, 2.4]) {
       const cam = mid.clone().addScaledVector(dir, dist).setY(h);
       const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h > 2 ? 0.6 : 0) +
         (Math.abs(cam.x) > 7 || Math.abs(cam.z) > 7 ? 2 : 0);
@@ -718,7 +720,7 @@ function duelShot(a) {
   }
   const close = a.slowed ? 0.92 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (4.2 / Math.sqrt(aspect)) * close + spread * 0.9; // both fighters fully in frame, even on a tall phone
+  const dist = (3.5 / Math.sqrt(aspect)) * close + spread * 0.9; // both fighters fully in frame, even on a tall phone
   if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
   // a slow dolly around the fight, never swinging far from the clear side
   const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
@@ -839,10 +841,37 @@ const charred = new THREE.MeshStandardMaterial({ color: 0x18120e, roughness: 0.9
 
 // ------------------------------------------------------------------ deaths
 const deaths = [];
+const rubble = new Rubble(scene);
 function kill(p, style, from, power = 1) {
   const g = p.fig.group;
   const away = g.position.clone().sub(from).setY(0).normalize();
   const d = { p, style, t: 0, away, power, v: null, deathLen: 0 };
+  if (p.fig.statue) {
+    // stone on stone: the statue breaks at its joints and the pieces fly, chips burst from
+    // where the blow landed, and dust rolls out across the board
+    const fig = p.fig;
+    const hit = g.position.clone().addScaledVector(away, -0.14).setY(0.55 + 0.25 * Math.min(1, fig.height / 1.2));
+    rubble.chips(hit, away, fig.materials[0], 26, power, state.ply);
+    const parts = [];
+    fig.group.traverse((o) => {
+      if (o.isMesh) parts.push(o);
+    });
+    setRot(fig, 0.35);
+    rubble.breakApart(parts, hit, away, power * 1.15, state.ply);
+    scene.remove(g);
+    for (let i = 0; i < 18; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, color: fig.isWhite ? 0xcfc8ba : 0x55555a, transparent: true, opacity: 0.55, depthWrite: false }));
+      sp.position.copy(g.position).add(new THREE.Vector3((Math.random() - 0.5) * 0.5, 0.08 + Math.random() * 0.5, (Math.random() - 0.5) * 0.5));
+      sp.scale.setScalar(0.3 + Math.random() * 0.25);
+      scene.add(sp);
+      puffs.push({ sp, v: new THREE.Vector3((Math.random() - 0.5) * 1.6 + away.x * 0.8, 0.2 + Math.random() * 0.4, (Math.random() - 0.5) * 1.6 + away.z * 0.8), age: 0 });
+    }
+    crash(0.9);
+    clang(0.25);
+    shake = 0.14 * power;
+    send({ type: 'impact', heavy: true });
+    return d;
+  }
   // the blow lands: blood for the living army, black-green ichor for the dead one
   const gore = p.fig.statue ? (p.fig.isWhite ? [0xd8d2c4, 0xa39b8c] : [0x2a2830, 0x55505a]) : p.fig.isWhite ? [0x7a0606, 0xb01010] : [0x0f3a18, 0x3dbb5a];
   for (const c of gore) particles.burst(g.position.clone().add(away.clone().multiplyScalar(-0.15)).setY(0.75), { color: c, n: 22, speed: 2.2 * power, up: 1.6, size: 0.055, life: 0.9, gravity: 9, solid: true });
@@ -974,13 +1003,7 @@ function updateDeaths(dt, t) {
 // ------------------------------------------------------------------ choreography
 // Every piece has its own finishing move, and the victim dies to match.
 function finisherFor(att, statue) {
-  if (statue) {
-    // the film's wizard chess: no magic, just stone smashing stone
-    if (att === PAWN) return { style: 'topple' };
-    if (att === KNIGHT) return { style: 'launch' };
-    if (att === ROOK) return { style: 'launch', pound: true };
-    return { style: 'shatter' };
-  }
+  if (statue) return { style: 'smash', pound: att === ROOK || att === KNIGHT }; // stone smashing stone
   switch (att) {
     case PAWN:
       return { style: 'fall' };
@@ -1038,16 +1061,14 @@ function startMove(job) {
     a.approach = capPos.clone().addScaledVector(dir, -0.85);
     a.phases.push({ name: 'walk', d: walkTime, a: from, b: a.approach });
     // the duel: an attack each way, parried or dodged, then the finisher
-    // (statues don't duel: like the film's pieces they just slide up and smash)
-    if (!mover.fig.statue) {
-      const atk = clipFor(mover.fig, 'attack'), vatk = clipFor(cap.fig, 'attack');
-      a.phases.push({ name: 'clash', d: clipDuration(atk) * 0.95, who: 'A', clip: atk, dodge: Math.random() < 0.3 });
-      a.phases.push({ name: 'clash', d: clipDuration(vatk) * 0.95, who: 'V', clip: vatk, dodge: Math.random() < 0.3 });
-    }
+    // the duel: a blow each way, parried (sparks, a ringing clang) or dodged, then the finisher
+    const atk = clipFor(mover.fig, 'attack'), vatk = clipFor(cap.fig, 'attack');
+    a.phases.push({ name: 'clash', d: clipDuration(atk) * 0.95, who: 'A', clip: atk, dodge: Math.random() < 0.25 });
+    a.phases.push({ name: 'clash', d: clipDuration(vatk) * 0.95, who: 'V', clip: vatk, dodge: Math.random() < 0.25 });
     const fin = clipFor(mover.fig, 'finish');
     const finSpeed = fin === '2H_Melee_Attack_Spin' ? 1.4 : 1;
     a.phases.push({ name: 'final', d: clipDuration(fin) / finSpeed, clip: fin, speed: finSpeed });
-    a.phases.push({ name: 'wait', d: { launch: 1.3, vortex: 1.35, lightning: 1.5, fall: 2.6, shatter: 0.6, topple: 1.6 }[a.fin.style] || 0.6 });
+    a.phases.push({ name: 'wait', d: { launch: 1.3, vortex: 1.35, lightning: 1.5, fall: 2.6, shatter: 0.6, topple: 1.6, smash: 1.6 }[a.fin.style] || 0.6 });
     a.phases.push({ name: 'walk', d: 0.7, a: a.approach, b: to, settle: true });
   } else {
     a.phases.push({ name: 'walk', d: walkTime, a: from, b: to });
@@ -1191,10 +1212,10 @@ function stepMove(a, dt) {
         }
         if (k >= strikeAt && once('hit')) {
           const at = a.cap.fig.group.position.clone().setY(0.8);
-          particles.burst(at, { color: 0xfff0c0, n: 36, speed: 3.4, up: 1.4, size: 0.09, life: 0.6 });
+          if (!a.cap.fig.statue) particles.burst(at, { color: 0xfff0c0, n: 36, speed: 3.4, up: 1.4, size: 0.09, life: 0.6 });
           flash.position.copy(at);
           flash.color.set(0xffe0a0);
-          flash.intensity = 35;
+          flash.intensity = a.cap.fig.statue ? 8 : 35;
           shake = 0.1;
           crash(0.35);
           send({ type: 'impact', heavy: true });
@@ -1366,6 +1387,7 @@ function tick(realDt) {
   updateDeaths(dt, t);
   for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(dt)) fx.splice(i, 1);
   updateRubble(dt);
+  rubble.update(dt, state.ply);
   updateSparks(dt);
   particles.update(dt);
   updateCamera(realDt);

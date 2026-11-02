@@ -5,7 +5,8 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 // The character models (models/*.glb) are embedded as base64 so the page needs no files.
 const models = {};
-for (const f of readdirSync('models').filter((f) => f.endsWith('.glb'))) {
+// (the Wizard Chess meshes are only for printing now: the game builds its statues itself)
+for (const f of readdirSync('models').filter((f) => f.endsWith('.glb') && !f.startsWith('wizard_'))) {
   models[f.replace('.glb', '')] = readFileSync('models/' + f).toString('base64');
 }
 writeFileSync('src/models_data.gen.js', 'export default ' + JSON.stringify(models) + ';\n');
