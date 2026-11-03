@@ -1,10 +1,11 @@
-// The pawn: a sturdy foot soldier who waits crouched behind his blades and rises to fight. A
+// The pawn: a stern foot soldier, faceless in a closed helm, a short sword in his right hand and
+// a round shield on his left arm. A
 // coat of scales under a tabard with corded edges and a device, split before and behind; a
 // mail collar, mail sleeves and a mail skirt; spaulders, couters, vambraces and poleyns of
 // plate with rolled, riveted and engraved edges; gauntlets closed round the grips; a belt
-// with a buckle, a pouch and a dagger; hose over muscled legs and turned-down boots. A combed
-// kettle hat with a riveted band over a visor with a vision slit and breaths. Two arming
-// swords with fullered, inscribed blades.
+// with a buckle, a pouch and a dagger; hose over muscled legs and turned-down boots. A combed,
+// close helm with a riveted band over a visor with a narrow vision slit and breaths. A short arming
+// sword with a fullered blade; a dished, riveted shield with a boss.
 // (Carved on the shared skeleton: joint names and positions are what statues.js animates.)
 import * as THREE from 'three';
 import { carve, skeleton } from '../carving.js';
@@ -139,69 +140,60 @@ export function pawn(J, root, P) {
     P.box(J['knee' + side], 0.012 * H, 0.012 * H, 0.004 * H, s * 0.055 * H, -0.215 * H * 0.49, 0.022 * H, 0, s * 1.1, 0);
   }
 
-  // ---- the head under a kettle hat, the face behind a visor
+  // ---- no face: a closed helm. A tall, faintly pointed skull with a raised comb, coming down
+  // over the sides and the nape, the visor before it with only a narrow slit to see through
   const r = 0.062 * H;
-  P.add(J.head, sculptHead(r, { seg: 32 }), 0, 0.05 * H, 0);
-  // hair at the nape
-  const hair = new THREE.SphereGeometry(r * 1.03, 28, 10, (Math.PI * 5) / 6, (Math.PI * 4) / 3, Math.PI * 0.35, Math.PI * 0.3);
-  carve(hair, r * 0.06, 20 / r);
-  P.add(J.head, hair, 0, 0.05 * H, 0);
+  P.add(J.head, new THREE.SphereGeometry(r * 0.92, 20, 14), 0, 0.05 * H, 0, 0, 0, 0, [0.9, 1.1, 0.95]); // the dark inside of the helm
   visor(P, J.head, H, 0.05 * H);
-  const hat = new THREE.Group();
-  hat.position.set(0, 0.05 * H, -0.004 * H);
-  hat.rotation.x = -0.42; // tipped well back, so the visor shows under the brim
-  hat.position.y += 0.006 * H;
-  J.head.add(hat);
-  // the dome, the band with its rivets, the wide sloping brim with a rolled edge, the comb
-  lathe(P, hat, [[0.0001, 0.115 * H], [0.03 * H, 0.112 * H], [0.058 * H, 0.096 * H], [0.074 * H, 0.066 * H], [0.078 * H, 0.04 * H], [0.077 * H, 0.03 * H]], 0, 56);
-  lathe(P, hat, [[0.079 * H, 0.026 * H], [0.081 * H, 0.03 * H], [0.081 * H, 0.046 * H], [0.078 * H, 0.05 * H]], 0, 64);
-  P.add(hat, rivetRing(0.0818 * H, 0.038 * H, 20, 0.0038 * H));
-  // engraved lines round the band and the dome
-  for (const [rr, y] of [[0.0815, 0.0285], [0.0815, 0.0475]]) P.add(hat, cord(arc(rr * H, y * H, 0, Math.PI * 2, 48), 0.0011 * H, { closed: true, radial: 5, perPt: 1.2 }));
-  // the dome's riveted seams, front to back and side to side, each a raised strap
-  for (const [cx, cz] of [[1, 0], [0, 1]]) {
-    const seam = [], rv = [];
-    for (let i = 0; i <= 24; i++) {
-      const t = (i / 24) * Math.PI - Math.PI / 2;
-      const y = 0.04 * H + Math.cos(t) * 0.075 * H;
-      const rr = Math.sin(t) * (0.0772 + 0.0012 * Math.cos(t)) * H;
-      seam.push(new THREE.Vector3(cx * rr, y + Math.cos(t) * 0.001 * H, cz * rr));
-      if (i % 3 === 0 && i > 0 && i < 24) rv.push(new THREE.Vector3(cx * rr * 1.02, y + 0.0015 * H, cz * rr * 1.02));
-    }
-    if (cz) P.add(hat, cord(seam, 0.0026 * H, { radial: 6, perPt: 2 })); // (the side seam is under the comb)
-    P.add(hat, pearls(rv, 0.003 * H, { w: 7, h: 4 }));
-  }
-  lathe(P, hat, [[0.077 * H, 0.03 * H], [0.098 * H, 0.016 * H], [0.11 * H, 0.007 * H], [0.114 * H, 0.0], [0.11 * H, 0.001 * H], [0.098 * H, 0.008 * H], [0.077 * H, 0.022 * H]], 0, 64);
-  P.add(hat, cord(arc(0.1135 * H, 0.0025 * H, 0, Math.PI * 2, 64), 0.0032 * H, { closed: true, radial: 6, perPt: 1.2 })); // the rolled edge
-  P.add(hat, rivetRing(0.1 * H, 0.0145 * H, 24, 0.0026 * H));
-  // the comb: a tall ridge from brow to nape, with a roped crest and rivets along its foot
-  const comb = new THREE.Shape();
-  comb.moveTo(-0.075 * H, 0);
-  comb.bezierCurveTo(-0.05 * H, 0.06 * H, 0.04 * H, 0.08 * H, 0.075 * H, 0);
-  const cg = new THREE.ExtrudeGeometry(comb, { depth: 0.008 * H, bevelEnabled: true, bevelThickness: 0.0025 * H, bevelSize: 0.002 * H, bevelSegments: 3, curveSegments: 28 });
-  cg.translate(0, 0, -0.004 * H);
-  P.add(hat, cg, 0, 0.058 * H, 0, 0, Math.PI / 2, 0);
+  const helm = new THREE.Group();
+  helm.position.set(0, 0.05 * H, -0.004 * H);
+  J.head.add(helm);
+  // the skull: whole above the visor, open in front below it (where the visor closes it)
+  const top = [[0.0001, 0.142 * H], [0.012 * H, 0.138 * H], [0.034 * H, 0.122 * H], [0.056 * H, 0.098 * H], [0.07 * H, 0.074 * H], [0.077 * H, 0.052 * H]];
+  P.add(helm, outward(new THREE.LatheGeometry(top.map(([x, y]) => new THREE.Vector2(x, y)), 56)));
+  const sides = [[0.077 * H, 0.054 * H], [0.079 * H, 0.03 * H], [0.08 * H, 0.0], [0.078 * H, -0.03 * H], [0.074 * H, -0.058 * H], [0.08 * H, -0.07 * H], [0.084 * H, -0.074 * H]];
+  P.add(helm, outward(new THREE.LatheGeometry(sides.map(([x, y]) => new THREE.Vector2(x, y)), 48, 1.05, Math.PI * 2 - 2.1)));
+  // a band round the brow with rivets, and a flared, rolled lower edge
+  P.add(helm, cord(arc(0.0785 * H, 0.052 * H, 0, Math.PI * 2, 56), 0.0026 * H, { closed: true, radial: 6, perPt: 1.2 }));
+  P.add(helm, rivetRing(0.0795 * H, 0.04 * H, 18, 0.0026 * H, { from: 1.15, to: Math.PI * 2 - 1.15 }));
+  P.add(helm, cord(arc(0.084 * H, -0.074 * H, 1.05, Math.PI * 2 - 1.05, 48), 0.0032 * H, { radial: 6, perPt: 1.2 }));
+  // the comb: a low ridge from brow to nape
   {
-    const cv = new THREE.CubicBezierCurve3(new THREE.Vector3(0, 0.058 * H, 0.075 * H), new THREE.Vector3(0, 0.118 * H, 0.05 * H), new THREE.Vector3(0, 0.138 * H, -0.04 * H), new THREE.Vector3(0, 0.058 * H, -0.075 * H));
-    const pts = cv.getPoints(30).map((q) => q.clone().setY(q.y + 0.0016 * H));
-    P.add(hat, rope(pts, 0.0034 * H, { twist: 90, radial: 6, perPt: 2 }));
-    const rv = [];
-    for (let i = 1; i < 8; i++) {
-      const t = (i / 8) * Math.PI - Math.PI / 2;
-      for (const sx of [-1, 1]) rv.push(new THREE.Vector3(sx * 0.0072 * H, 0.04 * H + Math.cos(t) * 0.0755 * H, Math.sin(t) * 0.0755 * H));
-    }
-    P.add(hat, pearls(rv, 0.0026 * H, { w: 7, h: 4 }));
+    const comb = new THREE.Shape();
+    comb.moveTo(-0.07 * H, 0);
+    comb.bezierCurveTo(-0.05 * H, 0.04 * H, 0.04 * H, 0.05 * H, 0.07 * H, 0);
+    const cg = new THREE.ExtrudeGeometry(comb, { depth: 0.006 * H, bevelEnabled: true, bevelThickness: 0.002 * H, bevelSize: 0.0018 * H, bevelSegments: 2, curveSegments: 24 });
+    cg.translate(0, 0, -0.003 * H);
+    P.add(helm, cg, 0, 0.095 * H, 0, 0, Math.PI / 2, 0);
   }
-  // chin strap
-  P.add(hat, new THREE.TorusGeometry(0.066 * H, 0.0035 * H, 6, 32, Math.PI), 0, 0.03 * H, 0.004 * H, Math.PI, Math.PI / 2, 0, [1, 1.35, 1]);
 
-  // ---- two arming swords
-  const bL = sword(P, J.wrL, H, 0.42, 'weapon2');
-  bL.position.set(0, -0.032 * H, 0.03 * H);
-  const bR = sword(P, J.wrR, H, 0.42, 'weapon');
+  // ---- a short sword in the right hand, a round shield strapped to the left forearm
+  const bR = sword(P, J.wrR, H, 0.32, 'weapon');
   bR.position.set(0, -0.032 * H, 0.03 * H);
+  const sh = new THREE.Group();
+  sh.name = 'weapon2';
+  sh.position.set(0.034 * H, 0.05 * H, 0.0);
+  J.wrL.add(sh);
+  {
+    const R = 0.15 * H;
+    // dished, with a raised rim, a boss and a ring of rivets; its face looks outward (+x)
+    const face = outward(new THREE.LatheGeometry([[0.0001, 0.022], [0.12, 0.021], [0.3, 0.017], [0.6, 0.011], [0.86, 0.006], [0.9, 0.012], [0.97, 0.014], [1.0, 0.006], [1.0, 0.0], [0.0001, 0.0]].map(([x, y]) => new THREE.Vector2(x * R, y * H * 0.9)), 56));
+    face.rotateZ(-Math.PI / 2);
+    P.add(sh, face);
+    const boss = new THREE.SphereGeometry(0.045 * H, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    boss.rotateZ(-Math.PI / 2);
+    P.add(sh, boss, 0.018 * H, 0, 0, 0, 0, 0, [0.7, 1, 1]);
+    const ring = [];
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      ring.push(new THREE.Vector3(0.012 * H, Math.cos(a) * R * 0.78, Math.sin(a) * R * 0.78));
+    }
+    P.add(sh, pearls(ring, 0.004 * H, { w: 7, h: 4 }));
+    // a cross of iron bands from the boss to the rim
+    for (const a of [0, Math.PI / 2]) P.box(sh, 0.004 * H, Math.cos(a) * R * 1.7 + 0.008 * H, Math.sin(a) * R * 1.7 + 0.008 * H, 0.013 * H, 0, 0);
+  }
   J.weapon = bR;
-  J.weapon2 = bL;
+  J.weapon2 = sh;
   return { H, legs, style: 'dual' };
 }
 

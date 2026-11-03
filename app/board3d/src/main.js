@@ -38,8 +38,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1; // gloomy, but the pieces must stay readable on a phone
+// neutral tone mapping keeps the limestone white and the basalt black (ACES greyed both)
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.1;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
@@ -52,22 +53,71 @@ const post = setupPost(renderer);
 const FOCUS_PTS = [];
 for (const x of [-4.3, 4.3]) for (const z of [-4.3, 4.3]) for (const y of [-0.2, 1.5]) FOCUS_PTS.push(new THREE.Vector3(x, y, z));
 
-scene.add(new THREE.HemisphereLight(0xb9c3d2, 0x1c1a18, 0.3));
-// cold daylight falling from high windows
-const sun = new THREE.DirectionalLight(0xe2e8f0, 2.3);
+scene.add(new THREE.HemisphereLight(0xb9c3d2, 0x1c1a18, 0.22));
+// the key: daylight falling from a high window, casting soft but real shadows
+const sun = new THREE.DirectionalLight(0xe2e8f0, 2.9);
 sun.position.set(-5, 11, 6);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -6;
-sun.shadow.camera.right = 6;
-sun.shadow.camera.top = 6;
-sun.shadow.camera.bottom = -6;
-sun.shadow.bias = -0.0005;
-sun.shadow.normalBias = 0.02;
+sun.shadow.camera.left = -5.4;
+sun.shadow.camera.right = 5.4;
+sun.shadow.camera.top = 5.4;
+sun.shadow.camera.bottom = -5.4;
+sun.shadow.camera.near = 4;
+sun.shadow.camera.far = 24;
+sun.shadow.radius = 3;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.015;
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0x8fa0b8, 0.9);
+// a cool back light, always on the far side of the camera, that outlines every statue (the
+// basalt army stands out from the dark squares by its lit edges)
+const rim = new THREE.DirectionalLight(0xc4d2ff, 1.6);
 rim.position.set(6, 6, -8);
 scene.add(rim);
+// contact shadows: a soft dark pool under each statue's feet, so it stands on the board
+const contact = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(0,0,0,0.9)');
+  g.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 64, 64);
+  const mat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), color: 0x000000, transparent: true, opacity: 0.6, depthWrite: false, fog: false });
+  const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const SIZE = { 1: [0.5, 0.5], 2: [0.62, 0.85], 3: [0.56, 0.56], 4: [0.74, 0.74], 5: [0.62, 0.62], 6: [0.66, 0.66] };
+  const pool = [];
+  const _d = new THREE.Vector3();
+  return function update() {
+    let n = 0;
+    for (const p of pieces.values()) {
+      const g = p.fig.group;
+      if (!g.parent || g.visible === false) continue;
+      let m = pool[n];
+      if (!m) {
+        m = pool[n] = new THREE.Mesh(geo, mat);
+        m.renderOrder = -1;
+        scene.add(m);
+      }
+      n++;
+      const lift = Math.max(0, g.position.y);
+      const [w, l] = SIZE[p.code & 7] || [0.55, 0.55];
+      const k = Math.max(0, 1 - lift * 2.5);
+      m.visible = k > 0.02 && (p.fig.opacity === undefined || p.fig.opacity > 0.5);
+      m.position.set(g.position.x, 0.0015, g.position.z);
+      m.rotation.y = g.rotation.y;
+      m.scale.set(w * (1 + lift), 1, l * (1 + lift)).multiplyScalar(0.5 + 0.5 * k);
+    }
+    for (let i = n; i < pool.length; i++) pool[i].visible = false;
+    // the back light stays behind the statues, whichever way the camera looks
+    _d.copy(camera.position).setY(0);
+    if (_d.lengthSq() < 1e-4) _d.set(0, 0, 1);
+    _d.normalize();
+    rim.position.set(-_d.x * 8, 5, -_d.z * 8);
+  };
+})();
 const flash = new THREE.PointLight(0xffd59a, 0, 6, 1.6);
 scene.add(flash);
 const checkLight = new THREE.PointLight(0xff3020, 0, 2.5, 2);
@@ -76,16 +126,25 @@ scene.add(checkLight);
 // ------------------------------------------------------------------ the board
 const SQ_TOP = 0.0; // pieces stand on y = 0
 const squareMeshes = [];
-const sqLight = new THREE.MeshStandardMaterial({ color: 0xd8cfbe, roughness: 0.35 });
-const sqDark = new THREE.MeshStandardMaterial({ color: 0x2c2522, roughness: 0.3 });
 {
   const g = new THREE.BoxGeometry(1, 0.16, 1);
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
       const light = (f + r) % 2 === 1;
-      // each square a slab of pale limestone or dark slate, the grain running on between them
-      const m = new THREE.Mesh(g, granite(light ? 'white' : 'black', { grain: 16, offset: [f - 3.5, 0, 3.5 - r] }));
-      m.material.roughness = light ? 0.55 : 0.4;
+      // each square a matte slab of honey sandstone or brown slate, the grain running on between
+      // them: mid tones, so the pale army stands out on both and so does the black one
+      const mat = granite(light ? 'white' : 'black', { grain: 7, offset: [f - 3.5, 0, 3.5 - r] });
+      const u = mat.userData.uniforms;
+      if (light) {
+        u.uTint.value.setRGB(0.36, 0.26, 0.15);
+        u.uTint2.value.setRGB(0.45, 0.34, 0.21);
+      } else {
+        u.uTint.value.setRGB(0.1, 0.07, 0.05);
+        u.uTint2.value.setRGB(0.14, 0.1, 0.07);
+      }
+      u.uBump.value = 0.3;
+      mat.roughness = 0.95;
+      const m = new THREE.Mesh(g, mat);
       m.position.set(f - 3.5, SQ_TOP - 0.08, 3.5 - r);
       m.receiveShadow = true;
       m.userData.square = r * 8 + f;
@@ -94,8 +153,8 @@ const sqDark = new THREE.MeshStandardMaterial({ color: 0x2c2522, roughness: 0.3 
     }
   }
   // carved frame
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x2d241d, roughness: 0.55 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0xb08a4a, roughness: 0.35, metalness: 0.7 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x2d241d, roughness: 0.85 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x9a7a48, roughness: 0.7, metalness: 0.2 });
   const side = (w, d, x, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, d), frameMat);
     m.position.set(x, -0.1, z);
@@ -282,6 +341,43 @@ function boardDist() {
   const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
   return Math.max(4.9 / Math.tan(halfFov), 4.9 / (Math.tan(halfFov) * camera.aspect)) * 0.98;
 }
+// The play view's distance: as close as it can be with the whole board (every square, and
+// the tops of the statues on the far rank) still in the picture, so the pieces are as big as the
+// screen allows. Solved once per angle and screen shape.
+const _fitCam = new THREE.PerspectiveCamera();
+const _fitP = new THREE.Vector3();
+const FIT_PTS = [];
+for (const x of [-4.1, 4.1]) for (const z of [-4.1, 4.1]) FIT_PTS.push(new THREE.Vector3(x, 0, z));
+for (const x of [-3.5, 3.5]) for (const z of [-3.5, 3.5]) FIT_PTS.push(new THREE.Vector3(x, 1.5, z));
+const fitCache = new Map();
+function fitDist(el, az, target) {
+  const key = [camera.aspect, el, az, target.z].map((v) => v.toFixed(3)).join();
+  let d = fitCache.get(key);
+  if (d) return d;
+  _fitCam.fov = camera.fov;
+  _fitCam.aspect = camera.aspect;
+  _fitCam.updateProjectionMatrix();
+  const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+  const fits = (dist) => {
+    _fitCam.position.copy(target).addScaledVector(dir, dist);
+    _fitCam.lookAt(target);
+    _fitCam.updateMatrixWorld();
+    return FIT_PTS.every((q) => {
+      _fitP.copy(q).project(_fitCam);
+      return Math.abs(_fitP.x) < 0.985 && Math.abs(_fitP.y) < 0.95 && _fitP.z < 1;
+    });
+  };
+  let lo = 4, hi = 80;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) hi = mid;
+    else lo = mid;
+  }
+  d = hi;
+  if (fitCache.size > 200) fitCache.clear();
+  fitCache.set(key, d);
+  return d;
+}
 
 // A cinematic shot: where the camera wants to be and what it looks at. The battle code
 // updates it every frame while `want` is 1; it blends in and out smoothly.
@@ -299,10 +395,13 @@ const topDown = () => state.view === 'top';
 function playerView() {
   const az = azimuth + user.az;
   // the top-down view looks almost straight down, so every piece is easy to read
-  const baseEl = camera.aspect < 0.8 ? 0.98 : BASE_EL; // tall phone screens look down more, so the board fills them
+  // a three-quarter view: low enough that the statues stand tall, high enough to see over the
+  // front ranks to the back ones
+  const baseEl = camera.aspect < 0.8 ? 0.86 : BASE_EL;
   const el = topDown() ? Math.min(1.53, Math.max(1.0, 1.5 + user.el)) : Math.min(1.4, Math.max(0.22, baseEl + user.el));
-  const dist = boardDist() * user.zoom * (topDown() ? 0.86 : 1);
-  const target = new THREE.Vector3(0, -0.2, 0.25 * Math.cos(azimuth)).add(user.pan);
+  const base = new THREE.Vector3(0, -0.2, 0.25 * Math.cos(azimuth));
+  const dist = (topDown() ? boardDist() * 0.86 : fitDist(el, az, base)) * user.zoom;
+  const target = base.add(user.pan);
   const pos = target.clone().add(_v.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(dist));
   return { pos, target, az };
 }
@@ -2257,6 +2356,7 @@ function tick(realDt) {
   particles.update(dt);
   updateCamera(realDt);
   fadeBlockers(realDt);
+  contact();
   post.focusOn(camera, FOCUS_PTS);
   if (!window.__noRender) post.render(scene, camera);
   const nowBusy = busy || slowLeft > 0;

@@ -226,3 +226,44 @@ export function keep(tower, P, T) {
     P.add(tower, cap);
   }
 }
+
+/**
+ * A round drum of dressed stones (a turret's wall): [courses] courses of blocks laid round a
+ * mortar core from y0 to y1, their faces at radius r (narrowing to rTop), the joints staggered.
+ */
+export function drum(parent, P, { r, rTop = r, y0, y1, courses, seed = 11, depth = 0.016, nu = 7 }) {
+  rnd = rng(seed);
+  P.cyl(parent, rTop - depth * 0.8, r - depth * 0.8, y1 - y0, 0, (y0 + y1) / 2, 0, 0, 0, 0, 40);
+  const ch = (y1 - y0) / courses;
+  for (let c = 0; c < courses; c++) {
+    const t = (c + 0.5) / courses, R = r + (rTop - r) * t;
+    const ya = y0 + ch * c + 0.0025, yb = y0 + ch * (c + 1) - 0.0025;
+    let a = (c % 2) * 0.3 + rnd() * 0.1;
+    const end = a + Math.PI * 2;
+    while (a < end - 0.02) {
+      const da = Math.min((0.05 + rnd() * 0.035) / R, end - a);
+      const dmg = rnd() < 0.15 ? { chips: [[rnd() < 0.5 ? 0 : 1, rnd() < 0.5 ? 0 : 1, 0.003 + rnd() * 0.004]] } : {};
+      P.add(parent, block(R - depth, a + 0.002, a + da - 0.002, ya, yb, depth, dmg, nu, 3));
+      a += da + 0.003;
+    }
+  }
+}
+
+/** A parapet of [n] merlons round radius r (an arrow loop through every other one). */
+export function crenels(parent, P, { r, y, n = 6, h = 0.05, depth = 0.03, seed = 13 }) {
+  rnd = rng(seed);
+  // the walk behind, and a moulded string course under the merlons
+  P.lathe(parent, [[r - depth, y - 0.004], [r + 0.004, y - 0.004], [r + 0.006, y], [r + 0.004, y + 0.006], [r - depth, y + 0.006], [r - depth, y + 0.002], [0, y + 0.002]], 0, 48);
+  P.torus(parent, r + 0.004, 0.0035, 0, y - 0.002, 0, Math.PI / 2, Math.PI * 2, 64);
+  const hw = (Math.PI / n) * 0.55;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.PI / n;
+    const gap = 0.0035 / r;
+    if (i % 2 === 0) {
+      P.add(parent, block(r - depth, a - hw, a - gap, y + 0.006, y + h * 0.62, depth, {}, 5, 3));
+      P.add(parent, block(r - depth, a + gap, a + hw, y + 0.006, y + h * 0.62, depth, {}, 5, 3));
+    } else P.add(parent, block(r - depth, a - hw, a + hw, y + 0.006, y + h * 0.62, depth, { chips: rnd() < 0.5 ? [[1, 1, 0.004]] : [] }, 8, 3));
+    P.add(parent, block(r - depth, a - hw, a + hw, y + h * 0.62 + 0.003, y + h, depth, {}, 8, 3));
+    P.add(parent, block(r - depth - 0.002, a - hw * 1.1, a + hw * 1.1, y + h, y + h + 0.009, depth + 0.006, {}, 8, 2));
+  }
+}

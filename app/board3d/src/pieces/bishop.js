@@ -1,15 +1,15 @@
 // The bishop: an old churchman in full vestments. A long alb falls in fine creases to the
 // pedestal; over it a gothic chasuble hangs from his shoulders in deep folds, longer before and
 // behind, with embroidered orphrey bands and jewels; a stole's fringed ends show below it. He
-// has a lined, bearded face under a two-peaked mitre with its band, jewels and lappets, raises
+// is faceless (a stern stone mask, in the manner of the great wizard's chess set) under a two-peaked mitre with its band, jewels and lappets, raises
 // his right hand in blessing and holds an ornate crozier: knopped staff, a little gothic shrine
 // for a node, and a crook curling in on itself, crocketed, ending in a rosette.
 // (Carved on the shared skeleton: joint names and positions are what statues.js animates.)
 import * as THREE from 'three';
 import { V2, carve, joint, skeleton } from '../carving.js';
-import { bead, beardLocks, eyes, face, fineHand, fringe, gem, lathe, moustache, outward, quatrefoil, robe, sculptBeard, sculptHead } from './bp_kit.js';
+import { bead, face, fineHand, fringe, gem, lathe, outward, quatrefoil, robe, sculptHead } from './bp_kit.js';
 import { cord, latheGrid, pearls, rope, setOn, slab, spaced } from './bp_fine.js';
-import { crozierFine, mitreFine, browTufts, pectoral } from './bp_bishop.js';
+import { crozierFine, mitreFine, pectoral } from './bp_bishop.js';
 
 export function bishop(J, root, P) {
   const H = 1.02;
@@ -190,17 +190,11 @@ export function bishop(J, root, P) {
     fineHand(P, J['wr' + side], 0.1 * H, s, s > 0 ? 'grip' : 'bless', { ring: s < 0 });
   }
 
-  // ---- the head: an old, lined face with a long beard
+  // ---- the head: a faceless stone mask, stern under the mitre
   const r = 0.062 * H;
-  P.add(J.head, sculptHead(r, { old: true, seg: 60 }), 0, 0.05 * H, 0);
-  browTufts(P, J.head, r, 0, 0.05 * H, 0);
-  eyes(P, J.head, r, 0, 0.05 * H, 0);
-  // the beard: a combed mass, and long separate locks falling over it
-  const beard = sculptBeard(r * 0.7, 0.1 * H, 48, 34);
-  carve(beard, r * 0.02, 30 / r);
-  P.add(J.head, beard, 0, 0.05 * H - r * 0.55, r * 0.15);
-  for (const lock of beardLocks(r, 0.13 * H, { n: 30, tub: 10, rad: 7, thin: 0.8 })) P.add(J.head, lock, 0, 0.05 * H, r * 0.05);
-  for (const m of moustache(r)) P.add(J.head, m, 0, 0.05 * H - r * 0.4, r * 1.0);
+  P.add(J.head, sculptHead(r, { seg: 60, blank: true }), 0, 0.05 * H, 0, 0, 0, 0, [0.94, 1.06, 1]);
+  // a high, stiff amice collar standing round the neck and jaw
+  P.add(J.head, outward(new THREE.LatheGeometry(V2([[0.05 * H, -0.035 * H], [0.07 * H, -0.03 * H], [0.078 * H, 0.0], [0.076 * H, 0.03 * H], [0.07 * H, 0.032 * H], [0.07 * H, 0.0], [0.055 * H, -0.03 * H]]), 48, 1.1, Math.PI * 2 - 2.2)), 0, 0.0, 0);
   // hair at the back and sides, below the mitre
   const hair = new THREE.SphereGeometry(r * 1.04, 56, 22, (Math.PI * 5) / 6, (Math.PI * 4) / 3, Math.PI * 0.3, Math.PI * 0.45);
   {

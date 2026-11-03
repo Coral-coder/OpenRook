@@ -44,11 +44,19 @@ function bump(p, c, s) {
  * A carved head (radius r) facing +z: skull, brow ridge, eye sockets with lids, a nose
  * with nostrils, cheekbones and hollows, lips, chin and ears; the jaw narrows.
  */
-export function sculptHead(r, { old = false, ears = true, seg = 48 } = {}) {
+export function sculptHead(r, { old = false, ears = true, seg = 48, blank = false } = {}) {
   const g = new THREE.SphereGeometry(1, seg, Math.round(seg * 0.75));
   const p = g.attributes.position;
   const v = new THREE.Vector3();
-  const F = [
+  // blank: a faceless stone mask, cut in severe planes (a hard brow over shadowed hollows, a
+  // blade of a nose, a long chin) with no eyes, mouth or ears: stern, and a little menacing
+  const F = blank ? [
+    [[0, 0.27, 0.95], [0.5, 0.055], 0.075], // one straight brow
+    [[-0.3, 0.1, 0.93], [0.2, 0.1], -0.07], [[0.3, 0.1, 0.93], [0.2, 0.1], -0.07], // hollows, no eyes
+    [[0, -0.02, 1], [0.05, 0.3], 0.11], // the blade of the nose
+    [[-0.46, -0.12, 0.82], [0.22, 0.2], 0.03], [[0.46, -0.12, 0.82], [0.22, 0.2], 0.03], // cheek planes
+    [[0, -0.74, 0.8], [0.22, 0.16], 0.07], // a long chin
+  ] : [
     // [centre, spread, amount]
     [[-0.33, 0.3, 0.93], [0.28, 0.08], 0.06], [[0.33, 0.3, 0.93], [0.28, 0.08], 0.06], // brow ridges
     [[0, 0.27, 0.98], [0.12, 0.08], 0.03], // glabella
@@ -64,21 +72,20 @@ export function sculptHead(r, { old = false, ears = true, seg = 48 } = {}) {
     [[0, -0.55, 0.94], [0.14, 0.045], 0.035], // lower lip
     [[0, -0.77, 0.75], [0.2, 0.12], 0.08], // chin
   ];
-  if (ears) {
+  if (ears && !blank) {
     for (const s of [-1, 1]) {
       F.push([[s * 0.97, 0.02, 0.05], [0.06, 0.2, 0.14], 0.14]); // the ear
       F.push([[s * 0.99, 0.03, 0.08], [0.03, 0.12, 0.05], -0.05]); // its bowl
       F.push([[s * 0.98, -0.16, 0.06], [0.05, 0.06, 0.08], 0.05]); // the lobe
     }
   }
-  for (const s of [-1, 1]) {
+  for (const s of blank ? [] : [-1, 1]) {
     F.push([[s * 0.2, -0.3, 0.94], [0.035, 0.15], -0.028]); // the folds from nose to mouth
     F.push([[s * 0.62, 0.2, 0.75], [0.12, 0.14], -0.025]); // temples
     F.push([[s * 0.22, -0.62, 0.9], [0.06, 0.07], -0.02]); // the corners of the mouth
   }
-  F.push([[0, -0.34, 0.99], [0.03, 0.05], -0.025]); // the philtrum
-  F.push([[0, -0.66, 0.92], [0.1, 0.03], -0.02]); // the groove above the chin
-  if (old) {
+  if (!blank) F.push([[0, -0.34, 0.99], [0.03, 0.05], -0.025], [[0, -0.66, 0.92], [0.1, 0.03], -0.02]); // the philtrum, the groove above the chin
+  if (old && !blank) {
     F.push([[-0.25, 0.42, 0.9], [0.4, 0.03], -0.016], [[0.25, 0.5, 0.86], [0.4, 0.03], -0.016], [[0, 0.58, 0.8], [0.35, 0.025], -0.012]); // furrows
     F.push([[0, 0.3, 0.99], [0.025, 0.08], -0.02], [[0.06, 0.3, 0.99], [0.02, 0.07], -0.012]); // frown lines
     for (const s of [-1, 1]) {

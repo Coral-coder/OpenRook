@@ -1,6 +1,6 @@
 // Tilt-shift focus: the board is a small chess set on a table, so the camera sees it the way a
-// macro lens would. Everything nearer or farther than the board and its pieces melts into a
-// soft, colourful blur; the board stays sharp. A depth-aware blur (the depth decides how much
+// macro lens would. Everything nearer or farther than the board and its pieces softens into a
+// gentle blur; the board and its pieces stay crisp (and skip the blur entirely). A depth-aware blur (the depth decides how much
 // each pixel blurs), in two separable passes, plus a little screen-height falloff for the
 // classic miniature look.
 import * as THREE from 'three';
@@ -28,28 +28,34 @@ function blurMaterial(final) {
         vec4 v = uProjInv * vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).x * 2.0 - 1.0, 1.0);
         vec3 w = (uCamWorld * vec4(v.xyz / v.w, 1.0)).xyz;
         // sharp on the board and the pieces standing on it; the farther from it, the softer
-        float outside = max(max(abs(w.x), abs(w.z)) - 4.7, max(w.y - 2.2, -0.75 - w.y));
-        float blur = smoothstep(0.2, 7.0, outside);
+        float outside = max(max(abs(w.x), abs(w.z)) - 5.2, max(w.y - 2.6, -0.75 - w.y));
+        float blur = smoothstep(0.3, 6.0, outside);
         // and the miniature falloff toward the top and bottom of the picture
-        blur = max(blur, smoothstep(uBand.y, uBand.y + 0.35, abs(uv.y - uBand.x)) * 0.35 * step(0.01, outside));
+        blur = max(blur, smoothstep(uBand.y, uBand.y + 0.35, abs(uv.y - uBand.x)) * 0.25 * step(0.01, outside));
         return blur;
       }
       void main() {
         float c = coc(vUv);
-        float r = c * uMax;
-        vec4 sum = texture2D(tColor, vUv) * 0.2;
-        float wsum = 0.2;
-        for (int i = 1; i <= 8; i++) {
-          float f = float(i) / 8.0;
-          float w = exp(-f * f * 2.5);
-          vec2 o = uDir * r * f;
-          // a sharp sample never bleeds into a blurred neighbour's halo
-          float wa = w * max(coc(vUv + o), c * 0.5);
-          float wb = w * max(coc(vUv - o), c * 0.5);
-          sum += texture2D(tColor, vUv + o) * wa + texture2D(tColor, vUv - o) * wb;
-          wsum += wa + wb;
+        if (c < 0.003) {
+          // the board and its pieces: sharp, and cheap
+          gl_FragColor = texture2D(tColor, vUv);
+        } else {
+          float r = c * uMax;
+          vec4 sum = texture2D(tColor, vUv) * 0.2;
+          float wsum = 0.2;
+          for (int i = 1; i <= 8; i++) {
+            float f = float(i) / 8.0;
+            float w = exp(-f * f * 2.5);
+            vec2 o = uDir * r * f;
+            // only blurred neighbours spread: a sharp piece never bleeds a glowing halo into
+            // the soft room behind it
+            float wa = w * coc(vUv + o);
+            float wb = w * coc(vUv - o);
+            sum += texture2D(tColor, vUv + o) * wa + texture2D(tColor, vUv - o) * wb;
+            wsum += wa + wb;
+          }
+          gl_FragColor = sum / wsum;
         }
-        gl_FragColor = sum / wsum;
         ${final ? '#include <tonemapping_fragment>\n#include <colorspace_fragment>' : ''}
       }`,
     depthTest: false,
@@ -111,7 +117,7 @@ export function setupPost(renderer) {
         u.uNear.value = camera.near;
         u.uFar.value = camera.far;
         u.uFocus.value.copy(focus);
-        u.uMax.value = 13 * dpr;
+        u.uMax.value = 12 * dpr; // a gentle tilt-shift: the room soft, the board crisp
         u.uProjInv.value.copy(camera.projectionMatrixInverse);
         u.uCamWorld.value.copy(camera.matrixWorld);
         quad.material = m;

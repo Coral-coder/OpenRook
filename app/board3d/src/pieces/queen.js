@@ -220,7 +220,7 @@ export function queen(J, root, P) {
   }
 
   // ---- the face, the hair, the crown
-  all(J.head, headShape(H, { female: true }));
+  all(J.head, headShape(H, { female: true, blank: true })); // faceless: a stern stone mask
   // hair drawn back under the crown, a braid wound round, locks down her back
   const hairCap = (geo) => combed(geo, H, 72);
   g(J.head, hairCap(sculpt(0.0, 0.095 * H, (t) => 0.068 * H * Math.sqrt(Math.max(0, 1 - t * t * 0.9)), {

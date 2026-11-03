@@ -171,7 +171,7 @@ export function plateLames(len, r, n, flare = 1.12, { rad = 28, rings = 6 } = {}
 // ------------------------------------------------------------------ faces
 /** A carved head (face forward, +z): skull, brow, sockets, cheekbones, nose, lips, jaw, chin,
  * ears. Centred on the head joint, crown at about +0.12H. */
-export function headShape(H, { female = false, beard = false } = {}) {
+export function headShape(H, { female = false, beard = false, blank = false } = {}) {
   const S = (female ? 0.066 : 0.064) * H;
   const G = (x, y, cx, cy, sx, sy) => Math.exp(-(((x - cx) / sx) ** 2) - (((y - cy) / sy) ** 2));
   const W = female ? 0.8 : 0.86;
@@ -183,7 +183,21 @@ export function headShape(H, { female = false, beard = false } = {}) {
     if (z > 0.72) z = 0.72 + (z - 0.72) * 0.5;
     return z;
   };
+  // blank: a faceless mask of severe planes (a hard brow over shadowed hollows, a blade of a
+  // nose, a narrow chin), with no eyes, lips or brows
+  const blankRelief = (x, y) => {
+    let d = 0.1 * G(x, y, 0, 0.26, 0.6, 0.05);
+    for (const s of [-1, 1]) {
+      d -= 0.14 * G(x, y, s * 0.29, 0.08, 0.2, 0.11);
+      d += 0.05 * G(x, y, s * 0.42, -0.22, 0.18, 0.16);
+    }
+    const ny = sm(0.24, -0.3, y) * (1 - sm(-0.3, -0.36, y));
+    d += 0.17 * ny * Math.exp(-((x / 0.07) ** 2));
+    d += 0.07 * G(x, y, 0, -0.8, 0.18, 0.12);
+    return d;
+  };
   const relief = (x, y) => {
+    if (blank) return blankRelief(x, y);
     let d = 0;
     d += 0.09 * G(x, y, 0, 0.27, 0.55, 0.055) * (female ? 0.6 : 1); // brow line
     for (const s of [-1, 1]) {

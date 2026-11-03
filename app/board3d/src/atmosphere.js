@@ -235,7 +235,7 @@ function apothecary() {
   const moon = new THREE.DirectionalLight(0x6f86c8, 0.5);
   moon.position.set(-20, 30, -30);
   g.add(moon);
-  return { g, flames, lights, fog: [0x1a120c, 0.012], bg: 0x120c08, hemi: [0xffd6a0, 0x2a1a10, 0.45], key: 0xffd9b0 };
+  return { g, flames, lights, fog: [0x1a120c, 0.012], bg: 0x120c08, hemi: [0xffd6a0, 0x2a1a10, 0.45], key: 0xffe8cc };
 }
 
 // ------------------------------------------------------------------ the astronomy tower
@@ -422,7 +422,7 @@ export function setupAtmosphere(scene) {
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const dust = new THREE.Points(geo, new THREE.PointsMaterial({
     size: 0.08, map: soft('rgba(255,240,210,0.9)', 'rgba(255,240,210,0)'), color: 0xffe0b0,
-    transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+    transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   scene.add(dust);
 
