@@ -7,8 +7,8 @@ r() { echo "-> stl/$1.stl"; openscad --export-format binstl -o "stl/$1.stl" "${@
 r board_tile board_tile
 r dark_square_inlay dark_square_inlay
 r capture_strip capture_strip
-for p in pawn rook knight bishop queen king; do r "piece_$p" pieces -D "PIECE=\"$p\""; done
-r pieces_preview_set pieces
+# The chess pieces (piece_*.stl) are the Wizard Chess set, made by
+# app/board3d/tools/import-wizard.mjs, not by OpenSCAD.
 r foot foot
 r rod_holder rod_holder
 r motor_mount_left motor_mount

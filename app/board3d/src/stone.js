@@ -1,7 +1,7 @@
 // Living-stone materials for the Wizard style: the armies as carved chess statues.
 //
-// White is pale marble shot through with gold veins that faintly glow with light magic.
-// Black is cracked obsidian whose cracks pulse with sickly green-violet dark magic. The
+// White is pale, warm limestone with faint veins; Black is near-black basalt. Both matte, so
+// the armies read clearly against the board (only a dying piece's cracks glow, like embers). The
 // pattern is computed in the shader from the model's own (bind-pose) coordinates, so the
 // veins are carved into each figure and move with it. Each figure gets its own material
 // instances so a dying piece can rot (uRot) and fade (opacity) on its own.
@@ -30,8 +30,9 @@ export function stoneMaterial(source, side, kind, { offset = [0, 0, 0], scale = 
   const isBlack = side === 'black';
   const m = new THREE.MeshStandardMaterial({
     map: source?.map || null,
-    roughness: kind === 1 ? 0.3 : isBlack ? 0.22 : 0.38,
-    metalness: kind === 1 ? 0.85 : isBlack ? 0.15 : 0.02,
+    // matte carved stone (the held metal a little smoother): no wet sheen, no glints
+    roughness: kind === 1 ? 0.55 : 0.88,
+    metalness: kind === 1 ? 0.3 : 0,
     color: 0xffffff,
     emissive: 0x000000,
   });
@@ -61,9 +62,9 @@ export function stoneMaterial(source, side, kind, { offset = [0, 0, 0], scale = 
         stone = uSide < 0.5 ? mix(vec3(0.75, 0.72, 0.66), vec3(0.95, 0.8, 0.45), sn) : mix(vec3(0.12, 0.12, 0.13), vec3(0.3, 0.28, 0.3), sn);
         stone *= 0.7 + 0.5 * lum;
       } else {
-        vec3 base = uSide < 0.5 ? mix(vec3(0.80, 0.77, 0.71), vec3(0.97, 0.95, 0.90), sn) : mix(vec3(0.035, 0.03, 0.045), vec3(0.13, 0.11, 0.14), sn);
-        vec3 veinCol = uSide < 0.5 ? vec3(0.80, 0.62, 0.28) : vec3(0.01, 0.01, 0.015);
-        stone = mix(base, veinCol, vein * (uSide < 0.5 ? 0.85 : 0.65)) * (0.5 + 0.7 * lum);
+        vec3 base = uSide < 0.5 ? mix(vec3(0.70, 0.66, 0.58), vec3(0.84, 0.80, 0.72), sn) : mix(vec3(0.024, 0.024, 0.027), vec3(0.05, 0.049, 0.052), sn);
+        vec3 veinCol = uSide < 0.5 ? vec3(0.62, 0.56, 0.46) : vec3(0.012, 0.012, 0.014);
+        stone = mix(base, veinCol, vein * 0.35) * (0.75 + 0.35 * lum);
       }
       // rot: the stone darkens, mottles and crumbles as the piece dies
       vec3 rotten = mix(vec3(0.16, 0.14, 0.09), vec3(0.05, 0.04, 0.03), sn);
@@ -76,8 +77,6 @@ export function stoneMaterial(source, side, kind, { offset = [0, 0, 0], scale = 
       if (uKind > 1.5) {
         totalEmissiveRadiance += (uSide < 0.5 ? vec3(1.0, 0.8, 0.35) : vec3(0.3, 1.0, 0.5)) * 2.0 * pulse * (1.0 - uRot);
       } else if (uKind < 0.5) {
-        vec3 magic = uSide < 0.5 ? vec3(1.0, 0.78, 0.35) * 0.32 : vec3(0.35, 1.0, 0.55) * 0.55 + vec3(0.4, 0.1, 0.6) * 0.25 * sin(uTime + sn * 4.0);
-        totalEmissiveRadiance += vein * magic * pulse * (1.0 - uRot);
         // dying: the cracks burn like embers before going out
         totalEmissiveRadiance += vein * vec3(1.0, 0.25, 0.05) * smoothstep(0.0, 0.4, uRot) * (1.0 - smoothstep(0.6, 1.0, uRot)) * 1.4;
       }`,

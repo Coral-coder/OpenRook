@@ -1,2 +1,5 @@
 node_modules/
 src/models_data.gen.js
+_prev/
+models/_*
+src/sounds_data.gen.js

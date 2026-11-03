@@ -78,8 +78,11 @@ tells the board how to play your opponent's.
   With Settings → **Keep the mic on all game**, one tap leaves the mic open for the whole game:
   just call your moves (and "top view", "battle view", "flip"). It pauses while the announcer
   speaks so it doesn't hear itself.
-- **Announcer**: every move is said out loud ("Bishop takes knight on C 6. Check!") in the
-  most natural voice the phone has (premium, enhanced or neural voices first; pick another in
+- **Announcer**: every move is said out loud ("Bishop takes knight on C 6. Check!") by an
+  on-device neural voice with an English accent (Piper voices via sherpa-onnx,
+  `lib/voice/neural_voice.dart`), downloaded once (67 to 80 MB). Settings → **Announcer voice**
+  picks Obadiah (deep RP, the default), Prudence, Jenny or Alan (the original). Until the voice
+  is ready, the phone's own voice stands in, British voices first (pick another in
   Settings → Voice). Settings → **Announce my own moves too** chooses whether your moves are
   called or only your opponent's. Settings can also turn off the announcer, the battle view and
   the vibration.

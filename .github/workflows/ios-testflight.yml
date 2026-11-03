@@ -394,6 +394,9 @@ jobs:
       # TestFlight crash reports need the symbols, and the archive is gone with the runner.
       - name: Keep dSYMs
         if: env.UPLOAD == 'true'
+        # Only keeps debug symbols for crash reports; GitHub's artifact store timing out must not
+        # mark an upload that already reached TestFlight as failed.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ios-dSYMs-${{ env.VERSION }}-${{ env.BUILD_NUMBER }}

@@ -247,6 +247,7 @@ class _GameScreenState extends State<GameScreen> {
                         onMove: (m) => c.playLocal(m),
                         matedKing: c.matedKing,
                         onImpact: _impact,
+                        onShown: c.boardShown,
                       )
                     else
                       BattleBoard(
@@ -430,6 +431,7 @@ class _GameScreenState extends State<GameScreen> {
               onMove: (m) => c.playLocal(m),
               matedKing: c.matedKing,
               onImpact: _impact,
+              onShown: c.boardShown,
             ),
           ),
           SafeArea(

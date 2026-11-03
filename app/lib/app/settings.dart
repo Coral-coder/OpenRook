@@ -44,6 +44,9 @@ class Settings extends ChangeNotifier {
   bool haptics = true;
   bool cinematic = true; // close-up camera for fights
   String style = 'wizard'; // 'wizard' (living stone statues) or 'toon' (KayKit, for kids)
+  String battle = 'standard'; // how long captures are fought out: 'quick', 'standard' or 'epic'
+  String boardIteration = 'latest'; // which version of the 3D board (ui/board3d/iterations.dart)
+  String room = 'apothecary'; // where the set stands: 'apothecary' (cabin) or 'tower' (astronomer's tower)
   bool topDown = false; // overhead view of the battle board
   bool announceOwn = true; // also say the moves made on this phone
   bool alwaysListen = false; // the mic stays on for the whole game
@@ -73,6 +76,9 @@ class Settings extends ChangeNotifier {
     haptics = _p.getBool('haptics') ?? true;
     cinematic = _p.getBool('cinematic') ?? true;
     style = _p.getString('style') ?? 'wizard';
+    room = _p.getString('room') ?? 'apothecary';
+    boardIteration = _p.getString('boardIteration') ?? 'latest';
+    battle = _p.getString('battle') ?? 'standard';
     topDown = _p.getBool('topDown') ?? false;
     announceOwn = _p.getBool('announceOwn') ?? true;
     alwaysListen = _p.getBool('alwaysListen') ?? false;
@@ -101,6 +107,9 @@ class Settings extends ChangeNotifier {
     await _p.setBool('haptics', haptics);
     await _p.setBool('cinematic', cinematic);
     await _p.setString('style', style);
+    await _p.setString('room', room);
+    await _p.setString('boardIteration', boardIteration);
+    await _p.setString('battle', battle);
     await _p.setBool('topDown', topDown);
     await _p.setBool('announceOwn', announceOwn);
     await _p.setBool('alwaysListen', alwaysListen);
