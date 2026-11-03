@@ -23,7 +23,10 @@ export const smax = (a, b, k) => -smin(-a, -b, k);
 // --- primitives: each returns a function (x, y, z) => signed distance
 export function sphere(cx, cy, cz, r, sx = 1, sy = 1, sz = 1) {
   const m = Math.min(sx, sy, sz);
+  // far outside its box the answer is simply "far" (see cone)
+  const pad = r * Math.max(sx, sy, sz) + 0.05;
   return (x, y, z) => {
+    if (x < cx - pad || x > cx + pad || y < cy - pad || y > cy + pad || z < cz - pad || z > cz + pad) return 1;
     const dx = (x - cx) / sx, dy = (y - cy) / sy, dz = (z - cz) / sz;
     return (Math.sqrt(dx * dx + dy * dy + dz * dz) - r) * m;
   };
@@ -56,6 +59,29 @@ export function roundBox(cx, cy, cz, hx, hy, hz, r) {
     return Math.sqrt(ox * ox + oy * oy + oz * oz) + Math.min(Math.max(qx, qy, qz), 0) - r;
   };
 }
+/** A hard union of many small parts (locks of hair, strands), skipped as a whole far from their box. */
+export function union(fs, box) {
+  const [lx, ly, lz, hx, hy, hz] = box;
+  return (x, y, z) => {
+    if (x < lx || x > hx || y < ly || y > hy || z < lz || z > hz) return 1;
+    let d = 1;
+    for (const f of fs) {
+      const e = f(x, y, z);
+      if (e < d) d = e;
+    }
+    return d;
+  };
+}
+/** The box round a set of points, padded. */
+export function boxOf(pts, pad) {
+  const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (const p of pts) for (let i = 0; i < 3; i++) {
+    b[i] = Math.min(b[i], p[i] - pad);
+    b[i + 3] = Math.max(b[i + 3], p[i] + pad);
+  }
+  return b;
+}
+
 /** Smooth union of parts: [[sdf, k], ...] (k = how softly it melts into what came before). */
 export function blend(parts) {
   return (x, y, z) => {
@@ -114,7 +140,7 @@ export function sculpt(sdf, min, max, res = 48, { keep = 0.4, error = 0.0012 } =
   for (let z = 0; z < cr; z++) for (let y = 0; y < cr; y++) for (let x = 0; x < cr; x++) {
     coarse[x + y * cr + z * cr * cr] = sdf(c[0] + W(x * S), c[1] + W(y * S), c[2] + W(z * S));
   }
-  const band = S * cell * 1.9; // closer than this to the surface: evaluate exactly
+  const band = S * cell * 1.4; // closer than this to the surface: evaluate exactly
   const f = mc.field;
   for (let z = 0; z < res; z++) {
     const z0 = Math.min(cr - 2, (z / S) | 0), tz = z / S - z0;

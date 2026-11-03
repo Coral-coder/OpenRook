@@ -1,8 +1,8 @@
 // The rook: carved on the shared skeleton (joint names and positions are what statues.js animates).
 import * as THREE from 'three';
-import { V2, armouredArms, armouredLegs, carve, cuirass, drape, face, folds, greatHelm, joint, resample, robeSkirt, skeleton } from '../carving.js';
-import { horse, soldierTop } from './soldier.js';
-import { kettle } from './kr_armour.js';
+import { joint } from '../carving.js';
+import { soldierTop } from './soldier.js';
+import { face, kettle, kite, sword } from './kr_armour.js';
 import { keep } from './kr_keep.js';
 
 export function rook(J, root, P) {
@@ -27,15 +27,15 @@ export function rook(J, root, P) {
     }
     soldierTop(J, P, H);
     // a young face under a kettle helm
-    face(J.head, P, H);
+    face(P, J.head, H);
     kettle(P, J.head, H);
     const shield = new THREE.Group();
     shield.name = 'shield';
     J.elL.add(shield);
-    P.kite(shield, 0.3 * H, 0.46 * H);
+    kite(P, shield, 0.3 * H, 0.46 * H);
     shield.position.set(0, -0.09 * H, 0);
     J.shield = shield;
-    const sw = P.sword(J.wrR, H, 0.42);
+    const sw = sword(P, J.wrR, H, 0.42);
     sw.position.set(0, -0.05 * H, 0.02 * H);
     J.weapon = sw;
     return { H, legs: [], style: 'one', hand: 'R' };
