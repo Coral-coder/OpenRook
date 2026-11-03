@@ -239,9 +239,9 @@ class GameController extends ChangeNotifier {
     if (mine && !Settings.shared.announceOwn && !(over && game.resultReason == 'checkmate')) return;
     var text = spokenMove(before, m);
     if (over && game.resultReason == 'checkmate') {
-      text += '. Checkmate.'; // spoken calmly: no exclamation
+      text += '. Checkmate!';
     } else if (game.position.inCheck) {
-      text += '. Check.';
+      text += '. Check!';
     }
     Voice.shared.say(text);
   }

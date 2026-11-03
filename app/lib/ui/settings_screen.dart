@@ -117,23 +117,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: s.announce ? (v) => setState(() => s.announceOwn = v) : null,
             ),
             ListTile(
-              title: const Text('Announcer voice'),
-              subtitle: ListenableBuilder(
-                listenable: NeuralVoice.shared,
-                builder: (context, _) {
-                  final v = NeuralVoice.shared.voice;
-                  return Text('${v.name}: ${v.about}\n${_neuralStatus()}');
-                },
-              ),
-              isThreeLine: true,
-              trailing: const Icon(Icons.campaign),
-              onTap: _pickAnnouncer,
-            ),
-            ListTile(
               title: const Text('Voice'),
               subtitle: ListenableBuilder(
                 listenable: NeuralVoice.shared,
-                builder: (context, _) => Text(s.voiceName.isNotEmpty ? s.voiceName : 'The announcer (${NeuralVoice.shared.voice.name})'),
+                builder: (context, _) => Text(s.voiceName.isNotEmpty ? s.voiceName : 'The announcer (neural, built in)'),
               ),
               trailing: const Icon(Icons.record_voice_over),
               onTap: _pickVoice,
@@ -207,39 +194,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     };
   }
 
-  /// Picks which neural voice the announcer uses; a voice not on the phone yet downloads now.
-  Future<void> _pickAnnouncer() async {
-    final n = NeuralVoice.shared;
-    final installed = {for (final v in announcerVoices) v.id: await n.installed(v)};
-    if (!mounted) return;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const ListTile(title: Text('Who announces the moves')),
-            for (final v in announcerVoices)
-              ListTile(
-                leading: Icon(v.id == n.voice.id ? Icons.radio_button_checked : Icons.radio_button_unchecked),
-                title: Text(v.name),
-                subtitle: Text('${v.about}\n${installed[v.id]! ? 'On this phone' : 'Downloads ${v.megabytes} MB once'}'),
-                isThreeLine: true,
-                onTap: () => Navigator.pop(context, v.id),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null) return;
-    if (s.voiceName.isNotEmpty) await Voice.shared.useVoice('', ''); // the announcer, not the phone's voice
-    if (mounted) setState(() {});
-    await n.use(picked);
-    if (!mounted || picked != n.voice.id) return;
-    setState(() {});
-    if (n.ready) await Voice.shared.say('Knight takes bishop on E 5. Check.');
-  }
-
   Future<void> _pickVoice() async {
     final voices = await Voice.shared.voices();
     if (!mounted) return;
@@ -251,13 +205,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const ListTile(title: Text('Voice that calls the moves')),
             ListTile(
               leading: const Icon(Icons.auto_awesome),
-              title: Text('The announcer: ${NeuralVoice.shared.voice.name} (neural, built in)'),
+              title: const Text('The announcer (neural, built in)'),
               subtitle: Text(_neuralStatus()),
               trailing: IconButton(
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () async {
                   await Voice.shared.useVoice('', '');
-                  await Voice.shared.say('Knight takes bishop on E 5. Check.');
+                  await Voice.shared.say('Knight takes bishop on E 5. Check!');
                 },
               ),
               onTap: () => Navigator.pop(context, const {'name': '', 'locale': ''}),
@@ -271,7 +225,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(Icons.play_arrow),
                   onPressed: () async {
                     await Voice.shared.useVoice(v['name'] ?? '', v['locale'] ?? '');
-                    await Voice.shared.say('Knight takes bishop on e5. Check.');
+                    await Voice.shared.say('Knight takes bishop on e5. Check!');
                   },
                 ),
                 onTap: () => Navigator.pop(context, v),

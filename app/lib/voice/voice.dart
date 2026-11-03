@@ -146,8 +146,8 @@ class Voice extends ChangeNotifier {
   // ------------------------------------------------------------------ the board's voice
   List<Map<String, String>> _voices = [];
 
-  /// English text-to-speech voices on this device, best first: British voices at the top
-  /// (premium / enhanced / neural ones first), then the rest.
+  /// Text-to-speech voices on this device, best first (neural / premium / enhanced voices
+  /// in the device's language at the top).
   Future<List<Map<String, String>>> voices() async {
     if (_voices.isNotEmpty) return _voices;
     try {
@@ -164,8 +164,7 @@ class Voice extends ChangeNotifier {
     return _voices;
   }
 
-  /// How well a voice suits the castle, from what the platform tells us about it. A British
-  /// voice always wins (the announcer is English), then the most natural-sounding one.
+  /// How natural a voice is likely to sound, from what the platform tells us about it.
   static int voiceScore(Map<String, String> v) {
     final name = (v['name'] ?? '').toLowerCase();
     final id = (v['identifier'] ?? '').toLowerCase();
@@ -178,21 +177,8 @@ class Voice extends ChangeNotifier {
     if (name.contains('network') || v['network_required'] == 'true' || v['network_required'] == '1') s += 30;
     if (quality.contains('very high') || quality == '500') s += 25;
     if (quality.contains('high') || quality == '400') s += 10;
-    final british = locale == 'en-gb' || locale.startsWith('en-gb-') || name.startsWith('en-gb') || id.contains('en-gb');
-    if (british) {
-      s += 250; // above any quality bonus: even a plain British voice beats a premium American one
-      // the well-spoken English voices: Apple's Daniel, Arthur, Oliver, Serena, Kate, Stephanie,
-      // Jamie; Google's en-gb-x-rjs / gbd (male) and gba / gbc / gbg (female)
-      const rp = ['daniel', 'arthur', 'oliver', 'serena', 'kate', 'stephanie', 'jamie', 'malcolm', 'martha'];
-      if (rp.any((n) => name.contains(n) || id.contains(n))) s += 12;
-      final male = (v['gender'] ?? '').toLowerCase() == 'male' ||
-          ['daniel', 'arthur', 'oliver', 'malcolm', 'x-rjs', 'x-gbd'].any((n) => name.contains(n) || id.contains(n));
-      if (male) s += 4; // a man's voice, like the neural announcer
-    } else if (locale.startsWith('en-ie') || locale.startsWith('en-au') || locale.startsWith('en-nz') || locale.startsWith('en-za')) {
-      s += 20; // closer to British than American
-    } else if (locale == 'en-us') {
-      s += 6;
-    }
+    if (locale == 'en-us') s += 6;
+    if (locale == 'en-gb') s += 8; // a British voice suits the castle
     if (id.contains('compact') || name.contains('local') && name.contains('x-')) s -= 5;
     if (id.contains('eloquence') || id.contains('speech.synthesis.voice.')) s -= 20; // novelty voices
     return s;
@@ -208,15 +194,9 @@ class Voice extends ChangeNotifier {
       }
     }
     v ??= list.isEmpty ? null : list.first;
-    if (v == null) {
-      // the platform didn't list its voices: at least ask for British English
-      try {
-        await _tts.setLanguage('en-GB');
-      } catch (_) {}
-      return;
-    }
+    if (v == null) return;
     try {
-      await _tts.setVoice({'name': v['name']!, 'locale': v['locale'] ?? 'en-GB'});
+      await _tts.setVoice({'name': v['name']!, 'locale': v['locale'] ?? 'en-US'});
     } catch (_) {}
   }
 

@@ -52,7 +52,6 @@ class Settings extends ChangeNotifier {
   bool alwaysListen = false; // the mic stays on for the whole game
   String voiceName = ''; // chosen text-to-speech voice ('' = the best one on the device)
   String voiceLocale = '';
-  String announcer = 'alan'; // the board's neural voice (see announcerVoices in neural_voice.dart)
   List<SavedRoom> rooms = [];
   String? savedComputerGame; // json: {fen, moves, color, level}
 
@@ -85,7 +84,6 @@ class Settings extends ChangeNotifier {
     alwaysListen = _p.getBool('alwaysListen') ?? false;
     voiceName = _p.getString('voiceName') ?? '';
     voiceLocale = _p.getString('voiceLocale') ?? '';
-    announcer = _p.getString('announcer2') ?? 'alan'; // (a new key: everyone starts back on Alan)
     savedComputerGame = _p.getString('computerGame');
     try {
       rooms = [for (final r in jsonDecode(_p.getString('rooms') ?? '[]') as List) SavedRoom.fromJson(r as Map<String, dynamic>)];
@@ -117,7 +115,6 @@ class Settings extends ChangeNotifier {
     await _p.setBool('alwaysListen', alwaysListen);
     await _p.setString('voiceName', voiceName);
     await _p.setString('voiceLocale', voiceLocale);
-    await _p.setString('announcer2', announcer);
     await _p.setString('rooms', jsonEncode([for (final r in rooms) r.toJson()]));
     if (savedComputerGame == null) {
       await _p.remove('computerGame');
