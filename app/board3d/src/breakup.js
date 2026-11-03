@@ -10,6 +10,13 @@
 //            goes over backwards, and the legs fold under it.
 //   cleave - split down the middle: the halves fall away from each other and break up as they land.
 //   smash  - (no blade: a mate, a test) the figure topples whole and breaks up where it lands.
+//   burst  - a blow or a spell that blasts it apart where it stands (or lies): every piece flies
+//            off at once, away from the point of impact.
+//   crumble- petrified, crushed or bound in chains: it falls in on itself, in many small pieces
+//            (cut ahead along a few random planes), in a heap where it stood.
+//   shatter- frozen solid: it bursts into many pieces like a dropped ice sculpture.
+//   crush  - flattened (a tower toppled onto it, a horse trampling it): the pieces splay out
+//            low across the board.
 //
 // The pieces are rigid bodies (rubble.js) glued into compounds and let go one by one; what
 // still stands is the statue itself, its skeleton posed until it gives way.
@@ -81,6 +88,12 @@ export function prepareBreakup(rubble, fig, cut) {
   } else if (kind === 'cleave') {
     meshes = subtreeMeshes(fig.model).filter((m) => !m.userData.decal);
     planes = [[cut.normal.clone(), cut.point.clone()]];
+  } else if (kind === 'crumble' || kind === 'shatter') {
+    // the torso in four or eight, along random planes through its middle
+    for (const n of ['chest', 'spine', 'tower']) if (J[n]) meshes.push(...ownMeshes(J[n]));
+    const c = fig.group.position.clone().setY((fig.height || 1) * 0.5);
+    const a = Math.random() * Math.PI;
+    planes = [[new THREE.Vector3(Math.cos(a), rnd(-0.3, 0.3), Math.sin(a)).normalize(), c.clone()], [new THREE.Vector3(rnd(-0.3, 0.3), 1, rnd(-0.3, 0.3)).normalize(), c.clone().setY(c.y * rnd(0.6, 1.2))]];
   }
   // the rook's keep crumbles when it goes: cracked ahead across and down through
   let towerTask = null;
@@ -114,7 +127,7 @@ export function prepareBreakup(rubble, fig, cut) {
       return out;
     })());
   }
-  return { kind, task: meshes.length ? rubble.task(cutAll(meshes, planes)) : null, towerTask, crackTask };
+  return { kind, task: meshes.length && planes.length ? rubble.task(cutAll(meshes, planes)) : null, towerTask, crackTask };
 }
 
 /**
@@ -140,7 +153,8 @@ export class Breakup {
     this.swing.normalize();
     fig.group.updateMatrixWorld(true);
     this.events = [];
-    this[this.kind === 'slice' ? 'slice' : this.kind === 'stab' ? 'stab' : this.kind === 'cleave' ? 'cleave' : 'smash']();
+    const ways = ['slice', 'stab', 'cleave', 'burst', 'crumble', 'shatter', 'crush'];
+    this[ways.includes(this.kind) ? this.kind : 'smash']();
   }
 
   at(t, fn) {
@@ -375,6 +389,69 @@ export class Breakup {
     }
     this.fig.group.parent?.remove(this.fig.group);
     this.endAt = 0.9;
+  }
+
+  // ---- every piece of it at once, cut pieces included: { seg: [items] } (what was cut ahead
+  // replaces its mesh)
+  pieces() {
+    const out = [];
+    const cutMeshes = new Set();
+    for (const r of [...(this.res || []), ...(this.towerRes || [])]) {
+      if (!r.mesh.visible) continue;
+      cutMeshes.add(r.mesh);
+      const [s] = segmentOf(r.mesh, this.fig.model);
+      for (const p of r.parts) out.push([s, [{ geo: p.g, m: r.mesh.matrixWorld.clone() }], r.mesh.parent]);
+      decalsOf(r.mesh, null);
+      r.mesh.visible = false;
+    }
+    for (const [s, e] of Object.entries(this.segments())) {
+      const ms = e.meshes.filter((m) => !cutMeshes.has(m) && m.visible);
+      if (ms.length) out.push([s, ms, e.frame]);
+    }
+    return out;
+  }
+  // all of it flies apart from [P]: speed, how much up, how much spin, spread along the ground
+  scatter(speed, up, spin, flat = 0) {
+    const { rubble } = this.ctx;
+    this.brk = ++rubble.breaks;
+    const P = (this.cut?.point || this.fig.group.position.clone().setY((this.fig.height || 1) * 0.55)).clone();
+    for (const [s, items, frame] of this.pieces()) {
+      const b = this.body(items, frame, { round: s === 'head' });
+      if (!b) continue;
+      const out = b.p.clone().sub(P);
+      out.y *= 1 - flat;
+      if (out.lengthSq() < 1e-6) out.set(rnd(-1, 1), 0.3, rnd(-1, 1));
+      out.normalize();
+      const sp = speed * Math.min(1.5, this.power) * rnd(0.6, 1.25);
+      b.v.copy(out).multiplyScalar(sp).addScaledVector(this.swing, speed * 0.35 * this.power);
+      b.v.y += up * rnd(0.5, 1.2) * (1 - flat);
+      b.w.set(rnd(-spin, spin), rnd(-spin, spin), rnd(-spin, spin));
+      // what it stood on (the robes, the keep, the horse) goes over too: tipped along the blow
+      if (LOWER.includes(s) || s === 'pelvis') {
+        b.w.copy(UP.clone().cross(this.swing)).multiplyScalar(rnd(2.2, 3.2) * (1 - flat * 0.3));
+        b.v.copy(this.swing).multiplyScalar(0.5 + 0.3 * speed).setY(0.25);
+      }
+      b.sleep = false;
+    }
+    this.ctx.dust?.(P.clone().setY(Math.max(0.05, P.y * 0.5)), 0.35, 7, this.fig.isWhite);
+    rubble.chips(P, this.swing.clone().setY(0.3), this.mat, 16, this.power, this.ply);
+    this.standing = null;
+    this.fig.group.parent?.remove(this.fig.group);
+    this.endAt = 0.9;
+  }
+  burst() {
+    this.scatter(0.95, 0.75, 6);
+  }
+  crumble() {
+    this.scatter(0.35, 0.15, 2.5);
+    const P = this.fig.group.position;
+    for (let i = 0; i < 3; i++) this.ctx.rubble.chips(P.clone().setY(0.2 + i * 0.25), new THREE.Vector3(0, -0.2, 0), this.mat, 10, 0.35, this.ply);
+  }
+  shatter() {
+    this.scatter(1.35, 0.95, 8);
+  }
+  crush() {
+    this.scatter(1.0, 0.2, 4, 0.85);
   }
 
   // what's left standing gives way: its pieces fall on as they were moving
