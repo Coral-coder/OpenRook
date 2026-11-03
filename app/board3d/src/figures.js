@@ -12,7 +12,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { buildStatue, playMove, MOVES } from './statues.js';
 // the statues' sword-fighting: their move sets, timing, and aiming blows and parries
-export { arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow } from './statues.js';
+export { arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow, knock, rebound } from './statues.js';
 import MODELS from './models_data.gen.js';
 import { stoneMaterial } from './stone.js';
 

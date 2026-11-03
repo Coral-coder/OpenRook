@@ -8,13 +8,15 @@
 // Bridge: the app calls window.openrook.receive(json). This page posts JSON strings back
 // through window.OpenRook.postMessage (WebView channel) or window.parent.postMessage (web).
 import * as THREE from 'three';
-import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow } from './figures.js';
+import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow, knock, rebound } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
 import { setupPost } from './post.js';
 import { stoneTime } from './stone.js';
 import { granite } from './granite.js';
 import { Rubble } from './rubble.js';
 import { Particles, chime, clang, crash, glowSprite, grind, setSound, step, unlockAudio, whoosh, zap } from './battle.js';
+import { clap as clapSound, flashPop, wormHum } from './battle.js';
+import { WORM, Wormhole, castTrail, clapBurst, plantStaff, prepareWormhole } from './wormhole.js';
 
 // ------------------------------------------------------------------ bridge
 function send(msg) {
@@ -276,6 +278,7 @@ function releaseShot() {
 let shotsSuppressed = false;
 
 let shake = 0;
+const camKick = new THREE.Vector3(); // a blow's jolt to the camera, along the swing
 const _v = new THREE.Vector3();
 const topDown = () => state.view === 'top';
 function playerView() {
@@ -301,6 +304,8 @@ function updateCamera(dt) {
     camera.position.y += (Math.random() - 0.5) * shake;
     shake = Math.max(0, shake - dt * 0.9);
   }
+  camera.position.add(camKick);
+  camKick.multiplyScalar(Math.exp(-dt * 9));
   camera.lookAt(look);
   // the fog hangs around the edges of the hall, never over the board itself
   if (scene.fog) scene.fog.density = 0.22 / Math.max(3, camera.position.distanceTo(look));
@@ -758,13 +763,37 @@ function duelShot(a) {
   }
   const close = a.slowed ? 0.92 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (3.1 / Math.sqrt(aspect)) * close + spread * 0.9 + Math.max(0, a.approach.distanceTo(a.capPos) - 0.9) * 1.6; // both fighters fully in frame, even on a tall phone
+  // far enough that both fighters, their swings and the victim's pieces stay in frame
+  const halfW = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  const fit = (a.approach.distanceTo(a.capPos) / 2 + 0.85) / Math.tan(halfW);
+  let dist = Math.max((3.1 / Math.sqrt(aspect)) * close, fit) + spread * 0.9;
+  const closeUp = a.slowed && (!a.killT || a.t - a.killT < 0.7);
+  if (closeUp) {
+    // the killing blow: in close on the victim, until the pieces scatter
+    mid.copy(a.capPos).lerp(a.approach, 0.2);
+    dist = 2.7 / Math.sqrt(aspect);
+  } // both fighters fully in frame, even on a tall phone
   if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
   // a slow dolly around the fight, never swinging far from the clear side
   const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
   const off = a.angle.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
-  shot.pos.copy(mid).add(off).setY(a.angle.h * close + spread * 0.5);
+  shot.pos.copy(mid).add(off).setY((closeUp ? 1.3 : a.angle.h * close) + spread * 0.5);
   shot.target.copy(mid).setY(0.6 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
+  if (a.wormUp) {
+    // the queen's wormhole hangs over the victim: back off a little, drop the eye and look up to it
+    const toHole = a.capPos.clone().sub(mid).setY(0).multiplyScalar(0.35 * a.wormUp);
+    shot.pos.addScaledVector(off, (1.1 * a.wormUp) / dist).add(toHole);
+    shot.pos.y += (1.35 - shot.pos.y) * 0.5 * a.wormUp;
+    shot.target.add(toHole).y += 0.6 * a.wormUp;
+  }
+  // moving in close for the kill and back out again: a quick glide, not a cut
+  if (a.camPos) {
+    shot.pos.copy(a.camPos.lerp(shot.pos, 0.14));
+    shot.target.copy(a.camLook.lerp(shot.target, 0.14));
+  } else {
+    a.camPos = shot.pos.clone();
+    a.camLook = shot.target.clone();
+  }
   shot.want = 1;
 }
 
@@ -779,6 +808,7 @@ function followShot(p) {
 
 // ------------------------------------------------------------------ effects
 const particles = new Particles(scene);
+const wormLight = prepareWormhole(scene);
 const fx = [];
 
 function launchBolt(from, to, color) {
@@ -908,14 +938,23 @@ function kill(p, style, from, power = 1, blow = null) {
     const swing = blow ? blow.dir.clone() : away.clone();
     swing.y = Math.max(-0.45, Math.min(0.3, swing.y));
     swing.normalize();
-    rubble.chips(hit, swing, fig.materials[0], 30, power, state.ply);
+    const cut = blow && blow.kind ? blow : null;
+    if (cut?.kind === 'slice' || cut?.kind === 'cleave') {
+      // chips spray from the line of the cut
+      const along = cut.swing || swing;
+      for (let i = -3; i <= 3; i++) rubble.chips(cut.point.clone().addScaledVector(along, i * 0.05), along.clone().addScaledVector(cut.normal, 0.3), fig.materials[0], 4, power, state.ply);
+    } else if (cut?.kind === 'stab') {
+      // ... or burst out of the far side along the thrust
+      rubble.chips(hit.clone().addScaledVector(cut.axis, 0.18), cut.axis, fig.materials[0], 26, power * 1.4, state.ply);
+      rubble.chips(hit, cut.axis.clone().negate().setY(0.4), fig.materials[0], 8, power * 0.6, state.ply);
+    } else rubble.chips(hit, swing, fig.materials[0], 30, power, state.ply);
     const parts = [];
     fig.group.traverse((o) => {
       if (o.isMesh) parts.push(o);
     });
     setRot(fig, 0.35);
     fig.group.updateMatrixWorld(true);
-    rubble.breakApart(parts, hit, swing, power, state.ply);
+    rubble.breakApart(parts, cut && cut.kind !== 'stab' ? cut.point : hit, swing, power, state.ply, cut ? { kind: cut.kind, normal: cut.normal, point: cut.point, axis: cut.axis, heavy: cut.heavy, job: cut.job } : {});
     scene.remove(g);
     for (let i = 0; i < 18; i++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dustTex, color: fig.isWhite ? 0xcfc8ba : 0x55555a, transparent: true, opacity: 0.55, depthWrite: false }));
@@ -1120,7 +1159,9 @@ function planDuel(a, walkTime) {
   a.approach = a.capPos.clone().addScaledVector(a.dir, -reach);
   a.phases.push({ name: 'walk', d: walkTime, a: a.from, b: a.approach });
   a.phases.push({ name: 'square', d: 0.3 }); // on guard, eye to eye
-  const n = Math.random() < 0.45 ? 2 : 3;
+  // the queen and a pawn: most often she claps up a wormhole for it (one blow first, to keep it short)
+  const worm = A.fig.type === QUEEN && V.fig.type === PAWN && (window.__forceFin ? window.__forceFin === 'clap' : Math.random() < 0.7);
+  const n = worm ? 1 : Math.random() < 0.45 ? 2 : 3;
   let lastA = null, lastV = null, total = 0;
   for (let i = 0; i < n; i++) {
     const att = i % 2 === 0; // the attacker opens, the victim answers
@@ -1129,18 +1170,25 @@ function planDuel(a, walkTime) {
     const info = moveInfo(fig, move);
     const defFig = att ? V.fig : A.fig;
     const r = Math.random();
-    const react = r < 0.2 ? (Math.random() < 0.5 ? 'dodgeL' : 'dodgeR') : info.heavy && r < 0.65 ? (info.line === 'high' ? 'staggerHigh' : 'stagger') : info.line === 'high' ? 'parryHigh' : 'parry';
+    const react = window.__forceReact ? window.__forceReact : r < 0.2 ? (Math.random() < 0.5 ? 'dodgeL' : 'dodgeR') : info.heavy && r < 0.65 ? (info.line === 'high' ? 'staggerHigh' : 'stagger') : info.line === 'high' ? 'parryHigh' : 'parry';
     // the next blow comes as this one recovers
     const d = info.d * (react.startsWith('stagger') ? 0.98 : 0.84);
     total += d;
     a.phases.push({ name: 'blow', d, who: att ? 'A' : 'V', move, info, react, shield: !!defFig.shieldAt && !react.startsWith('dodge') });
     if (total > 2.9) break;
   }
-  const fin = pick(armA.finishers);
-  const fi = moveInfo(A.fig, fin);
-  const killAt = fi.hits[fi.hits.length - 1] * fi.d;
-  a.phases.push({ name: 'kill', d: killAt + 0.32, move: fin, info: fi, killAt });
-  a.phases.push({ name: 'wait', d: 1.05 });
+  if (worm) {
+    // (see stepWormhole: the wormhole flashes WORM.flash after her cast, then she takes her staff back)
+    const fi = moveInfo(A.fig, 'clap');
+    a.phases.push({ name: 'kill', wormhole: true, d: fi.hits[2] * fi.d + WORM.flash + 0.5, move: 'clap', info: fi });
+    a.phases.push({ name: 'wait', d: 0.45 });
+  } else {
+    const fin = armA.finishers.includes(window.__forceFin) ? window.__forceFin : pick(armA.finishers); // (__forceFin: for testing)
+    const fi = moveInfo(A.fig, fin);
+    const killAt = fi.hits[fi.hits.length - 1] * fi.d;
+    a.phases.push({ name: 'kill', d: killAt + 0.32, move: fin, info: fi, killAt });
+    a.phases.push({ name: 'wait', d: 1.05 });
+  }
   a.phases.push({ name: 'walk', d: 0.7, a: null, b: a.to, settle: true, fromHere: true });
   a.phases.push({ name: 'turnback', d: 0.35 });
 }
@@ -1208,6 +1256,17 @@ function sparksAt(at, push, defender, heavy) {
   shake = Math.max(shake, heavy ? 0.06 : 0.035);
 }
 
+// A parried blow still carries its weight: the defender is knocked back (pedestal skidding and
+// rocking, body whipping, head snapping) and settles; the striker's blade rebounds off the guard
+// the way it came; a glancing edge knocks a flake of stone off the defender; the camera jolts.
+function blowLands(striker, defender, at, push, power) {
+  knock(defender.fig, push, power);
+  knock(striker.fig, push.clone().negate(), power * 0.25);
+  rebound(striker.fig, 0.45 + 0.2 * Math.random());
+  if (power > 1 || Math.random() < 0.5) rubble.flake(at, push.clone().setY(0.2), defender.fig.materials[0], 0.025 + 0.025 * Math.random() * power, state.ply);
+  camKick.addScaledVector(push, 0.05 * power).add(new THREE.Vector3(0, -0.025 * power, 0));
+}
+
 function stepBlow(a, phase, idx, tt, dt, once) {
   const striker = phase.who === 'A' ? a.mover : a.cap;
   const defender = phase.who === 'A' ? a.cap : a.mover;
@@ -1260,10 +1319,36 @@ function stepBlow(a, phase, idx, tt, dt, once) {
     const push = defender.fig.group.position.clone().sub(striker.fig.group.position).setY(0).normalize();
     const heavy = phase.react.startsWith('stagger');
     sparksAt(c.at, push, defender, heavy);
-    recoil(striker, push.clone().negate(), 0.03);
-    a.hitStop = 0.07; // the blades bite: a beat of stillness
+    blowLands(striker, defender, c.at, push, heavy ? 1.15 : 0.6);
+    a.hitStop = heavy ? 0.1 : 0.06; // the blades bite: a beat of stillness
     window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, gap: +c.gap.toFixed(3), aimErr: +plan.err.toFixed(3), defErr: phase.defErr !== undefined ? +phase.defErr.toFixed(3) : null, shift: +plan.shift.toFixed(2) });
   }
+}
+
+// The killing blow's break, worked out as the blow is coming (and the stone cut ahead of time,
+// a little each frame): a slice is cut along the blade's real path through the body, a thrust
+// cracks out radially from the point, a cleave splits the statue top to bottom.
+function prepareBreak(a, phase, v) {
+  const mover = a.mover, g = mover.fig.group, { info, move } = phase;
+  const kT = phase.killAt / info.d;
+  g.position.copy(a.approach).addScaledVector(phase.plan.dir, phase.plan.shift);
+  const p1 = probeMove(mover.fig, 'S_' + move, kT), p0 = probeMove(mover.fig, 'S_' + move, Math.max(0, kT - 0.04 / info.d));
+  g.position.copy(a.approach);
+  const blade = p1.tip.clone().sub(p1.grip).normalize(), swing = p1.tip.clone().sub(p0.tip);
+  if (swing.lengthSq() < 1e-6) swing.copy(a.dir);
+  swing.normalize();
+  const kind = info.cut || 'smash';
+  let normal = blade.clone().cross(swing);
+  if (kind === 'cleave') normal.y = 0;
+  if (normal.lengthSq() < 0.04) normal = kind === 'cleave' ? new THREE.Vector3(a.dir.z, 0, -a.dir.x) : new THREE.Vector3(0, 1, 0);
+  normal.normalize();
+  if (normal.y < 0) normal.negate();
+  const heavy = mover.fig.type === KING || mover.fig.type === ROOK || mover.fig.type === KNIGHT;
+  const meshes = [];
+  v.fig.group.traverse((o) => o.isMesh && meshes.push(o));
+  v.fig.group.updateMatrixWorld(true);
+  phase.cut = { kind, normal, point: p1.tip.clone(), axis: kind === 'stab' ? blade : null, swing, heavy };
+  phase.cut.job = rubble.prepare(meshes, phase.cut);
 }
 
 function stepKill(a, phase, tt, dt, once) {
@@ -1295,6 +1380,7 @@ function stepKill(a, phase, tt, dt, once) {
     phase.plan = aimBlow(a, mover, v, 'S_' + move, phase.killAt / info.d, target, 0.48);
     phase.target = target;
     if (info.cast) phase.plan.tip = target.clone();
+    else prepareBreak(a, phase, v);
   }
   const plan = phase.plan;
   const killAt = phase.killAt;
@@ -1319,6 +1405,7 @@ function stepKill(a, phase, tt, dt, once) {
       const sw = weaponNow(mover.fig), dw = weaponNow(cap.fig);
       const c = cap.fig.shieldAt ? contactPoint(sw.grip, sw.tip, dw.shield, dw.shield) : contactPoint(sw.grip, sw.tip, dw.butt.distanceTo(dw.grip) > 0.15 ? dw.butt : dw.grip, dw.tip);
       sparksAt(c.at, a.dir, cap, true);
+      blowLands(mover, cap, c.at, a.dir, 0.9);
       a.hitStop = 0.08;
       whoosh(0.5);
     }
@@ -1337,6 +1424,8 @@ function stepKill(a, phase, tt, dt, once) {
   if (cap && tt >= killAt && once('hit')) {
     phase.hitPt = pt;
     act(cap, 'reel', { fade: 0.03 });
+    knock(cap.fig, a.dir, 0.7);
+    camKick.addScaledVector(a.dir, 0.08).add(new THREE.Vector3(0, -0.05, 0));
     setRot(cap.fig, 0.15);
     a.hitStop = 0.14;
     a.stopMoverOnly = true; // the weapon bites and holds; the victim reels from it
@@ -1348,23 +1437,99 @@ function stepKill(a, phase, tt, dt, once) {
     shake = 0.08;
     crash(0.35);
     particles.burst(at, { color: 0xfff0c0, n: 18, speed: 2, up: 0.6, size: 0.06, life: 0.4 });
-    if (mover.fig.type === KNIGHT || mover.fig.type === ROOK) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
+    if ((phase.cut?.heavy && phase.cut.kind === 'cleave') || mover.fig.type === KNIGHT || mover.fig.type === ROOK) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
   }
   if (cap && phase.hitPt !== undefined) setRot(cap.fig, 0.15 + clamp01((pt - phase.hitPt) / 0.14) * 0.25);
   // ... and cracks apart
   if (cap && phase.hitPt !== undefined && pt >= phase.hitPt + 0.14 && once('kill')) {
     const swingDir = phase.swing && phase.swing.lengthSq() > 1e-6 ? phase.swing.clone() : a.dir.clone();
     swingDir.normalize().lerp(a.dir.clone().setY(swingDir.y), 0.35).normalize();
-    const blow = { at: tip.clone(), dir: swingDir };
+    const blow = { at: tip.clone(), dir: swingDir, ...(phase.cut || {}) };
     const vc = cap.fig.group.position;
     window.__duelLog?.push({ kill: move, by: mover.fig.type, victim: cap.fig.type, tipToBody: +Math.hypot(tip.x - vc.x, tip.z - vc.z).toFixed(3), tipY: +tip.y.toFixed(2), victimH: +cap.fig.height.toFixed(2), aimErr: +plan.err.toFixed(3), shift: +plan.shift.toFixed(2) });
     send({ type: 'impact', heavy: true });
     const weight = { [PAWN]: 0.9, [KNIGHT]: 1.2, [BISHOP]: 1.0, [ROOK]: 1.5, [QUEEN]: 1.3, [KING]: 1.4 }[mover.fig.type] || 1;
     a.death = kill(cap, a.fin.style, g.position.clone(), weight * (cap.fig.type >= ROOK ? 1.1 : 1), blow);
+    a.killT = a.t;
     pieces.delete(a.job.m.cap);
     a.cap = null;
   }
   if (tt >= killAt - 0.1) a.prevTip = tip;
+}
+
+// The queen's wormhole, her finisher against a pawn (the effect is in wormhole.js): she plants
+// her staff, claps twice over her head and sweeps her arm down at the pawn; a wormhole opens over
+// it, draws it up and snaps shut in a flash of light. The pawn leaves the board as kill() takes a
+// victim off it, but leaves no rubble behind.
+const handOf = (fig, side) => fig.J['wr' + side].localToWorld(new THREE.Vector3(0, -0.045, 0));
+function stepWormhole(a, phase, tt, dt, once) {
+  const mover = a.mover, fig = mover.fig;
+  const { info, move } = phase;
+  const white = fig.isWhite, tint = white ? 0x9fd8ff : 0xc77dff;
+  if (once('fin')) {
+    act(mover, move, { fade: 0.14 });
+    fig.group.position.copy(a.approach);
+    if (a.cap) a.cap.fig.group.position.copy(a.capPos);
+  }
+  const ct = fig.move.name === move ? fig.move.t : phase.d; // the clip's own clock
+  const castT = info.hits[2] * info.d;
+  // she lets go of the staff: it stands on her pedestal until she takes it back
+  if (ct >= info.plant && once('plant')) fx.push(plantStaff(fig, move, info.grab));
+  // two claps: the hands meet in a ring of light
+  for (const k of [0, 1]) {
+    if (ct >= info.hits[k] * info.d && once('clap' + k)) {
+      fig.group.updateMatrixWorld(true);
+      const at = handOf(fig, 'L').lerp(handOf(fig, 'R'), 0.5);
+      fx.push(clapBurst(scene, particles, at, white, camera));
+      clapSound(0.6);
+      flash.position.copy(at);
+      flash.color.set(tint);
+      flash.intensity = 7;
+      shake = Math.max(shake, 0.015);
+      if (k === 0 && a.cap) act(a.cap, 'guard', { loop: true, fade: 0.2 }); // the pawn looks up, uneasy
+    }
+  }
+  // the cast: a streak of light from her hand up into the air over the pawn, where it opens
+  if (ct >= castT - 0.12 && once('cast')) {
+    fig.group.updateMatrixWorld(true);
+    a.worm = new Wormhole(scene, particles, wormLight, a.capPos, a.cap ? a.cap.fig : null, white);
+    a.worm.t = -0.12;
+    fx.push(a.worm);
+    fx.push(castTrail(scene, particles, handOf(fig, 'L'), a.worm.center, white));
+    zap(0.3);
+    whoosh(0.6);
+    wormHum(WORM.flash + 0.25, 0.3);
+  }
+  const w = a.worm;
+  if (!w) {
+    a.wormUp = 0.5 * clamp01(ct / 0.5); // up to her hands for the claps
+    return;
+  }
+  // the camera looks up to it, and back down once it is gone
+  a.wormUp = Math.min(0.5 + 0.5 * clamp01((w.t + 0.12) / 0.45), 1 - 0.6 * clamp01((w.t - WORM.flash - 0.15) / 0.4));
+  if (a.cap && w.t >= 0.08 && once('cower')) act(a.cap, 'parryHigh', { fade: 0.15 });
+  if (a.cap && w.t >= WORM.lift && once('lifted')) act(a.cap, 'reel', { fade: 0.1 }); // torn off its square, flailing
+  if (w.t >= WORM.gone && once('gone')) {
+    // swallowed: off the board, as kill() takes a victim off it
+    const cap = a.cap;
+    if (cap) {
+      scene.remove(cap.fig.group);
+      if (pieces.get(a.job.m.cap) === cap) pieces.delete(a.job.m.cap);
+      a.cap = null;
+    }
+  }
+  if (w.t >= WORM.flash - 0.14 && once('slow')) {
+    a.slowed = true;
+    slowLeft = 0.8; // slow motion as it snaps shut
+  }
+  if (w.t >= WORM.flash && once('flash')) {
+    flashPop(0.7);
+    flash.position.copy(w.center);
+    flash.color.set(white ? 0xe6f4ff : 0xf6e6ff);
+    flash.intensity = 18;
+    shake = Math.max(shake, 0.11);
+    send({ type: 'impact', heavy: true });
+  }
 }
 
 function startMove(job) {
@@ -1513,7 +1678,8 @@ function stepMove(a, dt) {
         stepBlow(a, phase, idx, tt, dt, once);
         break;
       case 'kill':
-        stepKill(a, phase, tt, dt, once);
+        if (phase.wormhole) stepWormhole(a, phase, tt, dt, once);
+        else stepKill(a, phase, tt, dt, once);
         break;
       case 'clash': {
         // one side strikes; the other parries (sparks and a clang) or dodges aside
@@ -1765,6 +1931,8 @@ function tick(realDt) {
   updateRecoils(dt);
   rubble.update(dt, state.ply);
   window.__physMs = rubble.ms;
+  window.__physPeak = Math.max(window.__physPeak || 0, rubble.ms);
+  window.__prepPeak = Math.max(window.__prepPeak || 0, rubble.prepMs || 0);
   window.__rubble = rubble;
   window.__physAwake = rubble.awake;
   window.__physBodies = rubble.bodies.length;

@@ -194,6 +194,33 @@ function twoHanded() {
     [0.82, two(-1.6, 0.0, -0.1, -1.1, { spine: [0.4, 0, 0], chest: [0.12, 0, 0], head: [-0.15, 0, 0], $hips: [-0.11, 0.07], $fL: [0, 0, 0.12], $fR: [0, 0, -0.06], $root: [0, 0, 0.13, 0.06, 0, 0] })],
     [1.3, guard],
   ] };
+  // the queen's spell for a pawn: the staff planted upright at her right side (main.js lets go
+  // of it at `plant` and takes it back at `grab`), two claps high over her head, then the left
+  // arm swept down at the foe; she raises her hand as the wormhole draws it up, and shies from
+  // the flash. hits: the two claps and the cast.
+  {
+    const plant = { shR: [-0.3, 0, -0.42], elR: [-1.25, 0, 0], wrR: [1.55, 0, 0.42], shL: [-0.25, 0, 0.14], elL: [-0.55, 0, 0], wrL: [0.2, 0, 0], spine: [0.04, -0.12, 0], head: [0.06, 0.2, 0], $hips: [-0.04, 0], $fL: [0, 0, 0.04], $fR: [0, 0, -0.04] };
+    const high = (sp, el, x = {}) => ({ ...plant, shL: [-2.78, 0, sp], shR: [-2.78, 0, -sp], elL: [el, 0, 0], elR: [el, 0, 0], wrL: [0.05, 0, 0], wrR: [0.05, 0, 0], spine: [-0.1, 0, 0], chest: [-0.05, 0, 0], head: [-0.38, 0, 0], $hips: [-0.01, 0], $fL: [0, 0, 0.04], $fR: [0, 0, -0.04], ...x });
+    const lift = (sx, x = {}) => ({ ...plant, shL: [sx, 0, -0.06], elL: [-0.15, 0, 0], wrL: [-0.45, 0, 0], shR: [-0.45, 0, -0.55], elR: [-0.7, 0, 0], wrR: [0.3, 0, 0], spine: [0.12, -0.1, 0], chest: [0.04, 0, 0], head: [-0.4, -0.05, 0], $hips: [-0.08, 0.04], $fL: [0, 0, 0.1], $fR: [0, 0, -0.05], $root: [0, 0, 0.06, 0.02, 0, 0], ...x });
+    M.clap = { line: 'high', cast: true, hits: [0.6, 0.82, 1.18], plant: 0.3, grab: 3.12, keys: [
+      [0, guard],
+      [0.3, plant, 'h'],
+      [0.5, high(0.5, -0.85, { $root: [0, 0.01, 0, -0.02, 0, 0] })],
+      [0.6, high(-0.3, -0.32, { $root: [0, 0.02, 0, -0.03, 0, 0] })],
+      [0.71, high(0.42, -0.8, { $root: [0, 0.01, 0, -0.02, 0, 0] })],
+      [0.82, high(-0.3, -0.32, { $root: [0, 0.025, 0, -0.03, 0, 0] })],
+      [0.95, high(-0.3, -0.3, { spine: [-0.14, 0, 0], head: [-0.45, 0, 0], $root: [0, 0.03, 0, -0.04, 0, 0] }), 'h'],
+      [1.06, lift(-3.05, { shR: [-0.5, 0, -0.5], spine: [-0.16, 0.2, 0], chest: [-0.06, 0.1, 0], head: [-0.3, -0.15, 0], wrL: [0.3, 0, 0], $hips: [-0.02, -0.02], $root: [0, 0.02, -0.03, -0.04, 0.1, 0] }), 'h'],
+      [1.18, lift(-1.5, { wrL: [0.15, 0, 0], spine: [0.34, -0.2, 0], chest: [0.1, -0.05, 0], head: [-0.2, 0.05, 0], $hips: [-0.1, 0.06], $fL: [0, 0, 0.14], $root: [0, 0, 0.1, 0.05, -0.12, 0] })],
+      [1.4, lift(-1.6, { wrL: [-0.1, 0, 0], spine: [0.3, -0.18, 0], head: [-0.3, 0.05, 0], $root: [0, 0, 0.1, 0.04, -0.1, 0] }), 'h'],
+      [2.55, lift(-2.25, { head: [-0.55, 0.05, 0], spine: [0.05, -0.15, 0], $root: [0, 0.01, 0.07, -0.01, -0.08, 0] })],
+      [2.72, lift(-2.3, { head: [-0.6, 0.05, 0], spine: [0.0, -0.15, 0], $root: [0, 0.01, 0.07, -0.02, -0.08, 0] }), 'h'],
+      [2.86, { ...lift(-1.9, { shL: [-1.9, 0, 0.45], elL: [-0.9, 0, 0], spine: [-0.12, 0.15, 0.06], chest: [-0.06, 0.08, 0], head: [0.15, 0.45, 0.1], $hips: [-0.04, -0.03], $root: [0, 0, 0.0, -0.05, 0.05, 0] }) }],
+      [3.02, plant],
+      [3.12, plant, 'h'],
+      [3.45, guard],
+    ] };
+  }
   // guards: blade upright across the body, or held flat over the head
   P.blockMid = two(-1.25, -0.25, -1.15, -3.0, { spine: [0.0, 0.25, 0], head: [-0.05, -0.2, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
   P.blockHigh = { ...two(-2.25, 0.05, -1.05, -4.0, { spine: [-0.12, 0.1, 0], head: [-0.15, 0, 0], $hips: [-0.09, -0.03], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] }), wrR: [-4.0 + 2.25 + 1.05, 0, 1.2], wrL: [-4.0 + 2.25 + 1.05, 0, 1.2] };
@@ -415,9 +442,9 @@ function reactions(P) {
   // the death blow lands: the body jolts back, arms flung, head snapped round
   M.reel = { react: true, hits: [0], keys: [
     [0, g],
-    [0.06, { ...lerpPose(g, P.fling, 0.7), $root: R(-0.06, -0.16, 0.12, 0.06, 0, 0.02), $hips: [-0.04, -0.03] }],
-    [0.18, { ...P.fling, $root: R(-0.11, -0.27, 0.2, 0.1, 0, 0.03), $hips: [-0.02, -0.05], $fL: [0, 0.05, 0.03] }],
-    [0.7, { ...P.fling, $root: R(-0.12, -0.3, 0.22, 0.11, 0, 0.03), $hips: [-0.02, -0.05] }],
+    [0.06, { ...lerpPose(g, P.fling, 0.7), $root: R(-0.04, -0.09, 0.1, 0.05, 0, 0.02), $hips: [-0.04, -0.03] }],
+    [0.18, { ...P.fling, $root: R(-0.07, -0.14, 0.16, 0.08, 0, 0.03), $hips: [-0.02, -0.05], $fL: [0, 0.05, 0.03] }],
+    [0.7, { ...P.fling, $root: R(-0.08, -0.16, 0.18, 0.09, 0, 0.03), $hips: [-0.02, -0.05] }],
   ] };
   return M;
 }
@@ -672,7 +699,7 @@ export function playMove(fig, name, { loop, speed = 1, duration = 0, fade = 0.18
   if (fig.move.name === 'death') return d; // the fallen stay down
   if (fig.move.name === k && c.loop) return d;
   // cross-fade from wherever the body is now (a spin ends a full turn round: that's no turn)
-  fig.from = fig.pose ? { ...fig.pose } : null;
+  fig.from = fig.basePose || fig.pose ? { ...(fig.basePose || fig.pose) } : null;
   if (fig.from?.$root) {
     const r = fig.from.$root.slice();
     r[4] = Math.atan2(Math.sin(r[4] || 0), Math.cos(r[4] || 0));
@@ -687,9 +714,12 @@ export function playMove(fig, name, { loop, speed = 1, duration = 0, fade = 0.18
 export const strikeAt = (name) => clipSet('two')[name.replace(/^S_/, '')]?.at;
 
 /** A move's timing for this figure: duration (s), when its blows land (0..1), and its nature. */
+// how each killing blow breaks the victim: cut through along the blade's path, run through, or
+// split top to bottom
+const CUT = { slash: 'slice', sweep: 'slice', spin: 'slice', whirl: 'slice', double: 'slice', cross: 'slice', thrust: 'stab', lunge: 'stab', cleave: 'cleave', bash: 'cleave', leap: 'cleave' };
 export function moveInfo(fig, name) {
   const c = clipSet(fig.kind)[key(fig, name)];
-  return { d: c.d, at: c.at, hits: c.hits.map((h) => h / c.d), line: c.line || 'mid', heavy: !!c.heavy, cast: !!c.cast };
+  return { d: c.d, at: c.at, hits: c.hits.map((h) => h / c.d), line: c.line || 'mid', heavy: !!c.heavy, cast: !!c.cast, plant: c.plant, grab: c.grab, cut: CUT[key(fig, name)] || 'smash' };
 }
 
 /** The blows this figure throws in an exchange, and its finishing moves. */
@@ -751,11 +781,72 @@ function animate(fig, dt) {
   // cross-fade from the previous move's pose
   fig.blendT = Math.min(1, fig.blendT + dt / (fig.fade || 0.18));
   if (fig.from && fig.blendT < 1) pose = blend(fig.from, pose, smooth(fig.blendT));
+  // how the arms are moving (for a blade rebounding off a parry)
+  if (dt > 0) {
+    fig.armVel = {};
+    for (const n of ARMS) if (pose[n] && fig.basePose?.[n]) fig.armVel[n] = pose[n].map((x, i) => (x - fig.basePose[n][i]) / dt);
+  }
+  fig.basePose = pose;
+  pose = springs(fig, pose, dt);
   fig.pose = pose;
   applyPose(fig, pose);
   if (m.name === 'death') fall(fig, m.t, m.d);
   else fig.body.rotation.set(0, 0, 0);
   return fig.mixer;
+}
+
+// ------------------------------------------------------------------ being hit
+// Blows carry momentum: a struck statue is knocked (its pedestal skids and rocks, the body
+// whips back, the head snaps) by damped springs layered over whatever move it is playing, and
+// a blade that meets another rebounds off it. They settle back on their own.
+const ARMS = ['shL', 'elL', 'wrL', 'shR', 'elR', 'wrR'];
+function springs(fig, pose, dt) {
+  const S = fig.springs;
+  if (!S) return pose;
+  const off = {};
+  let live = false;
+  const h = Math.min(dt, 1 / 30) / 2;
+  for (const [n, s] of Object.entries(S)) {
+    const K = n === '$root' ? 70 : 170, C = n === '$root' ? 11 : 12;
+    let e = 0;
+    for (let k = 0; k < 2; k++) {
+      for (let i = 0; i < s.x.length; i++) {
+        s.v[i] += (-K * s.x[i] - C * s.v[i]) * h;
+        s.x[i] += s.v[i] * h;
+      }
+    }
+    for (let i = 0; i < s.x.length; i++) e += Math.abs(s.x[i]) + Math.abs(s.v[i]) * 0.05;
+    if (e < 1e-4) delete S[n];
+    else {
+      off[n] = s.x.slice();
+      live = true;
+    }
+  }
+  if (!live) fig.springs = null;
+  return add(pose, off);
+}
+function kick(fig, n, v) {
+  fig.springs = fig.springs || {};
+  const s = fig.springs[n] || (fig.springs[n] = { x: v.map(() => 0), v: v.map(() => 0) });
+  for (let i = 0; i < v.length; i++) s.v[i] += v[i];
+}
+/** A blow's momentum knocks the statue: [dir] (world) the way it's pushed, [amount] ~0.3..1.5. */
+export function knock(fig, dir, amount = 1) {
+  const ry = fig.group.rotation.y, c = Math.cos(ry), s = Math.sin(ry);
+  const lx = dir.x * c - dir.z * s, lz = dir.x * s + dir.z * c, a = amount;
+  kick(fig, '$root', [lx * 0.9 * a, 0.12 * a, lz * 0.9 * a, lz * 2.4 * a, (Math.random() - 0.5) * 1.5 * a, -lx * 2.4 * a]);
+  kick(fig, 'spine', [lz * 4 * a, lx * 2 * a, -lx * 3 * a]);
+  kick(fig, 'chest', [lz * 3 * a, 0, -lx * 2 * a]);
+  kick(fig, 'head', [lz * 6 * a, (Math.random() - 0.5) * 4 * a, -lx * 5 * a]);
+  if (fig.J.horse) kick(fig, 'horse', [lz * 2.5 * a, 0, -lx * 1.5 * a]);
+}
+/** The weapon arm bounces back the way it came (a blade meeting a blade). */
+export function rebound(fig, amount = 0.5) {
+  for (const n of ARMS) {
+    const v = fig.armVel?.[n];
+    if (!v) continue;
+    kick(fig, n, v.map((x) => Math.max(-14, Math.min(14, -x * amount))));
+  }
 }
 
 function applyPose(fig, pose) {

@@ -228,3 +228,90 @@ export class Particles {
     }
   }
 }
+
+// ------------------------------------------------------------------ the queen's wormhole
+/** Two stone hands clapped together: a sharp slap with a short ringing tail. */
+export function clap(vol = 0.5) {
+  const c = ctx();
+  if (!c) return;
+  const n = noiseSource(c, 'bandpass', 1300 + Math.random() * 300, 1.2);
+  const t = env(c, n.f, vol, 0.001, 0.07);
+  n.s.start(t);
+  n.s.stop(t + 0.12);
+  const h = noiseSource(c, 'highpass', 4200, 0.7);
+  const t2 = env(c, h.f, vol * 0.35, 0.001, 0.03);
+  h.s.start(t2);
+  h.s.stop(t2 + 0.06);
+  // and a faint magical shimmer
+  const o = c.createOscillator();
+  o.frequency.value = 1760 + Math.random() * 200;
+  const t3 = env(c, o, vol * 0.08, 0.005, 0.35);
+  o.start(t3);
+  o.stop(t3 + 0.45);
+}
+
+/** The wormhole's hum: a low throb and a rushing wind that rise together for `dur` seconds. */
+export function wormHum(dur = 2, vol = 0.35) {
+  const c = ctx();
+  if (!c) return;
+  const t = c.currentTime;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.35);
+  g.gain.setValueAtTime(vol, t + dur * 0.85);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  g.connect(c.destination);
+  // the throb: two detuned saws, rising, through a low filter that opens as it grows
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(220, t);
+  lp.frequency.exponentialRampToValueAtTime(1400, t + dur);
+  lp.Q.value = 3;
+  const tg = c.createGain();
+  tg.gain.value = 0.5;
+  lp.connect(tg);
+  tg.connect(g);
+  const oscs = [];
+  for (const d of [1, 1.013]) {
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(55 * d, t);
+    o.frequency.exponentialRampToValueAtTime(190 * d, t + dur);
+    o.connect(lp);
+    oscs.push(o);
+  }
+  // the wind being drawn in: noise swept upward
+  const w = noiseSource(c, 'bandpass', 300, 2.5);
+  w.f.frequency.setValueAtTime(300, t);
+  w.f.frequency.exponentialRampToValueAtTime(3200, t + dur);
+  w.f.connect(g);
+  w.s.loop = true;
+  for (const s of [...oscs, w.s]) {
+    s.start(t);
+    s.stop(t + dur + 0.05);
+  }
+}
+
+/** The wormhole snapping shut: a bright pop and a deep thump under it. */
+export function flashPop(vol = 0.6) {
+  const c = ctx();
+  if (!c) return;
+  const o = c.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(1500, c.currentTime);
+  o.frequency.exponentialRampToValueAtTime(90, c.currentTime + 0.18);
+  const t = env(c, o, vol * 0.7, 0.002, 0.2);
+  o.start(t);
+  o.stop(t + 0.3);
+  const b = c.createOscillator();
+  b.frequency.setValueAtTime(80, c.currentTime);
+  b.frequency.exponentialRampToValueAtTime(32, c.currentTime + 0.5);
+  const t2 = env(c, b, vol, 0.004, 0.55);
+  b.start(t2);
+  b.stop(t2 + 0.7);
+  const n = noiseSource(c, 'highpass', 2500, 0.7);
+  const t3 = env(c, n.f, vol * 0.5, 0.001, 0.12);
+  n.s.start(t3);
+  n.s.stop(t3 + 0.2);
+  chime(vol * 0.25);
+}
