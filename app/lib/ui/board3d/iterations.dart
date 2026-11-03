@@ -11,7 +11,8 @@ class BoardIteration {
 }
 
 const boardIterations = [
-  BoardIteration('latest', 'Battle scars (newest)', 'Wounds that stay, statues that come apart, melting rubble, the wormhole boom', 'assets/board3d/board3d.html'),
+  BoardIteration('latest', 'Living statues (newest)', 'Still until you pick them up; real swordplay and spells; matte stone that stands out; recorded sounds', 'assets/board3d/board3d.html'),
+  BoardIteration('v6', 'Battle scars', 'Wounds that stay, statues that come apart, melting rubble, the wormhole boom', 'assets/board3d/iterations/v6.html'),
   BoardIteration('v5', 'Swordplay', 'Standing on the board, horizontal sword cuts and stabs', 'assets/board3d/iterations/v5.html'),
   BoardIteration('v4', 'Cinematic duels', 'On plinths: full swings, slice/stab/cleave physics, the queen\'s wormhole', 'assets/board3d/iterations/v4.html'),
   BoardIteration('v3', 'Carved stone', 'Detailed carving, cabin and tower rooms, rubble physics', 'assets/board3d/iterations/v3.html'),
