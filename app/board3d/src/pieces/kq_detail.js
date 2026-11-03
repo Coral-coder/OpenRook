@@ -82,7 +82,7 @@ export function rivets(R, y, n, r, zs = 1, a0 = 0, a1 = TAU) {
   const out = [];
   for (let i = 0; i < n; i++) {
     const a = a0 + ((a1 - a0) * (i + 0.5)) / n;
-    const g = new THREE.SphereGeometry(r, 7, 5, 0, TAU, 0, Math.PI / 2);
+    const g = new THREE.SphereGeometry(r, 6, 2, 0, TAU, 0, Math.PI / 2);
     g.rotateX(Math.PI / 2);
     g.rotateY(a);
     g.translate(Math.sin(a) * R, y, Math.cos(a) * R * zs);
@@ -116,29 +116,49 @@ export function ornateSword(H, len) {
   const out = [];
   const L = len * H;
   // grip, wound with wire
-  const gr = new THREE.CylinderGeometry(0.0125 * H, 0.0135 * H, 0.1 * H, 14, 1);
-  gr.translate(0, 0.0, 0);
+  const gr = new THREE.CylinderGeometry(0.0125 * H, 0.0135 * H, 0.1 * H, 20, 20);
+  {
+    // the grip swells a little in the middle and the leather is bound in diagonal wraps
+    const p = gr.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i), a = Math.atan2(p.getX(i), p.getZ(i));
+      const k = 1 + 0.08 * Math.cos((y / (0.05 * H)) * Math.PI * 0.5) - 0.05 * Math.max(0, Math.cos(a * 1 - (y / (0.1 * H)) * TAU * 7)) ** 6;
+      p.setX(i, p.getX(i) * k);
+      p.setZ(i, p.getZ(i) * k);
+    }
+    gr.computeVertexNormals();
+  }
   out.push(gr);
+  for (const y of [0.05, -0.048]) out.push(ropeRing(0.0145 * H, y * H, 0.0032 * H, 10, 1, 28));
   const wire = new THREE.Curve();
   wire.getPoint = (t, v = new THREE.Vector3()) => {
     const a = t * TAU * 11;
     return v.set(Math.sin(a) * 0.0138 * H, 0.048 * H - t * 0.096 * H, Math.cos(a) * 0.0138 * H);
   };
-  out.push(new THREE.TubeGeometry(wire, 160, 0.0018 * H, 4, false));
+  out.push(new THREE.TubeGeometry(wire, 150, 0.0016 * H, 4, false));
   // pommel: a wheel with a raised rim and a cabochon each side
-  const pom = new THREE.CylinderGeometry(0.027 * H, 0.027 * H, 0.014 * H, 32, 1);
+  const pom = new THREE.CylinderGeometry(0.027 * H, 0.027 * H, 0.014 * H, 48, 1);
   pom.rotateZ(Math.PI / 2);
   pom.translate(0, 0.068 * H, 0);
   out.push(pom);
-  const rim = new THREE.TorusGeometry(0.027 * H, 0.004 * H, 8, 40);
+  const rim = new THREE.TorusGeometry(0.027 * H, 0.004 * H, 8, 64);
   rim.rotateY(Math.PI / 2);
   rim.translate(0, 0.068 * H, 0);
   out.push(rim);
   for (const s of [-1, 1]) {
-    const j = new THREE.SphereGeometry(0.011 * H, 14, 10);
+    const j = new THREE.SphereGeometry(0.011 * H, 14, 9);
     j.scale(0.55, 1, 1);
     j.translate(s * 0.008 * H, 0.068 * H, 0);
     out.push(j);
+    // a collet of beads round each cabochon and a ring of beads on the wheel's face
+    for (const [rr, n, br] of [[0.0128, 10, 0.0018], [0.021, 14, 0.0018]]) {
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * TAU;
+        const b = new THREE.SphereGeometry(br * H, 4, 3);
+        b.translate(s * 0.0072 * H, 0.068 * H + Math.cos(a) * rr * H, Math.sin(a) * rr * H);
+        out.push(b);
+      }
+    }
   }
   const btn = new THREE.SphereGeometry(0.008 * H, 10, 8);
   btn.translate(0, 0.087 * H, 0);
@@ -150,10 +170,10 @@ export function ornateSword(H, len) {
       const x = s * t * 0.085 * H;
       return v.set(x, -0.052 * H + (t ** 3) * 0.012 * H, 0);
     };
-    const g = new THREE.TubeGeometry(arm, 24, 0.0075 * H, 10, false);
+    const g = new THREE.TubeGeometry(arm, 24, 0.0075 * H, 12, false);
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
-      const t = Math.floor(i / 11) / 24, k = 0.75 + 0.6 * t;
+      const t = Math.floor(i / 13) / 24, k = (0.75 + 0.6 * t) * (1 + 0.12 * Math.exp(-(((t - 0.55) / 0.06) ** 2)) + 0.12 * Math.exp(-(((t - 0.25) / 0.05) ** 2)));
       const c = arm.getPoint(t);
       p.setXYZ(i, c.x + (p.getX(i) - c.x) * k, c.y + (p.getY(i) - c.y) * k, c.z + (p.getZ(i) - c.z) * k);
     }
@@ -165,14 +185,21 @@ export function ornateSword(H, len) {
       return v.set(s * (0.085 * H + Math.sin(a) * r), -0.04 * H - (1 - Math.cos(a)) * r * 0.0 + Math.cos(a) * r - r, 0);
     };
     out.push(new THREE.TubeGeometry(scroll, 24, 0.005 * H, 8, false));
+    const knob = new THREE.SphereGeometry(0.0055 * H, 12, 8);
+    knob.translate(s * 0.085 * H, -0.04 * H, 0);
+    out.push(knob);
   }
-  const block = new THREE.BoxGeometry(0.03 * H, 0.016 * H, 0.022 * H, 2, 2, 2);
-  block.translate(0, -0.052 * H, 0);
+  // the ecusson: a lozenge block at the centre of the cross, a jewel on each face
+  const block = new THREE.SphereGeometry(0.016 * H, 4, 2);
+  block.scale(1.15, 1.25, 0.75);
+  block.translate(0, -0.054 * H, 0);
   out.push(block);
-  const jewel = new THREE.OctahedronGeometry(0.008 * H, 1);
-  jewel.scale(1, 1.3, 0.7);
-  jewel.translate(0, -0.052 * H, 0.012 * H);
-  out.push(jewel);
+  for (const s of [-1, 1]) {
+    const jewel = new THREE.OctahedronGeometry(0.0075 * H, 1);
+    jewel.scale(1, 1.3, 0.6);
+    jewel.translate(0, -0.054 * H, s * 0.011 * H);
+    out.push(jewel);
+  }
   // langets down the blade
   for (const s of [-1, 1]) {
     const lg = new THREE.BoxGeometry(0.014 * H, 0.03 * H, 0.003 * H);
@@ -180,7 +207,7 @@ export function ornateSword(H, len) {
     out.push(lg);
   }
   // the blade: lofted cross-sections; a diamond with a fuller groove, tapering to the point
-  const rings = 70, cs = 16;
+  const rings = 80, cs = 20;
   const pos = [], idx = [];
   const y0 = -0.06 * H;
   for (let i = 0; i <= rings; i++) {
@@ -196,6 +223,14 @@ export function ornateSword(H, len) {
       let z = Math.sign(sz) * th * 0.5 * (1 - Math.abs(cx) ** 1.2);
       // the fuller: a groove down the middle of each face
       z -= Math.sign(sz) * fuller * th * 0.38 * Math.exp(-((x / (w * 0.14)) ** 2));
+      // a fine bevel line along each edge (the sharpened edge catches the light)
+      z -= Math.sign(sz) * th * 0.06 * Math.exp(-(((Math.abs(x) - w * 0.38) / (w * 0.03)) ** 2));
+      // a cross and a band etched into the ricasso
+      if (t > 0.025 && t < 0.085) {
+        const yy = (t - 0.055) * L, xx = x;
+        const cr = (Math.abs(xx) < w * 0.05 && Math.abs(yy) < 0.012 * H) || (Math.abs(yy - 0.004 * H) < w * 0.05 && Math.abs(xx) < w * 0.2);
+        if (cr) z += Math.sign(sz) * th * 0.12;
+      }
       pos.push(x, y0 - t * L, z);
     }
   }
@@ -224,12 +259,13 @@ export function gauntletHand(s, side) {
   // a cuff of three lames close round the wrist, a roped rim at the top
   for (let i = 0; i < 3; i++) {
     const r0 = s * (0.33 + i * 0.025), r1 = s * (0.37 + i * 0.03);
-    const cuff = sculpt(-0.11 * s, 0, (u) => r0 + (r1 - r0) * (1 - u), { rad: 28, rings: 4, capTop: false, capBottom: false, shape: (x, y, z) => [x, y, z * 0.85] });
+    const cuff = sculpt(-0.11 * s, 0, (u) => r0 + (r1 - r0) * (1 - u), { rad: 36, rings: 4, capTop: i === 0, capBottom: false, shape: (x, y, z) => [x, y, z * 0.85] });
     cuff.translate(0, 0.2 * s - i * 0.095 * s, 0);
     out.push(cuff);
   }
-  out.push(ropeRing(s * 0.37, 0.2 * s, 0.014 * s, 18, 0.85, 36));
-  const plate = sculpt(-0.3 * s, 0, (t) => 0.3 * s * Math.sin(Math.PI * (0.15 + 0.7 * t)), { rad: 20, rings: 8, shape: (x, y, z) => [x * 1.1, y, z * 0.35 + 0.1 * s] });
+  out.push(ropeRing(s * 0.37, 0.2 * s, 0.014 * s, 18, 0.85, 48));
+  for (let i = 0; i < 3; i++) out.push(...rivets(s * (0.37 + i * 0.03), 0.16 * s - i * 0.095 * s, 6, 0.016 * s, 0.85));
+  const plate = sculpt(-0.3 * s, 0, (t) => 0.3 * s * Math.sin(Math.PI * (0.15 + 0.7 * t)), { rad: 32, rings: 12, shape: (x, y, z) => [x * 1.1, y, z * 0.35 + 0.1 * s] });
   plate.translate(0, -0.3 * s, 0.02 * s);
   out.push(plate);
   return out;
@@ -239,10 +275,14 @@ export function gauntletHand(s, side) {
 export function ladyHand(s, side) {
   const out = fist(s, side);
   for (const i of [1, 3]) {
-    const r = new THREE.TorusGeometry(0.07 * s, 0.018 * s, 6, 14);
+    const r = new THREE.TorusGeometry(0.07 * s, 0.018 * s, 6, 16);
     r.rotateY(Math.PI / 2);
     r.translate((i - 1.5) * 0.15 * s, -0.56 * s, 0.17 * s);
     out.push(r);
+    const gem = new THREE.OctahedronGeometry(0.035 * s, 1);
+    gem.scale(1, 0.6, 1);
+    gem.translate((i - 1.5) * 0.15 * s, -0.5 * s, 0.2 * s);
+    out.push(gem);
   }
   return out;
 }
@@ -291,7 +331,7 @@ export function flowingLocks(H, n, { top = 0.07, len = 0.32, spread = 0.062 } = 
         top * H - t * L,
         z0 * (1 + 0.5 * t) - 0.028 * H * t * t + Math.cos(t * 6 + i) * 0.004 * H * t,
       );
-    const seg = 30, rs = 9;
+    const seg = 28, rs = 8;
     const g = new THREE.TubeGeometry(c, seg, 0.012 * H, rs, false);
     const p = g.attributes.position;
     for (let k = 0; k < p.count; k++) {
@@ -303,7 +343,7 @@ export function flowingLocks(H, n, { top = 0.07, len = 0.32, spread = 0.062 } = 
       const outward = new THREE.Vector3(ctr.x, 0, ctr.z).normalize();
       const radial = dx * outward.x + dz * outward.z;
       const taper = (1 - 0.82 * t ** 1.3) * (0.7 + 0.3 * Math.sin(Math.PI * Math.min(1, t * 4 + 0.2)));
-      const groove = 1 + 0.12 * Math.cos(ang * 5 + t * 3);
+      const groove = 1 + 0.1 * Math.cos(ang * 5 + t * 3) + 0.05 * Math.cos(ang * 11 - t * 5);
       const squash = 0.45;
       const nx = ctr.x + (dx - outward.x * radial * (1 - squash)) * taper * groove;
       const nz = ctr.z + (dz - outward.z * radial * (1 - squash)) * taper * groove;
@@ -322,9 +362,8 @@ export function combed(geo, H, n = 26) {
 
 /** One lock of hair along a path of points (head-joint frame): a tapering, grooved ribbon
  * lying flat against what it falls over (flattened toward `flat`, a direction). */
-export function lockAlong(points, H, width, flat = new THREE.Vector3(0, 0, 1)) {
+export function lockAlong(points, H, width, flat = new THREE.Vector3(0, 0, 1), { seg = 36, rs = 9 } = {}) {
   const c = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p).multiplyScalar(H)));
-  const seg = 36, rs = 9;
   const g = new THREE.TubeGeometry(c, seg, width * H, rs, false);
   const p = g.attributes.position;
   const f = flat.clone().normalize();
@@ -335,7 +374,7 @@ export function lockAlong(points, H, width, flat = new THREE.Vector3(0, 0, 1)) {
     const along = d.dot(f);
     d.addScaledVector(f, -along * 0.6); // a flat ribbon
     const taper = (1 - 0.85 * t ** 1.4) * (0.75 + 0.25 * Math.sin(Math.PI * Math.min(1, t * 3 + 0.3)));
-    d.multiplyScalar(taper * (1 + 0.12 * Math.cos((j / rs) * TAU * 5 + t * 4)));
+    d.multiplyScalar(taper * (1 + 0.1 * Math.cos((j / rs) * TAU * 5 + t * 4) + 0.05 * Math.cos((j / rs) * TAU * 11 - t * 6)));
     p.setXYZ(k, ctr.x + d.x, ctr.y + d.y, ctr.z + d.z);
   }
   g.computeVertexNormals();
@@ -346,17 +385,17 @@ export function lockAlong(points, H, width, flat = new THREE.Vector3(0, 0, 1)) {
  * rolled rim, so it reads as forged plate, not a fin. */
 export function couter(r, side, forward = true) {
   const out = [];
-  const boss = new THREE.SphereGeometry(r, 18, 12);
+  const boss = new THREE.SphereGeometry(r, 28, 18);
   boss.scale(1, 1, 0.9);
   boss.translate(0, 0, forward ? r * 0.25 : -r * 0.25);
   out.push(boss);
-  const wing = new THREE.SphereGeometry(r * 1.35, 20, 10, 0, Math.PI, 0, Math.PI);
+  const wing = new THREE.SphereGeometry(r * 1.35, 32, 16, 0, Math.PI, 0, Math.PI);
   wing.scale(0.32, 1, 1);
   wing.rotateY(side > 0 ? -Math.PI / 2 : Math.PI / 2);
   wing.rotateY(side > 0 ? Math.PI / 2 : -Math.PI / 2);
   wing.translate(side * r * 0.7, 0, 0);
   out.push(wing);
-  const rim = new THREE.TorusGeometry(r * 1.35, r * 0.09, 6, 28, Math.PI);
+  const rim = new THREE.TorusGeometry(r * 1.35, r * 0.09, 8, 40, Math.PI);
   rim.rotateZ(-Math.PI / 2);
   rim.rotateY(Math.PI / 2);
   rim.scale(1, 1, 1);

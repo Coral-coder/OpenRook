@@ -72,11 +72,11 @@ export function sculpt(y0, y1, r, { rad = 48, rings = 40, shape = null, capTop =
 // ------------------------------------------------------------------ armoured male torso
 /** The king's cuirass: a globose breastplate with a medial ridge and flaring plackart,
  * shoulder blades behind, a waist, from spine (y=0) to the base of the neck. */
-export function cuirassShell(H) {
+export function cuirassShell(H, { rad = 40, rings = 30 } = {}) {
   const r = profile([[0, 0.092], [0.12, 0.088], [0.3, 0.1], [0.5, 0.124], [0.68, 0.136], [0.8, 0.13], [0.9, 0.105], [0.97, 0.07], [1, 0.045]].map(([t, v]) => [t, v * H]));
   return sculpt(-0.01 * H, 0.225 * H, r, {
-    rad: 40,
-    rings: 30,
+    rad,
+    rings,
     shape: (x, y, z, a, t, R) => {
       const front = Math.cos(a) > 0;
       // deeper front (barrel chest), flatter back
@@ -98,11 +98,11 @@ export function cuirassShell(H) {
 }
 
 // ------------------------------------------------------------------ female bodice
-export function bodice(H) {
+export function bodice(H, { rad = 48, rings = 36 } = {}) {
   const r = profile([[0, 0.072], [0.18, 0.07], [0.42, 0.088], [0.6, 0.106], [0.76, 0.108], [0.88, 0.09], [0.96, 0.062], [1, 0.04]].map(([t, v]) => [t, v * H]));
   const g = sculpt(-0.01 * H, 0.215 * H, r, {
-    rad: 48,
-    rings: 36,
+    rad,
+    rings,
     shape: (x, y, z, a, t) => {
       const front = Math.cos(a) > 0;
       z *= front ? 0.8 : 0.7;
@@ -134,14 +134,14 @@ export function limbShape(len, r, { flat = 0.9, rad = 16, rings = 8, forward = 0
 
 /** A bell sleeve hanging from the elbow: it opens toward the wrist and its hem sags (local -z
  * is down while the forearm is held forward). */
-export function bellSleeve(H, len, r0, r1, sag, folds_ = 8) {
+export function bellSleeve(H, len, r0, r1, sag, folds_ = 8, { rad = 36, rings = 18 } = {}) {
   // a sleeve fitted at the elbow that widens toward the wrist; the cloth below the arm (local
   // -z while the forearm is held forward) hangs down in a long lip, the top stays close
   return sculpt(-len, 0, (u) => {
     const t = 1 - u;
     return r0 + (r1 - r0) * t * t;
   }, {
-    rad: 36, rings: 18, capTop: false, capBottom: false,
+    rad, rings, capTop: false, capBottom: false,
     shape: (x, y, z, a, u) => {
       const t = 1 - u;
       const under = Math.max(0, -Math.cos(a));
@@ -152,7 +152,7 @@ export function bellSleeve(H, len, r0, r1, sag, folds_ = 8) {
 }
 
 /** Plate over a limb: lames that follow the limb's profile, each overlapping the next. */
-export function plateLames(len, r, n, flare = 1.12) {
+export function plateLames(len, r, n, flare = 1.12, { rad = 28, rings = 6 } = {}) {
   const geos = [];
   const h = len / n;
   for (let i = 0; i < n; i++) {
@@ -161,7 +161,7 @@ export function plateLames(len, r, n, flare = 1.12) {
     const g = sculpt(-h * 1.08, 0, (u) => {
       const t = 1 - u; // 0 at the top of the lame
       return R(t) * (1.02 + (flare - 1) * (t < 0.12 ? t / 0.12 : 1 - 0.4 * (t - 0.12))) * (t > 0.92 ? 1 - (t - 0.92) * 1.2 : 1);
-    }, { rad: 28, rings: 6, capTop: false, capBottom: false });
+    }, { rad, rings, capTop: false, capBottom: false });
     g.translate(0, -i * h, 0);
     geos.push(g);
   }
@@ -205,10 +205,23 @@ export function headShape(H, { female = false, beard = false } = {}) {
     d += 0.07 * G(x, y, 0, -0.6, 0.16, 0.045) * (female ? 1.2 : 1); // lower lip
     d -= 0.03 * G(x, y, 0, -0.68, 0.15, 0.03); // under the lip
     d += 0.09 * G(x, y, 0, -0.82, 0.17, 0.11) * (female ? 0.7 : 1); // chin
+    for (const s of [-1, 1]) {
+      const ex = x - s * 0.29, ey = y - 0.09;
+      d -= 0.022 * G(x, y, s * 0.29, 0.09, 0.03, 0.03); // the drilled pupil
+      d -= 0.012 * Math.exp(-(((Math.hypot(ex, ey * 1.1) - 0.055) / 0.012) ** 2)) * (Math.hypot(ex, ey) < 0.08 ? 1 : 0); // the iris's edge
+      d -= 0.035 * Math.exp(-(((ey - 0.085 + 0.25 * ex * ex) / 0.016) ** 2)) * Math.exp(-((ex / 0.13) ** 2)); // the crease above the lid
+      d -= 0.02 * Math.exp(-(((ey + 0.075 - 0.3 * ex * ex) / 0.012) ** 2)) * Math.exp(-((ex / 0.1) ** 2)); // under the lower lid
+      // a fine arched brow
+      const by = 0.255 + 0.06 * Math.cos((x - s * 0.3) * 3.5) - (female ? 0 : 0.02);
+      d += (female ? 0.035 : 0.05) * Math.exp(-(((y - by) / 0.022) ** 2)) * Math.exp(-(((x - s * 0.3) / 0.17) ** 2));
+      d += 0.025 * G(x, y, s * 0.36, -0.28, 0.12, 0.1) * (female ? 1 : 0); // soft cheeks
+    }
+    d -= 0.02 * Math.exp(-(((y + 0.488 - 0.05 * Math.exp(-((x / 0.035) ** 2))) / 0.012) ** 2)) * Math.exp(-((x / 0.17) ** 2)); // the cupid's bow
+    d += 0.035 * G(x, y, 0, -0.31, 0.055, 0.045); // the tip of the nose
     return d;
   };
   // the skull: a light egg
-  const g = new THREE.SphereGeometry(1, 40, 30);
+  const g = new THREE.SphereGeometry(1, 48, 32);
   const sp = g.attributes.position;
   for (let i = 0; i < sp.count; i++) {
     const y = sp.getY(i) * 1.08, x = sp.getX(i) * width(y);
@@ -218,7 +231,7 @@ export function headShape(H, { female = false, beard = false } = {}) {
   }
   g.computeVertexNormals();
   // the face: a dense patch laid on the front, carved
-  const nx = 54, ny_ = 60, x0 = -0.62, x1 = 0.62, y0 = -0.94, y1 = 0.5;
+  const nx = 64, ny_ = 76, x0 = -0.62, x1 = 0.62, y0 = -0.94, y1 = 0.5;
   const pos = [], idx = [];
   for (let j = 0; j <= ny_; j++) {
     for (let i = 0; i <= nx; i++) {
@@ -226,7 +239,7 @@ export function headShape(H, { female = false, beard = false } = {}) {
       const xs = width(y) * 0.9;
       const x = (x0 + ((x1 - x0) * i) / nx) * xs / 0.62 * 0.62 / W;
       // feather the carving out toward the patch edge so it meets the skull
-      const e = Math.min(i, nx - i, j, ny_ - j) / 12;
+      const e = Math.min(i, nx - i, j, ny_ - j) / 16;
       const z = surf(x, y) + relief(x, y) * Math.min(1, e);
       pos.push(x * S, y * S + 0.05 * H, z * S);
     }
@@ -376,7 +389,7 @@ export function braid(curve, r, turns, H, seg = 64) {
       const a = t * turns * Math.PI * 2 + (k * Math.PI * 2) / 3;
       return v.copy(p).addScaledVector(n, Math.cos(a) * r * 0.9).addScaledVector(b, Math.sin(a) * r * 0.9);
     };
-    out.push(new THREE.TubeGeometry(c, seg, r * 0.75, 6, false));
+    out.push(new THREE.TubeGeometry(c, seg, r * 0.75, 8, false));
   }
   return out;
 }
@@ -466,7 +479,7 @@ export function crownGeos(r, h, { points = 8, arches = false } = {}) {
 /** A hand closed round a grip (the grip runs along local z through the palm). */
 export function fist(s, side, { gauntlet = false } = {}) {
   const out = [];
-  const palm = sculpt(-0.55 * s, 0, profile([[0, 0.22 * s], [0.3, 0.3 * s], [0.7, 0.3 * s], [1, 0.26 * s]]), { rad: 28, rings: 14, shape: (x, y, z) => [x * 1.15, y, z * 0.75] });
+  const palm = sculpt(-0.55 * s, 0, profile([[0, 0.22 * s], [0.3, 0.3 * s], [0.7, 0.3 * s], [1, 0.26 * s]]), { rad: 32, rings: 14, shape: (x, y, z) => [x * 1.15, y, z * 0.75] });
   out.push(palm);
   for (let i = 0; i < 4; i++) {
     // each finger curls round: three phalanges
@@ -477,14 +490,28 @@ export function fist(s, side, { gauntlet = false } = {}) {
       const a = t * Math.PI * 1.1;
       return v.set(fx, -0.5 * s - Math.sin(a) * L * 0.55, Math.cos(a) * L * 0.55 - L * 0.55 + 0.18 * s);
     };
-    out.push(new THREE.TubeGeometry(c, 18, (gauntlet ? 0.075 : 0.062) * s, 10, false));
+    out.push(new THREE.TubeGeometry(c, 20, (gauntlet ? 0.075 : 0.062) * s, 10, false));
+    if (!gauntlet) {
+      // knuckles and a fingernail at the tip
+      for (let k = 1; k < 3; k++) {
+        const kn = new THREE.SphereGeometry(0.066 * s, 10, 8);
+        kn.translate(...c.getPoint(k / 3).toArray());
+        out.push(kn);
+      }
+      const tipP = c.getPoint(1), tipT = c.getTangent(1);
+      const nail = new THREE.SphereGeometry(0.06 * s, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+      nail.scale(0.9, 0.35, 1.2);
+      nail.lookAt(tipT);
+      nail.translate(tipP.x, tipP.y, tipP.z);
+      out.push(nail);
+    }
     if (gauntlet) for (let k = 1; k < 3; k++) {
-      const knuckle = new THREE.SphereGeometry(0.08 * s, 8, 6);
+      const knuckle = new THREE.SphereGeometry(0.08 * s, 10, 6);
       knuckle.translate(...c.getPoint(k / 3).toArray());
       out.push(knuckle);
     }
   }
-  const th = new THREE.CapsuleGeometry(0.07 * s, 0.26 * s, 3, 8);
+  const th = new THREE.CapsuleGeometry(0.07 * s, 0.26 * s, 4, 12);
   th.rotateZ(side * 0.9);
   th.rotateX(0.7);
   th.translate(-side * 0.28 * s, -0.42 * s, 0.22 * s);
