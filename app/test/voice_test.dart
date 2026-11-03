@@ -28,8 +28,8 @@ void main() {
   });
 
   test('announcer voices', () {
-    expect(announcerVoices.first.id, 'obadiah');
-    expect(announcerVoice('nobody').id, 'obadiah');
+    expect(announcerVoices.first.id, 'alan');
+    expect(announcerVoice('nobody').id, 'alan');
     expect(announcerVoice('alan').onnx, 'en_GB-alan-medium.onnx');
     expect(announcerVoice('obadiah').onnx, 'en_GB-semaine-medium.onnx');
     expect(announcerVoice('obadiah').speaker, 2);
@@ -37,14 +37,14 @@ void main() {
     expect({for (final v in announcerVoices) v.id}.length, announcerVoices.length);
   });
 
-  test('quiet voices are brought up to a common loudness', () {
+  test('every voice is brought to the same calm loudness', () {
     final quiet = Float32List.fromList([0.0, 0.3, -0.15]);
     normalizeLoudness(quiet);
-    expect(quiet[1], closeTo(0.9, 1e-6));
-    expect(quiet[2], closeTo(-0.45, 1e-6));
-    final loud = Float32List.fromList([0.95, -0.5]);
+    expect(quiet[1], closeTo(0.6, 1e-6));
+    expect(quiet[2], closeTo(-0.3, 1e-6));
+    final loud = Float32List.fromList([0.96, -0.5]);
     normalizeLoudness(loud);
-    expect(loud[0], closeTo(0.95, 1e-6));
+    expect(loud[0], closeTo(0.6, 1e-6));
     final silent = Float32List(4);
     normalizeLoudness(silent);
     expect(silent.every((x) => x == 0), isTrue);

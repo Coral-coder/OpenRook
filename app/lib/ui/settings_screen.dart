@@ -70,6 +70,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             ListTile(
+              title: const Text('Battles'),
+              subtitle: Text(switch (s.battle) {
+                'quick' => 'Quick: one exchange and the finishing blow',
+                'epic' => 'Epic: long duels with footwork, broken weapons and lost limbs',
+                _ => 'Standard: a few blows each way, then the finishing blow',
+              }),
+              trailing: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'quick', label: Text('Quick')),
+                  ButtonSegment(value: 'standard', label: Text('Std')),
+                  ButtonSegment(value: 'epic', label: Text('Epic')),
+                ],
+                selected: {s.battle},
+                onSelectionChanged: (v) => setState(() => s.battle = v.first),
+              ),
+            ),
+            ListTile(
               title: const Text('Battle board version'),
               subtitle: Text(boardIteration(s.boardIteration).blurb),
               trailing: DropdownButton<String>(
@@ -220,7 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await n.use(picked);
     if (!mounted || picked != n.voice.id) return;
     setState(() {});
-    if (n.ready) await Voice.shared.say('Knight takes bishop on E 5. Check!');
+    if (n.ready) await Voice.shared.say('Knight takes bishop on E 5. Check.');
   }
 
   Future<void> _pickVoice() async {
@@ -240,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () async {
                   await Voice.shared.useVoice('', '');
-                  await Voice.shared.say('Knight takes bishop on E 5. Check!');
+                  await Voice.shared.say('Knight takes bishop on E 5. Check.');
                 },
               ),
               onTap: () => Navigator.pop(context, const {'name': '', 'locale': ''}),
@@ -254,7 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(Icons.play_arrow),
                   onPressed: () async {
                     await Voice.shared.useVoice(v['name'] ?? '', v['locale'] ?? '');
-                    await Voice.shared.say('Knight takes bishop on e5. Check!');
+                    await Voice.shared.say('Knight takes bishop on e5. Check.');
                   },
                 ),
                 onTap: () => Navigator.pop(context, v),

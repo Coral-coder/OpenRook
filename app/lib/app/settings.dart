@@ -44,6 +44,7 @@ class Settings extends ChangeNotifier {
   bool haptics = true;
   bool cinematic = true; // close-up camera for fights
   String style = 'wizard'; // 'wizard' (living stone statues) or 'toon' (KayKit, for kids)
+  String battle = 'standard'; // how long captures are fought out: 'quick', 'standard' or 'epic'
   String boardIteration = 'latest'; // which version of the 3D board (ui/board3d/iterations.dart)
   String room = 'apothecary'; // where the set stands: 'apothecary' (cabin) or 'tower' (astronomer's tower)
   bool topDown = false; // overhead view of the battle board
@@ -51,7 +52,7 @@ class Settings extends ChangeNotifier {
   bool alwaysListen = false; // the mic stays on for the whole game
   String voiceName = ''; // chosen text-to-speech voice ('' = the best one on the device)
   String voiceLocale = '';
-  String announcer = 'obadiah'; // the board's neural voice (see announcerVoices in neural_voice.dart)
+  String announcer = 'alan'; // the board's neural voice (see announcerVoices in neural_voice.dart)
   List<SavedRoom> rooms = [];
   String? savedComputerGame; // json: {fen, moves, color, level}
 
@@ -78,12 +79,13 @@ class Settings extends ChangeNotifier {
     style = _p.getString('style') ?? 'wizard';
     room = _p.getString('room') ?? 'apothecary';
     boardIteration = _p.getString('boardIteration') ?? 'latest';
+    battle = _p.getString('battle') ?? 'standard';
     topDown = _p.getBool('topDown') ?? false;
     announceOwn = _p.getBool('announceOwn') ?? true;
     alwaysListen = _p.getBool('alwaysListen') ?? false;
     voiceName = _p.getString('voiceName') ?? '';
     voiceLocale = _p.getString('voiceLocale') ?? '';
-    announcer = _p.getString('announcer') ?? 'obadiah';
+    announcer = _p.getString('announcer2') ?? 'alan'; // (a new key: everyone starts back on Alan)
     savedComputerGame = _p.getString('computerGame');
     try {
       rooms = [for (final r in jsonDecode(_p.getString('rooms') ?? '[]') as List) SavedRoom.fromJson(r as Map<String, dynamic>)];
@@ -109,12 +111,13 @@ class Settings extends ChangeNotifier {
     await _p.setString('style', style);
     await _p.setString('room', room);
     await _p.setString('boardIteration', boardIteration);
+    await _p.setString('battle', battle);
     await _p.setBool('topDown', topDown);
     await _p.setBool('announceOwn', announceOwn);
     await _p.setBool('alwaysListen', alwaysListen);
     await _p.setString('voiceName', voiceName);
     await _p.setString('voiceLocale', voiceLocale);
-    await _p.setString('announcer', announcer);
+    await _p.setString('announcer2', announcer);
     await _p.setString('rooms', jsonEncode([for (final r in rooms) r.toJson()]));
     if (savedComputerGame == null) {
       await _p.remove('computerGame');

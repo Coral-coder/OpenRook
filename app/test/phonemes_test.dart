@@ -16,7 +16,7 @@ void main() {
     for (final fen in fens) {
       final p = Position.fromFen(fen);
       for (final m in p.legalMoves()) {
-        for (final suffix in ['', '. Check!', '. Checkmate!']) {
+        for (final suffix in ['', '. Check!', '. Checkmate!', '. Check.', '. Checkmate.']) {
           final text = spokenMove(p, m) + suffix;
           expect(announcementPhonemes(text), isNotNull, reason: text);
           n++;
@@ -25,6 +25,7 @@ void main() {
     }
     expect(n, greaterThan(100));
     expect(announcementPhonemes('Knight to F 3. Check!')!.length, 2);
+    expect(announcementPhonemes('Knight to F 3. Check.')!.length, 2);
     expect(announcementPhonemes('Hello Steve'), isNull);
   });
 }

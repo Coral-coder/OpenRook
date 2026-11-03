@@ -67,9 +67,9 @@ class _ReplayScreenState extends State<ReplayScreen> {
     if (_announce) {
       var text = spokenMove(before, m);
       if (_game.result != GameResult.ongoing && _game.resultReason == 'checkmate') {
-        text += '. Checkmate!';
+        text += '. Checkmate.';
       } else if (_game.position.inCheck) {
-        text += '. Check!';
+        text += '. Check.';
       }
       Voice.shared.say(text);
     }

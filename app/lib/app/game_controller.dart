@@ -239,9 +239,9 @@ class GameController extends ChangeNotifier {
     if (mine && !Settings.shared.announceOwn && !(over && game.resultReason == 'checkmate')) return;
     var text = spokenMove(before, m);
     if (over && game.resultReason == 'checkmate') {
-      text += '. Checkmate!';
+      text += '. Checkmate.'; // spoken calmly: no exclamation
     } else if (game.position.inCheck) {
-      text += '. Check!';
+      text += '. Check.';
     }
     Voice.shared.say(text);
   }
@@ -313,7 +313,7 @@ class GameController extends ChangeNotifier {
       final target = game.ply;
       // a move takes a few seconds to act out (a capture with its slow motion, longer);
       // don't wait forever if the board isn't on screen to say it's done
-      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      final deadline = DateTime.now().add(Duration(seconds: Settings.shared.battle == 'epic' ? 45 : 15)); // epic duels run ~25 s
       while (!_disposed && _shownPly < target && DateTime.now().isBefore(deadline)) {
         _shownSignal ??= Completer<void>();
         await _shownSignal!.future.timeout(const Duration(milliseconds: 400), onTimeout: () {});

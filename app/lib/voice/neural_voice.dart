@@ -44,9 +44,20 @@ class AnnouncerVoice {
 /// The voices the announcer can use, the default first.
 const announcerVoices = [
   AnnouncerVoice(
+    id: 'alan',
+    name: 'Alan',
+    about: 'Calm, measured British English (male); the original announcer',
+    model: 'vits-piper-en_GB-alan-medium',
+    megabytes: 67,
+    lengthScale: 1.15, // unhurried
+    noiseScale: 0.5, // even, steady delivery: no excited swings in pitch
+    noiseScaleW: 0.6,
+    credit: 'Piper "Alan" voice (from the Mimic 3 voice by Alan Pope)',
+  ),
+  AnnouncerVoice(
     id: 'obadiah',
     name: 'Obadiah',
-    about: 'Deep, grave Received Pronunciation (male)',
+    about: 'Deep, grave Received Pronunciation (male); louder and more dramatic',
     model: 'vits-piper-en_GB-semaine-medium',
     speaker: 2, // semaine: prudence 0, spike 1, obadiah 2, poppy 3
     megabytes: 80,
@@ -74,14 +85,6 @@ const announcerVoices = [
     model: 'vits-piper-en_GB-jenny_dioco-medium',
     megabytes: 67,
     credit: 'Piper "Jenny" voice (Jenny TTS dataset by Dioco)',
-  ),
-  AnnouncerVoice(
-    id: 'alan',
-    name: 'Alan',
-    about: 'Mild British accent (male); the original announcer',
-    model: 'vits-piper-en_GB-alan-medium',
-    megabytes: 67,
-    credit: 'Piper "Alan" voice (from the Mimic 3 voice by Alan Pope)',
   ),
 ];
 
@@ -350,18 +353,19 @@ void _workerMain(List<Object> args) {
   });
 }
 
-/// Some voices come out much quieter than others (the semaine ones peak around a third of full
-/// scale): bring every line up to about the same peak, at most 4x louder.
+/// Some voices come out much quieter or louder than others (the semaine ones peak around a third
+/// of full scale, Alan near full scale): bring every line to the same calm, moderate peak, at
+/// most 3x louder and never more than about 3x quieter.
 @visibleForTesting
-void normalizeLoudness(Float32List samples, {double peak = 0.9}) {
+void normalizeLoudness(Float32List samples, {double peak = 0.6}) {
   var top = 0.0;
   for (final x in samples) {
     final a = x.abs();
     if (a > top) top = a;
   }
   if (top <= 0) return;
-  final gain = math.min(peak / top, 4.0);
-  if (gain <= 1.0) return;
+  final gain = (peak / top).clamp(0.3, 3.0);
+  if ((gain - 1.0).abs() < 0.02) return;
   for (var i = 0; i < samples.length; i++) {
     samples[i] *= gain;
   }
