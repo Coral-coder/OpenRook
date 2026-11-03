@@ -1371,7 +1371,7 @@ const ENDINGS = {
   [PAWN]: [['strike', 0.45], ['down', 0.35], ['disarm', 0.2]],
   [KNIGHT]: [['strike', 0.35], ['trample', 0.35], ['down', 0.3]],
   [BISHOP]: [['strike', 0.5], ['down', 0.3], ['disarm', 0.2]],
-  [ROOK]: [['strike', 0.2], ['topple', 0.25], ['hop', 0.2], ['ram', 0.15], ['down', 0.2]],
+  [ROOK]: [['strike', 0.08], ['topple', 0.32], ['hop', 0.25], ['ram', 0.2], ['down', 0.15]],
   [QUEEN]: [['strike', 0.5], ['disarm', 0.25], ['down', 0.25]],
   [KING]: [['strike', 0.5], ['down', 0.3], ['disarm', 0.2]],
 };
@@ -1403,7 +1403,9 @@ function composeFight(A, V, len) {
     // n beats of the exchange, the defender answering now and then
     for (let i = 0; i < n; i++) {
       const who = i % 2 && Math.random() < 0.75 ? 'V' : 'A';
-      const kind = pickW([['blow', 0.45], ['feint', 0.14], ['bind', 0.12], ['special', 0.17], ['step', o.circles ? 0.08 : 0.04], ['circle', o.circles ? 0.08 : 0]]);
+      // (a castle tower fights with its mass more than with its stone arms' sword)
+      const tower = (who === 'A' ? tA : tV) === ROOK;
+      const kind = pickW([['blow', tower ? 0.25 : 0.45], ['feint', tower ? 0.04 : 0.14], ['bind', tower ? 0.04 : 0.12], ['special', tower ? 0.5 : 0.17], ['step', o.circles ? 0.08 : 0.04], ['circle', o.circles ? 0.08 : 0]]);
       if (kind === 'blow') beats.push({ t: 'blow', who, hit: o.hits && Math.random() < 0.35 && who === 'A' });
       else if (kind === 'feint') beats.push({ t: 'feint', who }, { t: 'blow', who, late: true, hit: Math.random() < 0.5 });
       else if (kind === 'bind') beats.push({ t: 'bind', win: Math.random() < 0.65 ? 'A' : 'V' });

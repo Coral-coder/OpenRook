@@ -856,7 +856,10 @@ function knightMoves(P) {
 // diagonal; only the knight's mace (and the rook, after a shield-bash) still comes down from above.
 const ARSENAL = {
   two: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'spin', 'thrust', 'back'], specials: ['pommel', 'charge', 'disarm'] },
-  oneR: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'back', 'thrust', 'bash'], specials: ['shieldbash', 'ram', 'disarm'] },
+  // sword and shield: the pawn
+  oneR: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'back', 'thrust', 'bash'], specials: ['shieldbash', 'charge', 'pommel', 'disarm'] },
+  // the castle tower (its two stone arms hold a sword, but it fights with its mass)
+  tower: { blows: ['sweep', 'thrust', 'slash'], finishers: ['sweep', 'thrust'], specials: ['ram', 'ram', 'hop'] },
   oneL: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'thrust', 'back'], specials: ['pommel', 'charge', 'disarm'] },
   mounted: { blows: ['sweep', 'back', 'thrust', 'cleave'], finishers: ['bash', 'cleave', 'sweep', 'thrust'], specials: ['shieldbash', 'charge', 'trample'] },
   dual: { blows: ['fore', 'back', 'scissor', 'lunge', 'twin', 'double'], finishers: ['fore', 'spin', 'lunge', 'scissor', 'back', 'twin'], specials: ['pommel', 'charge', 'disarm'] },
@@ -868,6 +871,7 @@ function lib(kind) {
   if (kind === 'two') return twoHanded();
   if (kind === 'dual') return dualBlades();
   const L = oneHanded(kind === 'oneL');
+  // (the tower's arms move like a one-handed swordsman's)
   if (kind !== 'oneL') return L;
   const P = {}, M = {};
   for (const [k, v] of Object.entries(L.P)) P[k] = mirror(v);
@@ -895,7 +899,7 @@ function clips(kind) {
     shuffle: { loop: true, keys: [[0, add(g, { $fL: [0, 0.06, 0.03] })], [0.25, add(g, { $fR: [0, 0.06, -0.03] })], [0.5, add(g, { $fL: [0, 0.06, 0.03] })]] },
     ...M,
   };
-  if (kind === 'oneR') Object.assign(C, rookMoves(P));
+  if (kind === 'tower') Object.assign(C, rookMoves(P));
   if (kind === 'mounted') Object.assign(C, knightMoves(P));
   // a shield punched into the foe (the first half of the bash)
   if (C.bash) C.shieldbash = { line: 'mid', body: true, hits: [0.32], keys: [...C.bash.keys.slice(0, 3), [0.62, lerpPose(C.bash.keys[2][1], g, 0.6)], [0.85, g]] };
@@ -1060,21 +1064,24 @@ export function buildStatue(code) {
   }
   // the shield's face
   let shieldAt = null;
-  if (J.shield) {
+  // the shield: the rook's and knight's kite, or the pawn's round shield on his left forearm
+  const shieldJ = J.shield || (type === PAWN ? J.weapon2 : null);
+  if (shieldJ) {
     shieldAt = new THREE.Object3D();
     const box = new THREE.Box3();
-    J.shield.updateMatrixWorld(true);
-    const inv = new THREE.Matrix4().copy(J.shield.matrixWorld).invert();
-    J.shield.traverse((o) => {
+    shieldJ.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(shieldJ.matrixWorld).invert();
+    shieldJ.traverse((o) => {
       if (o.isMesh) {
         if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
         box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)));
       }
     });
     if (!box.isEmpty()) box.getCenter(shieldAt.position);
-    J.shield.add(shieldAt);
+    shieldJ.add(shieldAt);
   }
-  const kind = type === KNIGHT ? 'mounted' : info.style === 'one' ? (info.hand === 'L' ? 'oneL' : 'oneR') : info.style;
+  // (the pawn fights with sword and shield, the rook as a tower, whatever their carving says)
+  const kind = type === KNIGHT ? 'mounted' : type === ROOK ? 'tower' : type === PAWN ? 'oneR' : info.style === 'one' ? (info.hand === 'L' ? 'oneL' : 'oneR') : info.style;
   const fig = {
     group, type, isWhite, code, spec: {}, model, materials: [mat], stone: false, statue: true,
     parts: { inner }, current: null, J, info, kind, body, hand, butt, shieldAt, tailTip,
