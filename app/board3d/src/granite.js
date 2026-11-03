@@ -31,6 +31,7 @@ export function granite(side, { grain = 48, offset = [0, 0, 0] } = {}) {
     roughness: white ? 0.78 : 0.62,
     metalness: 0,
   });
+  m.userData.side = side;
   m.userData.uniforms = {
     uRot: { value: 0 },
     uGrain: { value: grain },

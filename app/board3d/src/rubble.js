@@ -12,14 +12,16 @@
 // other fragments) are solved with impulses: restitution only for hard hits, Coulomb friction,
 // positional correction, and sleeping once still, so heaps settle without jitter. Fixed
 // 120 Hz steps, a cap on substeps and on live bodies keep it cheap on a phone. Stone chips are
-// cheaper spheres. Old rubble sinks away a few moves later.
+// cheaper spheres. Pieces can be glued into one compound (a torso carrying its arms and head)
+// and let go one by one, so a statue comes apart in stages (see breakup.js). Once a piece has
+// settled it leaves the physics and melts away (melt.js).
 import * as THREE from 'three';
 
 const G = 9.81;
 const HZ = 120, H = 1 / HZ, MAX_STEPS = 5;
 const DENSITY = 140; // stone, in board units: a king's torso weighs about 1
 const FILL = 0.45; // a carved part fills about half of its box
-const MAX_BODIES = 90, MAX_CHIPS = 160;
+const MAX_BODIES = 70, MAX_CHIPS = 140;
 const MU = 0.6; // stone on stone
 const SLOP = 0.002;
 
@@ -29,7 +31,7 @@ const _qi = new THREE.Quaternion(), _m = new THREE.Matrix4(), _s = new THREE.Vec
 const chipGeos = [new THREE.DodecahedronGeometry(1, 0), new THREE.TetrahedronGeometry(1, 0), new THREE.OctahedronGeometry(1, 0)];
 
 // the ground under a point: the board, the frame and plinth around it, then the table
-function groundAt(x, z) {
+export function groundAt(x, z) {
   const e = Math.max(Math.abs(x), Math.abs(z));
   return e < 4.5 ? 0 : e < 4.8 ? -0.25 : -0.65;
 }
@@ -38,14 +40,14 @@ function groundAt(x, z) {
 // Splits a triangle soup (position + normal) by a plane (n . p = d) into two closed pieces;
 // the cut faces are capped. Returns null when the plane misses. Written on flat arrays: a
 // statue part can run to tens of thousands of triangles and the cut must not stall a frame.
-function cutGeometry(geo, n, d) {
+export function cutGeometry(geo, n, d) {
   const it = cutSteps(geo, n, d);
   let r = it.next();
   while (!r.done) r = it.next();
   return r.value;
 }
 // the same, a slice of the triangles at a time (yields between them)
-function* cutSteps(geo, n, d) {
+export function* cutSteps(geo, n, d) {
   const P = geo.attributes.position.array, N = geo.attributes.normal.array;
   const count = P.length / 3;
   const nx = n.x, ny = n.y, nz = n.z;
@@ -166,11 +168,12 @@ function* cutSteps(geo, n, d) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(o.p.subarray(0, o.k), 3));
     g.setAttribute('normal', new THREE.BufferAttribute(o.n.subarray(0, o.k), 3));
+    g.userData.own = true;
     return g;
   });
 }
 
-function soup(geo) {
+export function soup(geo) {
   if (!geo.index && geo.attributes.normal) {
     // the template's own arrays, only ever read (cutting writes new ones)
     const g = new THREE.BufferGeometry();
@@ -185,6 +188,8 @@ function soup(geo) {
 }
 
 // ------------------------------------------------------------------ the world
+const UP = new THREE.Vector3(0, 1, 0);
+const _gat = new THREE.Vector3(), _gr = new THREE.Vector3(), _gr2 = new THREE.Vector3(), _gn = new THREE.Vector3();
 export class Rubble {
   constructor(scene) {
     this.scene = scene;
@@ -193,8 +198,11 @@ export class Rubble {
     this.acc = 0;
     this.obstacles = () => [];
     this.ms = 0; // time spent in update() last frame, for measuring
-    this.jobs = []; // statues being cracked ahead of the blow
+    this.prepMs = 0;
+    this.tasks = []; // stone being cut ahead of a blow, a little each frame
     this.breaks = 0;
+    this.onImpact = null; // (point, speed, body): a heavy piece hit the ground hard
+    this.onMelt = null; // (object3d, white, volume): a settled piece is handed over to melt away
   }
 
   /** [fn] returns the statues still standing: [{ x, z, h, moving }] (h: the figure's height). */
@@ -202,210 +210,158 @@ export class Rubble {
     this.obstacles = fn;
   }
 
-  /**
-   * Starts cracking a statue ahead of the blow (the cutting is spread over the frames before
-   * it lands, so the moment of the kill doesn't stall). [opts] as for breakApart.
-   */
-  prepare(meshes, opts = {}) {
-    const job = { opts: { ...opts }, items: [], i: 0 };
-    if (opts.normal) job.opts.normal = opts.normal.clone().normalize();
-    if (opts.point) job.opts.point = opts.point.clone();
-    if (opts.axis) job.opts.axis = opts.axis.clone().normalize();
-    for (const o of meshes) if (o.visible && o.geometry) job.items.push({ o, chunks: null });
-    this.jobs.push(job);
-    return job;
+  /** Runs a generator a little each frame (within the frame budget); finish() completes it. */
+  task(gen) {
+    const t = { gen, done: false, value: null };
+    this.tasks.push(t);
+    return t;
   }
-
-  _work(job, budget) {
-    const t0 = performance.now();
-    while (job.i < job.items.length && performance.now() - t0 < budget) {
-      job.gen = job.gen || this._cutPart(job, job.items[job.i]);
-      if (job.gen.next().done) {
-        job.gen = null;
-        job.i++;
-      }
-    }
-    if (job.i >= job.items.length) this.jobs = this.jobs.filter((j) => j !== job);
+  finish(t) {
+    while (t && !t.done) this._run(t);
+    return t ? t.value : null;
   }
-
-  // one part: the blow's own cut first (along the blade's path), then cracks
-  *_cutPart(job, it) {
-    const { o } = it, { kind = 'smash', normal, point, axis } = job.opts;
-    o.updateWorldMatrix(true, false);
-    const wPos = new THREE.Vector3(), wQuat = new THREE.Quaternion(), wScale = new THREE.Vector3();
-    o.matrixWorld.decompose(wPos, wQuat, wScale);
-    const qi = wQuat.clone().invert();
-    const inv = new THREE.Matrix4().copy(o.matrixWorld).invert();
-    const geo = soup(o.geometry);
-    geo.computeBoundingBox();
-    yield;
-    let chunks = [{ g: geo, side: 0 }];
-    if (normal && (kind === 'slice' || kind === 'cleave')) {
-      const ln = normal.clone().applyQuaternion(qi).divide(wScale).normalize();
-      const d = ln.dot(point.clone().applyMatrix4(inv));
-      const r = yield* cutSteps(geo, ln, d);
-      if (r) chunks = [{ g: r[0], side: 1 }, { g: r[1], side: -1 }];
-      else chunks[0].side = ln.dot(geo.boundingBox.getCenter(_c)) >= d ? 1 : -1;
+  _run(t) {
+    const r = t.gen.next();
+    if (r.done) {
+      t.done = true;
+      t.value = r.value;
+      this.tasks = this.tasks.filter((x) => x !== t);
     }
-    // the cracks: big parts break into two to four chunks
-    const crack = function* (c, n, through) {
-      const parts = yield* cutSteps(c.g, n, n.dot(through));
-      return parts ? parts.map((g) => ({ g, side: c.side })) : [c];
-    };
-    const randomCut = function* (c, bias) {
-      c.g.computeBoundingBox();
-      const ctr = c.g.boundingBox.getCenter(new THREE.Vector3());
-      const wn = new THREE.Vector3(Math.random() - 0.5, (Math.random() - 0.5) * 1.6, Math.random() - 0.5);
-      if (bias) wn.addScaledVector(bias, 0.8);
-      const ln = wn.normalize().applyQuaternion(qi).normalize();
-      ctr.addScaledVector(ln, (Math.random() - 0.5) * 0.25 * c.g.boundingBox.getSize(_c).length());
-      return yield* crack(c, ln, ctr);
-    };
-    const near = point ? geo.boundingBox.getCenter(new THREE.Vector3()).applyMatrix4(o.matrixWorld).distanceTo(point) : 1;
-    const next = [];
-    for (const c of chunks) {
-      c.g.computeBoundingBox();
-      yield;
-      const size = c.g.boundingBox.getSize(_b).multiply(wScale);
-      const big = size.length();
-      let cuts = big > 0.62 ? 2 : big > 0.3 && size.x * size.y * size.z > 0.0015 ? 1 : 0;
-      if (kind === 'slice') cuts = c.side > 0 ? (big > 0.7 ? 1 : 0) : Math.min(cuts, 1); // the cut-off part stays one clean piece
-      else if (kind === 'cleave') cuts = Math.min(cuts, job.opts.heavy ? 2 : 1);
-      if (kind === 'stab' && axis && near < 0.4 && big > 0.12) {
-        // cracks running out radially from where the point went in
-        let list = [c];
-        const a0 = Math.random() * Math.PI;
-        for (let k = 0; k < 2; k++) {
-          const perp = new THREE.Vector3(0, 1, 0).applyAxisAngle(axis, a0 + (k * Math.PI) / 2);
-          const wn = perp.cross(axis).normalize();
-          const ln = wn.applyQuaternion(qi).divide(wScale).normalize();
-          const lp = point.clone().applyMatrix4(inv);
-          const nl = [];
-          for (const x of list) nl.push(...(yield* crack(x, ln, lp)));
-          list = nl;
-        }
-        next.push(...list);
-        continue;
-      }
-      let list = [c];
-      for (let k = 0; k < cuts; k++) {
-        const nl = [];
-        for (const x of list) nl.push(...(yield* randomCut(x, k ? job.opts.swing : null)));
-        list = nl;
-      }
-      next.push(...list);
-    }
-    it.chunks = next;
   }
 
   /**
-   * Cracks a struck statue. [meshes] are its parts still in place; [at] is where the blow
-   * landed, [dir] the direction of the swing, [power] how hard (the attacker's weight).
-   * opts.kind: 'slice' (cut through along the blade's path: the part above slides off with
-   * the swing), 'stab' (cracks burst out from the point, the pieces are driven on through),
-   * 'cleave' (split top to bottom, the halves fall apart), or 'smash'; opts.normal and
-   * opts.point give the cut's plane (world), opts.axis the thrust, opts.job a prepare()d break.
+   * A solid piece of stone made of one or more meshes, kept exactly where they are now.
+   * items: [{ geo, m }] (m: the mesh's world matrix); [quat] the piece's own frame.
+   * The geometries are shared, never changed (a cut makes new ones).
    */
-  breakApart(meshes, at, dir, power = 1, ply = 0, opts = {}) {
-    const swing = dir.clone().normalize();
-    const job = opts.job || this.prepare(meshes, { ...opts, swing });
-    job.opts.swing = swing;
-    this._work(job, Infinity);
-    const kind = job.opts.kind || 'smash';
-    const brk = ++this.breaks;
-    const pieces = [];
-    const keep = new Set(meshes);
-    for (const it of job.items) {
-      const { o } = it;
-      if (!keep.has(o) || !it.chunks) continue;
-      o.updateWorldMatrix(true, false);
-      const wPos = new THREE.Vector3(), wQuat = new THREE.Quaternion(), wScale = new THREE.Vector3();
-      o.matrixWorld.decompose(wPos, wQuat, wScale);
-      for (const c of it.chunks) {
-        if (c.g.attributes.position.count < 3) continue;
-        const b = this._body(c.g, o.material, wPos, wQuat, wScale, ply, o.castShadow);
-        if (b) {
-          b.side = c.side;
-          b.brk = brk;
-          pieces.push(b);
-        }
-      }
-      o.parent?.remove(o);
+  compound(items, material, quat, ply = 0, { shadow = true, white = material?.userData?.side !== 'black', round = false } = {}) {
+    if (!items.length) return null;
+    const R = new THREE.Matrix4().makeRotationFromQuaternion(quat);
+    const Rinv = R.clone().transpose();
+    const box = new THREE.Box3();
+    const rels = [];
+    for (const it of items) {
+      const rel = Rinv.clone().multiply(it.m);
+      if (!it.geo.boundingBox) it.geo.computeBoundingBox();
+      if (it.geo.boundingBox.isEmpty()) continue;
+      box.union(it.geo.boundingBox.clone().applyMatrix4(rel));
+      rels.push([it, rel]);
     }
-    const S = 2.0 * power;
-    const up = _a.set(0, 1, 0).clone();
-    const n = job.opts.normal ? job.opts.normal.clone() : up.clone();
-    // which way the cut-off part goes: with the swing, and up off the cut
-    const tilt = up.clone().cross(swing).normalize(); // turning about this tips the top along the swing
-    let base = null;
-    for (const b of pieces) if (!base || b.p.y < base.p.y) base = b;
-    for (const b of pieces) {
-      const toward = _c.copy(b.p).sub(at);
-      const dist = toward.length();
-      const fall = Math.exp(-dist / 0.42);
-      const light = Math.min(1.7, Math.max(0.75, Math.pow(0.06 / b.m, 0.18)));
-      const dv = new THREE.Vector3();
-      if (kind === 'slice') {
-        if (b.side > 0) {
-          // the part above the cut slides off along it, carried by the blade, and topples
-          dv.copy(swing).multiplyScalar((0.7 + 0.25 * power) * (0.9 + Math.random() * 0.2)).addScaledVector(n, 0.3).add(_b.set(0, 0.25, 0));
-          b.w.addScaledVector(tilt, 1.4 + Math.random() * 0.6);
-        } else {
-          // the part below the cut stands a moment...
-          dv.set((Math.random() - 0.5) * 0.1, 0, (Math.random() - 0.5) * 0.1);
-          // ... and a moment later what's left cracks and slumps
-          b.kick = { t: 0.25 + Math.random() * 0.35, dv: new THREE.Vector3((Math.random() - 0.5) * 0.9, 0.2, (Math.random() - 0.5) * 0.9).addScaledVector(swing, 0.4) };
-        }
-      } else if (kind === 'cleave') {
-        // split down the middle: the halves fall away from each other
-        const s = b.side || (toward.dot(n) >= 0 ? 1 : -1);
-        dv.copy(n).multiplyScalar(s * S * (0.3 + 0.25 * fall) * light).addScaledVector(swing, S * 0.25 * fall).add(_b.set(0, S * 0.12 * fall, 0));
-        b.w.addScaledVector(up.clone().cross(n).normalize(), s * (1.8 + Math.random()));
-        if (job.opts.heavy) {
-          // a crushing blow: everything blasts out along the floor
-          const out = _b.copy(b.p).sub(at).setY(0);
-          if (out.lengthSq() > 1e-6) dv.addScaledVector(out.normalize(), S * 0.35 * light);
-        }
-      } else if (kind === 'stab') {
-        // driven through: the far side bursts out along the thrust, the rest is shoved back
-        const ax = job.opts.axis || swing;
-        const ahead = toward.dot(ax);
-        const radial = _b.copy(toward).addScaledVector(ax, -ahead);
-        if (radial.lengthSq() > 1e-6) radial.normalize();
-        dv.copy(ax).multiplyScalar(S * (0.35 + (ahead > 0 ? 0.9 : 0.4) * fall) * light).addScaledVector(radial, S * 0.45 * fall * light).add(_a.set(0, S * 0.18 * fall, 0));
-        if (b === base) dv.copy(ax).multiplyScalar(S * 0.45); // the feet skid back
-      } else {
-        toward.y = Math.max(0.05, toward.y);
-        toward.normalize();
-        dv.copy(swing).multiplyScalar(S * fall * light * (0.8 + Math.random() * 0.5))
-          .addScaledVector(toward, S * (0.25 + 0.35 * fall) * light * Math.random())
-          .add(_b.set(0, S * (0.15 + 0.55 * fall) * light, 0));
-      }
-      // applied at the contact (clamped to the piece) so it spins as well as flies
-      const r = _r1.copy(at).sub(b.p);
-      if (r.length() > b.rad) r.setLength(b.rad);
-      this._impulse(b, dv.multiplyScalar(b.m), kind === 'smash' ? r : r.multiplyScalar(0.3));
-      if (b.w.length() > 16) b.w.setLength(16);
-      b.sleep = false;
+    if (box.isEmpty()) return null;
+    const cf = box.getCenter(new THREE.Vector3());
+    const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * 0.92);
+    // slivers left by a cut are too small to see and would only buzz about: drop them
+    if (Math.max(half.x, half.y, half.z) < 0.012) return null;
+    half.max(new THREE.Vector3(0.008, 0.008, 0.008));
+    const group = new THREE.Group();
+    group.position.copy(cf).applyQuaternion(quat);
+    group.quaternion.copy(quat);
+    const T = new THREE.Matrix4().makeTranslation(-cf.x, -cf.y, -cf.z);
+    for (const [it, rel] of rels) {
+      const mesh = new THREE.Mesh(it.geo, it.mat || material);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.multiplyMatrices(T, rel);
+      mesh.castShadow = shadow && half.length() > 0.03 && !it.mat;
+      mesh.receiveShadow = true;
+      if (it.mat) mesh.userData.decal = true;
+      group.add(mesh);
     }
+    this.scene.add(group);
+    const vol = 8 * half.x * half.y * half.z * FILL;
+    const m = Math.max(0.003, DENSITY * vol);
+    const I = new THREE.Vector3((m / 3) * (half.y * half.y + half.z * half.z), (m / 3) * (half.x * half.x + half.z * half.z), (m / 3) * (half.x * half.x + half.y * half.y));
+    // spheres along the longest side for colliding with other pieces
+    const axis = half.x >= half.y && half.x >= half.z ? 'x' : half.y >= half.z ? 'y' : 'z';
+    const long = half[axis];
+    const thick = Math.max(0.006, axis === 'x' ? Math.max(half.y, half.z) : axis === 'y' ? Math.max(half.x, half.z) : Math.max(half.x, half.y));
+    const sr = round ? (half.x + half.y + half.z) / 3 : Math.max(0.006, Math.min(long, thick * 0.85));
+    const ns = round ? 1 : Math.min(4, Math.max(1, Math.round(long / sr)));
+    const spheres = [];
+    for (let i = 0; i < ns; i++) {
+      const t = ns === 1 ? 0 : (i / (ns - 1)) * 2 - 1;
+      const o = new THREE.Vector3();
+      o[axis] = t * (long - sr);
+      spheres.push(o);
+    }
+    const corners = [];
+    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) corners.push(new THREE.Vector3(x * half.x, y * half.y, z * half.z));
+    const b = {
+      g: group, p: group.position, q: group.quaternion, v: new THREE.Vector3(), w: new THREE.Vector3(),
+      m, m0: m, I0: I, invM: 1 / m, invI: new THREE.Vector3(1 / I.x, 1 / I.y, 1 / I.z), half, corners, spheres, sr, round,
+      rad: half.length(), sleep: false, still: 0, rest: 0, ply, age: 0, white, vol,
+      parent: null, kids: [], off: null, offq: null, lastImp: -1,
+    };
+    this.bodies.push(b);
     this._trim();
-    return pieces;
+    return b;
+  }
+
+  _body(geo, material, pos, quat, scale, ply, shadow) {
+    const m = new THREE.Matrix4().compose(pos, quat, scale);
+    return this.compound([{ geo, m }], material, quat, ply, { shadow: shadow !== false });
+  }
+
+  // ---- pieces stuck together: a glued piece rides on its root until it is let go
+  _mass(r) {
+    let m = r.m0;
+    const I = r.I0.clone();
+    for (const k of r.kids) {
+      m += k.m0;
+      const o = k.off;
+      I.x += k.I0.x + k.m0 * (o.y * o.y + o.z * o.z);
+      I.y += k.I0.y + k.m0 * (o.x * o.x + o.z * o.z);
+      I.z += k.I0.z + k.m0 * (o.x * o.x + o.y * o.y);
+    }
+    r.m = m;
+    r.invM = 1 / m;
+    r.invI.set(1 / I.x, 1 / I.y, 1 / I.z);
+  }
+  /** Glues [kid] to [root] as they are now; it is let go at the root's age [at] (or when it hits hard). */
+  glue(kid, root, at = Infinity, dv = null, dw = null) {
+    if (!kid || !root || kid === root) return;
+    kid.parent = root;
+    _qi.copy(root.q).invert();
+    kid.off = kid.p.clone().sub(root.p).applyQuaternion(_qi);
+    kid.offq = _qi.clone().multiply(kid.q);
+    kid.releaseAt = at;
+    kid.releaseDv = dv;
+    kid.releaseDw = dw;
+    root.kids.push(kid);
+    this._mass(root);
+  }
+  release(kid, dv = null, dw = null) {
+    const r = kid.parent;
+    if (!r) return;
+    kid.parent = null;
+    r.kids = r.kids.filter((k) => k !== kid);
+    this._mass(r);
+    kid.v.copy(r.w).cross(_a.copy(kid.p).sub(r.p)).add(r.v);
+    kid.w.copy(r.w);
+    if (dv) kid.v.add(dv);
+    if (dw) kid.w.add(dw);
+    kid.sleep = false;
+    kid.still = 0;
+    kid.age = Math.max(kid.age, 0.07);
+    if (r.slide) {
+      kid.v.addScaledVector(r.slide.dir, r.slide.speed);
+    }
   }
 
   /** A flake of stone knocked off by a glancing blow: it falls and stays on the board. */
   flake(at, dir, material, size = 0.04, ply = 0) {
     const geo = new THREE.DodecahedronGeometry(size, 0);
     geo.scale(1, 0.55 + Math.random() * 0.3, 0.7 + Math.random() * 0.3);
+    geo.userData.own = true;
     const b = this._body(soup(geo), material, at.clone(), new THREE.Quaternion().random(), new THREE.Vector3(1, 1, 1), ply, true);
     if (!b) return null;
     b.v.copy(dir).multiplyScalar(1.1 + Math.random() * 0.8).add(_a.set((Math.random() - 0.5) * 0.8, 1.2 + Math.random(), (Math.random() - 0.5) * 0.8));
     b.w.set(Math.random() * 20 - 10, Math.random() * 20 - 10, Math.random() * 20 - 10);
-    this._trim();
     return b;
   }
 
   /** Chips of stone blasted off at the point of impact. */
   chips(at, dir, material, n = 18, power = 1, ply = 0) {
+    const white = material?.userData?.side !== 'black';
     for (let i = 0; i < n; i++) {
       const s = 0.01 + Math.random() * 0.03;
       const m = new THREE.Mesh(chipGeos[(Math.random() * 3) | 0], material);
@@ -418,66 +374,16 @@ export class Rubble {
       v.x += (Math.random() - 0.5) * 2.6 * power;
       v.z += (Math.random() - 0.5) * 2.6 * power;
       v.y += 0.8 + Math.random() * 2.6 * power;
-      this.chipsList.push({ m, r: s, v, w: new THREE.Vector3(Math.random() * 30 - 15, Math.random() * 30 - 15, Math.random() * 30 - 15), ply, age: 0, sleep: false, sink: 0 });
+      this.chipsList.push({ m, r: s, v, w: new THREE.Vector3(Math.random() * 30 - 15, Math.random() * 30 - 15, Math.random() * 30 - 15), ply, age: 0, sleep: false, white });
     }
-    while (this.chipsList.length > MAX_CHIPS) this.scene.remove(this.chipsList.shift().m);
-  }
-
-  _body(geo, material, pos, quat, scale, ply, shadow) {
-    geo.computeBoundingBox();
-    const bb = geo.boundingBox;
-    const cLocal = bb.getCenter(new THREE.Vector3());
-    const half = bb.getSize(new THREE.Vector3()).multiply(scale).multiplyScalar(0.5);
-    // slivers left by a cut are too small to see and would only buzz about: drop them
-    if (Math.max(half.x, half.y, half.z) < 0.014) return null;
-    half.max(new THREE.Vector3(0.008, 0.008, 0.008));
-    // the body sits at the chunk's centre; the mesh hangs inside it untouched, so the stone's
-    // grain (computed from the geometry's own coordinates) doesn't jump when it breaks
-    const group = new THREE.Group();
-    group.position.copy(cLocal).multiply(scale).applyQuaternion(quat).add(pos);
-    group.quaternion.copy(quat);
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.scale.copy(scale);
-    mesh.position.copy(cLocal).multiply(scale).negate();
-    mesh.castShadow = shadow !== false && half.length() > 0.03;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    this.scene.add(group);
-    const vol = 8 * half.x * half.y * half.z * FILL;
-    const m = Math.max(0.003, DENSITY * vol);
-    const I = new THREE.Vector3(
-      (m / 3) * (half.y * half.y + half.z * half.z),
-      (m / 3) * (half.x * half.x + half.z * half.z),
-      (m / 3) * (half.x * half.x + half.y * half.y),
-    );
-    // spheres along the longest side for colliding with other pieces
-    const axis = half.x >= half.y && half.x >= half.z ? 'x' : half.y >= half.z ? 'y' : 'z';
-    const long = half[axis];
-    const thick = Math.max(0.006, axis === 'x' ? Math.max(half.y, half.z) : axis === 'y' ? Math.max(half.x, half.z) : Math.max(half.x, half.y));
-    const sr = Math.max(0.006, Math.min(long, thick * 0.85));
-    const ns = Math.min(4, Math.max(1, Math.round(long / sr)));
-    const spheres = [];
-    for (let i = 0; i < ns; i++) {
-      const t = ns === 1 ? 0 : (i / (ns - 1)) * 2 - 1;
-      const o = new THREE.Vector3();
-      o[axis] = t * (long - sr);
-      spheres.push(o);
-    }
-    const corners = [];
-    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) corners.push(new THREE.Vector3(x * half.x, y * half.y, z * half.z));
-    const b = {
-      g: group, p: group.position, q: group.quaternion, v: new THREE.Vector3(), w: new THREE.Vector3(),
-      m, invM: 1 / m, invI: new THREE.Vector3(1 / I.x, 1 / I.y, 1 / I.z), half, corners, spheres, sr,
-      rad: half.length(), sleep: false, still: 0, ply, age: 0, sink: 0,
-    };
-    this.bodies.push(b);
-    return b;
+    while (this.chipsList.length > MAX_CHIPS) this._meltChip(this.chipsList.shift());
   }
 
   _trim() {
+    // too many pieces about: the oldest settled ones start melting now
     while (this.bodies.length > MAX_BODIES) {
-      const b = this.bodies.shift();
-      this.scene.remove(b.g);
+      const b = this.bodies.find((x) => !x.parent && !x.kids.length) || this.bodies[0];
+      this._meltBody(b);
     }
   }
 
@@ -499,7 +405,8 @@ export class Rubble {
     return out.copy(b.w).cross(r).add(b.v);
   }
 
-  // a contact against something that doesn't move: normal n points out of it, toward the body
+  // a contact against something that doesn't move: normal n points out of it, toward the body.
+  // Returns the speed it came in at (negative: into the surface).
   _contactStatic(b, r, n, depth, e) {
     const vp = this._vel(b, r, _a);
     const vn = vp.dot(n);
@@ -523,6 +430,7 @@ export class Rubble {
       if (jn * b.invM > 0.5) b.sleep = false;
     }
     if (depth > SLOP) b.p.addScaledVector(n, (depth - SLOP) * 0.8);
+    return vn;
   }
 
   _contactPair(A, B, ra, rb, n, depth) {
@@ -538,7 +446,6 @@ export class Rubble {
       const J = _r2.copy(n).multiplyScalar(jn);
       this._impulse(A, J, ra);
       this._impulse(B, J.negate(), rb);
-      // friction along the sliding
       const va2 = this._vel(A, ra, _a), vb2 = this._vel(B, rb, _b);
       const rel = va2.sub(vb2);
       const vt = rel.addScaledVector(n, -rel.dot(n));
@@ -562,8 +469,26 @@ export class Rubble {
   }
 
   _step(obst) {
-    const live = this.bodies.filter((b) => !b.sleep && !b.sink);
-    for (const b of live) {
+    const all = this.bodies;
+    for (const b of all) {
+      if (b.parent || b.sleep) continue;
+      if (b.slide) {
+        // carried along a cut face by the blade (kinematic): sliding, tipping, then let go
+        const s = b.slide;
+        s.speed += s.acc * H;
+        b.p.addScaledVector(s.dir, s.speed * H);
+        b.p.y -= s.drop * H;
+        _q.setFromAxisAngle(s.axis, s.spin * H);
+        b.q.premultiply(_q).normalize();
+        s.spin += s.spinAcc * H;
+        s.t += H;
+        if (s.t >= s.until) {
+          b.v.copy(s.dir).multiplyScalar(s.speed).y -= s.drop;
+          b.w.copy(s.axis).multiplyScalar(s.spin);
+          b.slide = null;
+        }
+        continue;
+      }
       b.v.y -= G * H;
       b.p.addScaledVector(b.v, H);
       const wl = b.w.length();
@@ -572,15 +497,20 @@ export class Rubble {
         b.q.premultiply(_q).normalize();
       }
     }
-    // fragments against fragments (awake against anything)
-    for (let i = 0; i < this.bodies.length; i++) {
-      const A = this.bodies[i];
-      if (A.sink) continue;
-      for (let j = i + 1; j < this.bodies.length; j++) {
-        const B = this.bodies[j];
-        if (B.sink || (A.sleep && B.sleep)) continue;
-        // pieces of one break start out touching: let them part before they collide
-        if (A.brk && A.brk === B.brk && A.age < 0.06 && B.age < 0.06) continue;
+    // glued pieces ride on their roots
+    for (const b of all) {
+      if (!b.parent) continue;
+      const r = b.parent;
+      b.p.copy(b.off).applyQuaternion(r.q).add(r.p);
+      b.q.copy(r.q).multiply(b.offq);
+    }
+    // fragments against fragments (a glued piece's contacts act on its root)
+    for (let i = 0; i < all.length; i++) {
+      const A = all[i], RA = A.parent || A;
+      for (let j = i + 1; j < all.length; j++) {
+        const B = all[j], RB = B.parent || B;
+        if (RA === RB || (RA.sleep && RB.sleep) || RA.slide || RB.slide) continue;
+        if (A.brk && A.brk === B.brk && RA.age < 0.06 && RB.age < 0.06) continue;
         const rr = A.rad + B.rad;
         if (A.p.distanceToSquared(B.p) > rr * rr) continue;
         for (const sa of A.spheres) {
@@ -589,55 +519,70 @@ export class Rubble {
             const pb = _r2.copy(sb).applyQuaternion(B.q).add(B.p);
             const d = pa.distanceTo(pb), min = A.sr + B.sr;
             if (d >= min || d < 1e-6) continue;
-            const n = pa.clone().sub(pb).divideScalar(d);
-            const cp = pb.clone().addScaledVector(n, B.sr - (min - d) / 2);
-            this._contactPair(A, B, cp.clone().sub(A.p), cp.clone().sub(B.p), n, min - d);
+            const n = _gn.copy(pa).sub(pb).divideScalar(d);
+            const cp = _gat.copy(pb).addScaledVector(n, B.sr - (min - d) / 2);
+            if (RA.sleep) RA.sleep = false;
+            if (RB.sleep) RB.sleep = false;
+            this._contactPair(RA, RB, _gr.copy(cp).sub(RA.p), _gr2.copy(cp).sub(RB.p), n, min - d);
           }
         }
       }
     }
-    for (const b of live) {
-      // the ground: every corner of the box below the surface is a contact (solved twice so
-      // a piece resting on several corners settles instead of rocking)
+    for (const b of all) {
+      if (b.parent || b.sleep || b.slide) continue;
+      const members = b.kids.length ? [b, ...b.kids] : [b];
+      // the ground: every corner of each box below the surface is a contact (solved twice so a
+      // piece resting on several corners settles instead of rocking); a round piece rolls on it
       let touching = false;
       for (let it = 0; it < 2; it++) {
-        for (const k of b.corners) {
-          const wp = _r1.copy(k).applyQuaternion(b.q).add(b.p);
-          const gy = groundAt(wp.x, wp.z);
-          if (wp.y < gy + 0.001) {
-            touching = true;
-            this._contactStatic(b, wp.sub(b.p).clone(), new THREE.Vector3(0, 1, 0), gy - (wp.y + b.p.y), it === 0 ? 0.25 : 0);
+        for (const mb of members) {
+          const pts = mb.round ? ROUND : mb.corners;
+          for (const k of pts) {
+            const wp = mb.round ? _r1.set(0, -mb.sr, 0).add(mb.p) : _r1.copy(k).applyQuaternion(mb.q).add(mb.p);
+            const gy = groundAt(wp.x, wp.z);
+            if (wp.y < gy + 0.001) {
+              touching = true;
+              const at = _gat.copy(wp);
+              const vn = this._contactStatic(b, _gr.copy(wp).sub(b.p), UP, gy - at.y, it === 0 ? 0.25 : 0);
+              if (it === 0 && vn < -0.9) {
+                if (mb !== b) mb.breakOff = true; // a glued piece that hits hard breaks off
+                if (vn < -1.3 && b.age - b.lastImp > 0.18 && this.onImpact) {
+                  b.lastImp = b.age;
+                  this.onImpact(at.clone(), -vn, b);
+                }
+              }
+            }
           }
         }
       }
       if (touching) {
-        // rolling resistance and grit: stone doesn't roll for long
-        b.w.multiplyScalar(0.975);
+        // rolling resistance and grit: stone doesn't roll for long (a head rolls a little more)
+        b.w.multiplyScalar(b.round ? 0.993 : 0.975);
         b.v.x *= 0.996;
         b.v.z *= 0.996;
       }
       // the statues still standing: an upright cylinder each (a broad foot, a body above it)
       for (const o of obst) {
         const dx = b.p.x - o.x, dz = b.p.z - o.z;
-        if (dx * dx + dz * dz > (0.22 + b.rad) * (0.22 + b.rad)) continue;
-        for (const s of b.spheres) {
-          const c = _r1.copy(s).applyQuaternion(b.q).add(b.p);
-          for (const [R, top] of [[0.18, o.h * 0.12], [0.14, o.h * 0.85]]) {
-            if (c.y - b.sr > top) continue;
-            const ex = c.x - o.x, ez = c.z - o.z, dd = Math.hypot(ex, ez);
-            const pen = R + b.sr - dd;
-            if (pen <= 0) continue;
-            // on top of it: pushed up; against its side: pushed out
-            if (top - (c.y - b.sr) < pen && c.y > top - 0.05) {
-              this._contactStatic(b, c.clone().sub(b.p).setY(c.y - b.sr - b.p.y), new THREE.Vector3(0, 1, 0), top - (c.y - b.sr), 0.15);
-            } else {
-              const n = new THREE.Vector3(ex / (dd || 1), 0, ez / (dd || 1));
-              this._contactStatic(b, c.clone().addScaledVector(n, -b.sr).sub(b.p), n, pen, 0.2);
+        if (dx * dx + dz * dz > (0.4 + b.rad) * (0.4 + b.rad)) continue;
+        for (const mb of members) {
+          for (const s of mb.spheres) {
+            const c = _r1.copy(s).applyQuaternion(mb.q).add(mb.p);
+            for (const [R, top] of [[0.18, o.h * 0.12], [0.14, o.h * 0.85]]) {
+              if (c.y - mb.sr > top) continue;
+              const ex = c.x - o.x, ez = c.z - o.z, dd = Math.hypot(ex, ez);
+              const pen = R + mb.sr - dd;
+              if (pen <= 0) continue;
+              if (top - (c.y - mb.sr) < pen && c.y > top - 0.05) {
+                this._contactStatic(b, _gr.copy(c).sub(b.p).setY(c.y - mb.sr - b.p.y), UP, top - (c.y - mb.sr), 0.15);
+              } else {
+                const n = _gn.set(ex / (dd || 1), 0, ez / (dd || 1));
+                this._contactStatic(b, _gr.copy(c).addScaledVector(n, -mb.sr).sub(b.p), n, pen, 0.2);
+              }
             }
           }
         }
       }
-      // asleep once it has stayed still for a moment
       // asleep once even its outermost point has stayed nearly still for a moment
       if (b.v.length() + b.w.length() * b.rad < 0.09) {
         b.still += H;
@@ -648,12 +593,11 @@ export class Rubble {
           b.w.set(0, 0, 0);
         }
       } else b.still = 0;
-      // air drag on the spin keeps it from rolling forever
       b.w.multiplyScalar(0.9985);
     }
     // chips: little spheres on the ground and against the statues' feet
     for (const c of this.chipsList) {
-      if (c.sleep || c.sink) continue;
+      if (c.sleep) continue;
       c.v.y -= G * H;
       c.m.position.addScaledVector(c.v, H);
       c.m.rotation.x += c.w.x * H;
@@ -684,17 +628,43 @@ export class Rubble {
     }
   }
 
-  /** Steps the simulation; [ply] lets old rubble sink away a few moves later. */
-  update(dt, ply) {
+  // a settled piece leaves the physics and melts away (see melt.js)
+  _meltBody(b) {
+    for (const k of b.kids.slice()) {
+      this.release(k);
+      k.sleep = true;
+    }
+    if (b.parent) this.release(b);
+    this.bodies = this.bodies.filter((x) => x !== b);
+    // whatever rested on it falls
+    for (const o of this.bodies) if (o.sleep && o.p.distanceTo(b.p) < o.rad + b.rad + 0.05) (o.sleep = false), (o.still = 0);
+    if (this.onMelt) this.onMelt(b.g, b.white, b.vol);
+    else {
+      this.scene.remove(b.g);
+      disposeOwn(b.g);
+    }
+  }
+  _meltChip(c) {
+    if (this.onMelt) this.onMelt(c.m, c.white, c.r * c.r * c.r * 4);
+    else this.scene.remove(c.m);
+  }
+
+  /** Steps the simulation. */
+  update(dt) {
     const t0 = performance.now();
     this.acc = Math.min(this.acc + dt, MAX_STEPS * H);
     const obst = this.obstacles();
-    // cracking ahead of a blow, a little each frame
+    // cutting ahead of a blow, a little each frame
     const tp = performance.now();
-    for (const job of this.jobs.slice()) this._work(job, 2.5 / this.jobs.length);
+    while (this.tasks.length && performance.now() - tp < 2.5) this._run(this.tasks[0]);
     this.prepMs = performance.now() - tp;
-    // what's left standing after a cut slumps a moment later
     for (const b of this.bodies) {
+      // glued pieces let go on time, or when they hit hard
+      if (b.parent && (b.breakOff || b.parent.age >= b.releaseAt)) {
+        this.release(b, b.breakOff ? null : b.releaseDv, b.breakOff ? null : b.releaseDw);
+        b.breakOff = false;
+      }
+      // what's left standing slumps a moment later
       if (b.kick && b.age >= b.kick.t) {
         b.v.add(b.kick.dv);
         b.w.add(_a.set(Math.random() * 4 - 2, Math.random() * 2 - 1, Math.random() * 4 - 2));
@@ -711,43 +681,45 @@ export class Rubble {
       this._step(obst);
       this.acc -= H;
     }
-    // old rubble sinks into the board and goes
-    for (let i = this.bodies.length - 1; i >= 0; i--) {
-      const b = this.bodies[i];
+    // settled rubble melts (a piece that never settles melts anyway)
+    for (const b of this.bodies.slice()) {
       b.age += dt;
-      if (ply - b.ply >= 3 && b.age > 4) b.sink += dt;
-      if (b.sink) {
-        b.p.y -= dt * 0.1;
-        if (b.sink > 2.5) {
-          this.scene.remove(b.g);
-          this.bodies.splice(i, 1);
-        }
-      }
+      if (b.parent) continue;
+      b.rest = b.sleep ? b.rest + dt : 0;
+      if (b.rest > REST_MELT || b.age > MAX_AGE) this._meltBody(b);
     }
     for (let i = this.chipsList.length - 1; i >= 0; i--) {
       const c = this.chipsList[i];
       c.age += dt;
-      if (ply - c.ply >= 3 && c.age > 4) c.sink += dt;
-      if (c.sink) {
-        c.m.position.y -= dt * 0.05;
-        if (c.sink > 2) {
-          this.scene.remove(c.m);
-          this.chipsList.splice(i, 1);
-        }
+      if ((c.sleep && c.age > 3) || c.age > 10) {
+        this.chipsList.splice(i, 1);
+        this._meltChip(c);
       }
     }
     this.ms = performance.now() - t0 - this.prepMs;
   }
 
   get awake() {
-    return this.bodies.filter((b) => !b.sleep && !b.sink).length;
+    return this.bodies.filter((b) => !b.sleep && !b.parent).length;
   }
 
   clear() {
-    this.jobs.length = 0;
-    for (const b of this.bodies) this.scene.remove(b.g);
+    this.tasks.length = 0;
+    for (const b of this.bodies) {
+      this.scene.remove(b.g);
+      disposeOwn(b.g);
+    }
     for (const c of this.chipsList) this.scene.remove(c.m);
     this.bodies.length = 0;
     this.chipsList.length = 0;
   }
+}
+const ROUND = [null];
+const REST_MELT = 2.5, MAX_AGE = 16;
+
+/** Frees the geometry a cut made (never a statue's shared template). */
+export function disposeOwn(o) {
+  o.traverse((x) => {
+    if (x.isMesh && x.geometry?.userData.own) x.geometry.dispose();
+  });
 }

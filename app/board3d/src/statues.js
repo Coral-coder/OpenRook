@@ -227,7 +227,7 @@ function twoHanded() {
     const plant = { shR: [-0.3, 0, -0.42], elR: [-1.25, 0, 0], wrR: [1.55, 0, 0.42], shL: [-0.25, 0, 0.14], elL: [-0.55, 0, 0], wrL: [0.2, 0, 0], spine: [0.04, -0.12, 0], head: [0.06, 0.2, 0], $hips: [-0.04, 0], $fL: [0, 0, 0.04], $fR: [0, 0, -0.04] };
     const high = (sp, el, x = {}) => ({ ...plant, shL: [-2.78, 0, sp], shR: [-2.78, 0, -sp], elL: [el, 0, 0], elR: [el, 0, 0], wrL: [0.05, 0, 0], wrR: [0.05, 0, 0], spine: [-0.1, 0, 0], chest: [-0.05, 0, 0], head: [-0.38, 0, 0], $hips: [-0.01, 0], $fL: [0, 0, 0.04], $fR: [0, 0, -0.04], ...x });
     const lift = (sx, x = {}) => ({ ...plant, shL: [sx, 0, -0.06], elL: [-0.15, 0, 0], wrL: [-0.45, 0, 0], shR: [-0.45, 0, -0.55], elR: [-0.7, 0, 0], wrR: [0.3, 0, 0], spine: [0.12, -0.1, 0], chest: [0.04, 0, 0], head: [-0.4, -0.05, 0], $hips: [-0.08, 0.04], $fL: [0, 0, 0.1], $fR: [0, 0, -0.05], $root: [0, 0, 0.06, 0.02, 0, 0], ...x });
-    M.clap = { line: 'high', cast: true, hits: [0.6, 0.82, 1.18], plant: 0.3, grab: 3.12, keys: [
+    M.clap = { line: 'high', cast: true, hits: [0.6, 0.82, 1.18], plant: 0.3, grab: 3.57, keys: [
       [0, guard],
       [0.3, plant, 'h'],
       [0.5, high(0.5, -0.85, { $root: [0, 0.01, 0, -0.02, 0, 0] })],
@@ -238,12 +238,12 @@ function twoHanded() {
       [1.06, lift(-3.05, { shR: [-0.5, 0, -0.5], spine: [-0.16, 0.2, 0], chest: [-0.06, 0.1, 0], head: [-0.3, -0.15, 0], wrL: [0.3, 0, 0], $hips: [-0.02, -0.02], $root: [0, 0.02, -0.03, -0.04, 0.1, 0] }), 'h'],
       [1.18, lift(-1.5, { wrL: [0.15, 0, 0], spine: [0.34, -0.2, 0], chest: [0.1, -0.05, 0], head: [-0.2, 0.05, 0], $hips: [-0.1, 0.06], $fL: [0, 0, 0.14], $root: [0, 0, 0.1, 0.05, -0.12, 0] })],
       [1.4, lift(-1.6, { wrL: [-0.1, 0, 0], spine: [0.3, -0.18, 0], head: [-0.3, 0.05, 0], $root: [0, 0, 0.1, 0.04, -0.1, 0] }), 'h'],
-      [2.55, lift(-2.25, { head: [-0.55, 0.05, 0], spine: [0.05, -0.15, 0], $root: [0, 0.01, 0.07, -0.01, -0.08, 0] })],
-      [2.72, lift(-2.3, { head: [-0.6, 0.05, 0], spine: [0.0, -0.15, 0], $root: [0, 0.01, 0.07, -0.02, -0.08, 0] }), 'h'],
-      [2.86, { ...lift(-1.9, { shL: [-1.9, 0, 0.45], elL: [-0.9, 0, 0], spine: [-0.12, 0.15, 0.06], chest: [-0.06, 0.08, 0], head: [0.15, 0.45, 0.1], $hips: [-0.04, -0.03], $root: [0, 0, 0.0, -0.05, 0.05, 0] }) }],
-      [3.02, plant],
-      [3.12, plant, 'h'],
-      [3.45, guard],
+      [3.0, lift(-2.25, { head: [-0.55, 0.05, 0], spine: [0.05, -0.15, 0], $root: [0, 0.01, 0.07, -0.01, -0.08, 0] })],
+      [3.17, lift(-2.3, { head: [-0.6, 0.05, 0], spine: [0.0, -0.15, 0], $root: [0, 0.01, 0.07, -0.02, -0.08, 0] }), 'h'],
+      [3.31, { ...lift(-1.9, { shL: [-1.9, 0, 0.45], elL: [-0.9, 0, 0], spine: [-0.12, 0.15, 0.06], chest: [-0.06, 0.08, 0], head: [0.15, 0.45, 0.1], $hips: [-0.04, -0.03], $root: [0, 0, 0.0, -0.05, 0.05, 0] }) }],
+      [3.47, plant],
+      [3.57, plant, 'h'],
+      [3.9, guard],
     ] };
   }
   // guards: blade upright across the body, or held flat over the head
@@ -473,7 +473,7 @@ const HORSE = {
 
 // the reactions every fighter has: parries (high and level), being knocked back off a heavy
 // blow, a sidestep out of the way, and reeling from the blow that kills
-function reactions(P) {
+function reactions(P, kind) {
   const g = P.guard;
   const R = (dz, rx, ry = 0, rz = 0, dx = 0, dy = 0) => [dx, dy, dz, rx, ry, rz];
   const M = {};
@@ -522,6 +522,26 @@ function reactions(P) {
       [1.0, g],
     ] };
   }
+  // wounded: a blow that got through. Doubled over, or driven down onto a knee, or the off
+  // hand clutched to the wound; then back up on guard
+  const oh = kind === 'oneL' ? 'R' : 'L', os = oh === 'L' ? 1 : -1;
+  const jolt = { ...lerpPose(g, P.fling, 0.55), $root: R(-0.07, -0.12, 0.1, 0.04, 0, 0.03), $hips: [-0.05, -0.03] };
+  const bent = { ...g, spine: [0.55, 0.2, 0.1], chest: [0.15, 0, 0], head: [0.1, -0.1, 0], $hips: [-0.12, -0.02], $root: R(-0.1, 0.05, 0.1) };
+  M.hurt = { react: true, hits: [0], keys: [[0, g], [0.07, jolt], [0.3, bent, 'h'], [0.75, add(bent, { spine: [-0.1, 0, 0] })], [1.15, g]] };
+  const knee = { ...g, $hips: [-0.34, -0.05], $fL: [0, 0, 0.14], $fR: [0, 0, -0.17], spine: [0.45, 0.1, 0.05], chest: [0.12, 0, 0], head: [-0.25, 0, 0], $root: R(-0.12, 0.08, 0.05, 0, -0.03, 0) };
+  M.kneel = { react: true, hits: [0], keys: [[0, g], [0.07, jolt], [0.38, knee, 'h'], [1.05, add(knee, { spine: [-0.08, 0, 0], head: [-0.1, 0, 0] })], [1.5, lerpPose(knee, g, 0.6)], [1.85, g]] };
+  const hold = { ...bent, ['sh' + oh]: [-1.0, 0, -0.55 * os], ['el' + oh]: [-2.1, 0, 0], ['wr' + oh]: [0.3, 0, 0] };
+  M.clutch = { react: true, hits: [0], keys: [[0, g], [0.07, jolt], [0.32, hold, 'h'], [0.95, add(hold, { spine: [-0.15, 0, 0] })], [1.35, g]] };
+  // run through: the stone seizes, arched and rigid
+  const arch = { ...P.fling, spine: [-0.38, 0, 0.06], chest: [-0.16, 0, 0], head: [-0.6, 0.1, 0.1], $hips: [-0.04, 0], $root: R(-0.04, -0.06) };
+  M.seize = { react: true, hits: [0], keys: [[0, g], [0.08, arch], [0.2, add(arch, { spine: [0.04, 0, -0.03] })], [0.4, arch], [2.5, arch]] };
+  // what's left standing gives way: the knees buckle and it goes over
+  M.collapse = { react: true, hits: [0], keys: [
+    [0, { ...g, $hips: [-0.06, 0] }],
+    [0.32, { ...g, $hips: [-0.12, 0.02], spine: [0.3, 0, 0.1], head: [0.2, 0, 0], $root: R(0, 0.04, 0, 0, 0, 0.03) }],
+    [0.75, { ...g, $hips: [-0.32, 0.06], spine: [0.5, 0, 0.2], $fL: [0, 0, 0.1], $fR: [0, 0, -0.12], $root: R(0.03, 0.25, 0, 0.12, 0, -0.01) }],
+    [1.3, { ...g, $hips: [-0.42, 0.1], spine: [0.6, 0, 0.3], $fL: [0, 0, 0.12], $fR: [0, 0, -0.14], $root: R(0.06, 0.7, 0, 0.3, 0, -0.04) }],
+  ] };
   // the death blow lands: the body jolts back, arms flung, head snapped round
   M.reel = { react: true, hits: [0], keys: [
     [0, g],
@@ -552,6 +572,9 @@ HORSE_TRACK.parryHigh = HORSE_TRACK.parryL = HORSE_TRACK.parryR = HORSE_TRACK.de
 HORSE_TRACK.staggerL = HORSE_TRACK.staggerR = HORSE_TRACK.stagger;
 HORSE_TRACK.staggerHigh = HORSE_TRACK.stagger;
 HORSE_TRACK.hit = HORSE_TRACK.parry;
+HORSE_TRACK.hurt = HORSE_TRACK.kneel = HORSE_TRACK.clutch = HORSE_TRACK.stagger;
+HORSE_TRACK.seize = HORSE_TRACK.reel;
+HORSE_TRACK.collapse = [[0, HORSE.rest], [0.32, HORSE.hit], [0.8, { horse: [0.3, 0, 0.25], flL: [0.8, 0, 0], fkL: [-1.6, 0, 0], flR: [0.6, 0, 0], fkR: [-1.4, 0, 0], hneck: [0.5, 0.2, 0], hhead: [-0.2, 0, 0], tail: [-0.3, 0, 0] }], [1.3, { horse: [0.45, 0, 0.5], flL: [1.1, 0, 0], fkL: [-2.0, 0, 0], flR: [0.9, 0, 0], fkR: [-1.9, 0, 0], hneck: [0.7, 0.3, 0], hhead: [-0.3, 0, 0], tail: [-0.4, 0, 0] }]];
 
 // what each kind of fighter does: the blows of an exchange and the finishing moves. Swords
 // fight with flat cuts round the body (forehand and backhand) and the point; the occasional
@@ -595,7 +618,8 @@ function clips(kind) {
     fidget: { keys: [[0, P.rest], [0.6, g], [1.4, g], [2, P.rest]] },
     death: { keys: [[0, P.blockMid], [1.2, P.blockMid]] },
     hit: { keys: [[0, g], [0.1, lerpPose(g, P.fling, 0.4)], [0.6, g]] },
-    ...reactions(P),
+    ...reactions(P, kind),
+    shuffle: { loop: true, keys: [[0, add(g, { $fL: [0, 0.06, 0.03] })], [0.25, add(g, { $fR: [0, 0.06, -0.03] })], [0.5, add(g, { $fL: [0, 0.06, 0.03] })]] },
     ...M,
   };
   C.hit2 = C.hit;
@@ -799,6 +823,7 @@ export function buildStatue(code) {
   return fig;
 }
 
+const HOLD = new Set(['death', 'reel', 'seize', 'collapse']); // moves that end held, never back to idle
 const ALIAS = { Blocking: 'guard', '2H_Melee_Idle': 'guard', Idle: 'idle' };
 export const MOVES = clipSet('two');
 const key = (fig, name) => {
@@ -877,7 +902,7 @@ function movePose(fig, c, t, lagged) {
 function animate(fig, dt) {
   const m = fig.move;
   m.t += dt;
-  if (!m.loop && m.t >= m.d && m.name !== 'death' && m.name !== 'reel') playMove(fig, 'idle', { fade: 0.35 });
+  if (!m.loop && m.t >= m.d && !HOLD.has(m.name)) playMove(fig, 'idle', { fade: 0.35 });
   const C = clipSet(fig.kind);
   const c = C[fig.move.name];
   const ct = (m.loop ? m.t % m.d : Math.min(m.t, m.d)) * (c.d / m.d);
@@ -898,7 +923,7 @@ function animate(fig, dt) {
   pose = add(pose, live);
   if (fig.type === KNIGHT && !c.horse) {
     let hp = {};
-    if (m.name === 'walk' || m.name === 'run' || m.name === 'guard') {
+    if (m.name === 'walk' || m.name === 'run' || m.name === 'guard' || m.name === 'shuffle') {
       const g = T * (m.name === 'guard' ? 4 : 9), a = m.name === 'guard' ? 0.5 : 1;
       hp = { horse: [-0.12 * a * Math.sin(g), 0, 0], flL: [0.5 * a * Math.sin(g), 0, 0], flR: [0.5 * a * Math.sin(g + 1.3), 0, 0], fkL: [-0.6 * a * Math.max(0, Math.sin(g + 0.8)), 0, 0], fkR: [-0.6 * a * Math.max(0, Math.sin(g + 2.1)), 0, 0], hneck: [0.15 * Math.sin(g + 0.5), 0, 0], tail: [0.2 * Math.sin(g), 0, 0.3 * Math.sin(g * 0.5)] };
     } else if (m.name === 'idle') {
@@ -978,7 +1003,7 @@ export function rebound(fig, amount = 0.5) {
   }
 }
 
-function applyPose(fig, pose) {
+function applyPose(fig, pose, legs = true) {
   const J = fig.J;
   for (const [n, j] of Object.entries(J)) {
     if (!j.userData.rest) continue;
@@ -996,10 +1021,10 @@ function applyPose(fig, pose) {
     // (a gown or an alb hangs from the hips to the board: the hips don't sink, or the hem would
     // sink into the board; the robed lean and twist from the waist instead)
     J.hips.position.set(0, 0.5 * H + (fig.robe ? 0 : hp[0]) * H, hp[1] * H);
-    solveLegs(fig, pose);
+    if (legs) solveLegs(fig, pose);
   }
   // the horse's tail rests on the board, it never goes through it
-  if (fig.tailTip) {
+  if (fig.tailTip && legs) {
     // (the marker is on the tail's axis; its strands spread a little lower)
     for (let i = 0; i < 3; i++) {
       fig.group.updateMatrixWorld(true);
@@ -1048,8 +1073,13 @@ function fall(fig, t, d) {
 
 // ------------------------------------------------------------------ aiming
 // Where the weapon is (world): its striking end, its far end, the hand, and the shield's face.
-function readWeapon(fig) {
-  fig.group.updateMatrixWorld(true);
+function readWeapon(fig, chain = false) {
+  if (chain) {
+    // (only the joints from the board up to the weapon and the shield: a probe is done often)
+    fig.hand.updateWorldMatrix(true, false);
+    fig.butt.updateWorldMatrix(false, false);
+    fig.shieldAt?.updateWorldMatrix(true, false);
+  } else fig.group.updateMatrixWorld(true);
   const w = fig.J.weapon;
   return {
     tip: fig.hand.getWorldPosition(new THREE.Vector3()),
@@ -1062,14 +1092,21 @@ function readWeapon(fig) {
 
 /** Where the weapon (and shield) would be at time k (0..1) of a move, with an aim layer. */
 export function probeMove(fig, name, k, aim = fig.aim) {
+  const r = probeRaw(fig, name, k, aim);
+  restorePose(fig);
+  return r;
+}
+// (the legs don't move the weapon: no IK for a probe; the pose is put back once, after)
+function probeRaw(fig, name, k, aim) {
   const c = clipSet(fig.kind)[key(fig, name)];
   let pose = movePose(fig, c, k * c.d, true);
   if (aim && pose.$aim) pose = add(pose, scaleP(aim, pose.$aim[0]));
-  applyPose(fig, pose);
-  const r = readWeapon(fig);
+  applyPose(fig, pose, false);
+  return readWeapon(fig, true);
+}
+function restorePose(fig) {
   if (fig.pose) applyPose(fig, fig.pose);
   fig.group.updateMatrixWorld(true);
-  return r;
 }
 /** Where the weapon is now. */
 export function weaponNow(fig) {
@@ -1107,7 +1144,7 @@ export function aimAt(fig, name, k, target, mode = 'strike') {
     return a;
   };
   const cost = (x) => {
-    const r = probeMove(fig, name, k, make(x));
+    const r = probeRaw(fig, name, k, make(x));
     let e;
     if (mode === 'strike') e = r.tip.distanceTo(target);
     else if (shield) e = Math.max(0, r.shield.distanceTo(target) - 0.03);
@@ -1136,7 +1173,8 @@ export function aimAt(fig, name, k, target, mode = 'strike') {
     if (!better) step *= 0.5;
   }
   const aim = make(x);
-  const r = probeMove(fig, name, k, aim);
+  const r = probeRaw(fig, name, k, aim);
+  restorePose(fig);
   const err = mode === 'strike' ? r.tip.distanceTo(target) : shield ? r.shield.distanceTo(target) : segDist(target, r.grip, r.tip, 0, 1);
   return { aim, err };
 }

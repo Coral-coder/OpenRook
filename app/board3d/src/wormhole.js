@@ -1,7 +1,8 @@
 // The queen's wormhole: her finisher against a pawn. She plants her staff, claps twice high over
 // her head and sweeps an arm down at the pawn; a little wormhole opens in the air above it, a
-// swirling disc with an inky core, sinks toward it and draws it up (tumbling, stretching,
-// shrinking, grit and dust spiralling up with it), then snaps shut in a flash of light and
+// swirling disc with an inky core, sinks toward it and draws it up (spaghettified: stretched
+// out along the pull into a thin twisting noodle that streams into the core, grit and dust
+// spiralling up with it), then snaps shut in a flash of light and
 // leaves a faint scorched ring on the square.
 //
 // Everything here is visual and keyed to its own clock; main.js times the events (the claps'
@@ -12,8 +13,8 @@ import { glowSprite } from './battle.js';
 /** The wormhole's timeline, in seconds after it opens. */
 export const WORM = {
   lift: 0.42, // the pawn leaves its square
-  gone: 1.4, // ... and is swallowed
-  flash: 1.58, // the wormhole has shrunk to a point: the flash
+  gone: 1.85, // ... and is swallowed (stretched out into a noodle on the way)
+  flash: 2.03, // the wormhole has shrunk to a point: the flash
   end: 4.2, // the scorch has faded
 };
 
@@ -106,6 +107,31 @@ const ringTex = (() => {
 })();
 
 const chipGeo = new THREE.DodecahedronGeometry(1, 0);
+
+// the stretch (see Wormhole.prepareVictim): each point slides toward the hole the faster the
+// nearer it is (so the body stretches out enormously along the pull), the stone thins as it
+// stretches, and it twists round the pull into a spiral as it streams into the core
+const SPAG_VERT = /* glsl */ `
+  vec4 wp = modelMatrix * vec4(transformed, 1.0);
+  if (uPull > 0.0) {
+    vec3 rel = wp.xyz - uHole;
+    float s = max(0.0, -dot(rel, uAxis));
+    vec3 q = rel + uAxis * s;
+    float sp = max(0.0, s - uPull / (s + 0.08));
+    float str = 1.0 + uPull / ((s + 0.08) * (s + 0.08));
+    float thin = pow(str, -0.8) * smoothstep(0.0, 0.3, sp) * (0.35 + 0.65 * exp(-uPull * 0.6));
+    float tw = uTwist * uPull / (sp + 0.1);
+    vec3 b1 = normalize(cross(uAxis, abs(uAxis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 b2 = cross(uAxis, b1);
+    float x = dot(q, b1), y = dot(q, b2);
+    float c = cos(tw), sn = sin(tw);
+    // the noodle swings round the axis too, coiling in
+    vec3 coil = (b1 * cos(tw * 0.5) + b2 * sin(tw * 0.5)) * 0.05 * min(1.0, uPull) * smoothstep(0.0, 0.5, sp);
+    wp.xyz = uHole - uAxis * sp + (b1 * (c * x - sn * y) + b2 * (sn * x + c * y)) * thin + coil;
+  }
+  vec4 mvPosition = viewMatrix * wp;
+  gl_Position = projectionMatrix * mvPosition;
+`;
 
 // ------------------------------------------------------------------ the claps
 /** A clap: a ring of light bursting out from the meeting hands, and a spray of sparkles. */
@@ -286,6 +312,7 @@ export class Wormhole {
       light.color.set(C.mid);
       light.intensity = 0;
     }
+    this.prepareVictim();
   }
 
   // how open it is (0..1) and its height, over time
@@ -332,6 +359,30 @@ export class Wormhole {
     return e;
   }
 
+  // Spaghettification: the victim's stone is stretched along the pull toward the hole (the
+  // parts nearest it first and fastest), thinned to a noodle and twisted into a spiral as it
+  // streams into the core. Done in the vertex shader, in the world, on its own material (set
+  // up when the wormhole opens, so the shader is ready before it's needed).
+  prepareVictim() {
+    const fig = this.victim;
+    const mat = fig?.materials?.[0];
+    if (!mat || mat.userData.spag) return;
+    const U = { uHole: { value: V() }, uAxis: { value: V(0, 1, 0) }, uPull: { value: 0 }, uTwist: { value: 0.75 } };
+    mat.userData.spag = U;
+    const orig = mat.onBeforeCompile;
+    mat.onBeforeCompile = (sh, r) => {
+      orig?.(sh, r);
+      Object.assign(sh.uniforms, U);
+      sh.vertexShader = 'uniform vec3 uHole;\nuniform vec3 uAxis;\nuniform float uPull;\nuniform float uTwist;\n' + sh.vertexShader.replace('#include <project_vertex>', SPAG_VERT);
+    };
+    const key = mat.customProgramCacheKey?.() || '';
+    mat.customProgramCacheKey = () => key + '-spag';
+    mat.needsUpdate = true;
+    fig.group.traverse((o) => {
+      if (o.isMesh && o.userData.decal) o.visible = false;
+    });
+  }
+
   updateVictim(t) {
     const fig = this.victim;
     if (!fig || this.swallowed) return;
@@ -341,25 +392,30 @@ export class Wormhole {
       const k = (t - (WORM.lift - 0.3)) / 0.3;
       inner.position.set(Math.sin(t * 83) * 0.012 * k, 0, Math.cos(t * 71) * 0.01 * k);
     }
+    const U = fig.materials[0]?.userData.spag;
+    if (U) {
+      U.uHole.value.copy(this.center);
+      U.uAxis.value.copy(this.center).sub(this.at.clone().setY(this.h * 0.4)).normalize();
+    }
     if (t < WORM.lift) return;
     const u = clamp01((t - WORM.lift) / (WORM.gone - WORM.lift));
     const e = Math.pow(u, 1.6);
-    const h = this.h;
-    // shrinking and stretched out toward the hole
-    const s = 1 - 0.92 * Math.pow(u, 2.2);
-    const sy = s * (1 + 0.9 * Math.pow(u, 1.4));
-    const sxz = s * (1 - 0.4 * Math.pow(u, 1.4));
-    g.scale.set(sxz, sy, sxz);
-    // its middle rises along a tightening spiral
-    const cy = h * 0.5 + (this.center.y - h * 0.5) * e;
-    const ang = this.spin0 + 11 * u * u;
-    const r = 0.2 * Math.sin(Math.PI * Math.min(1, u * 1.25)) * (1 - e);
-    g.position.set(this.at.x + Math.cos(ang) * r, cy - h * 0.5 * sy, this.at.z + Math.sin(ang) * r);
-    // tumbling about its middle
-    const c = V(0, h * 0.5, 0);
-    inner.rotation.set(2.6 * e + 0.4 * Math.sin(u * 9) * u, 9 * u * u, 1.1 * Math.sin(u * 6.5) * e, 'XYZ');
-    const rc = c.clone().applyEuler(inner.rotation);
-    inner.position.copy(c).sub(rc);
+    if (!this.unshadowed) {
+      this.unshadowed = true;
+      g.traverse((o) => o.isMesh && (o.castShadow = false));
+    }
+    // torn off the square, a little way up; the pull does the rest
+    inner.position.set(0, 0, 0);
+    inner.rotation.set(0, 0, 0);
+    g.position.set(this.at.x, 0.12 * e, this.at.z);
+    if (U) {
+      // (until its far end, the feet, has reached the hole too)
+      const sFar = Math.max(0.3, this.center.y - 0.02);
+      U.uPull.value = sFar * (sFar + 0.08) * 1.08 * Math.pow(u, 1.3);
+    } else {
+      const s = 1 - 0.92 * Math.pow(u, 2.2);
+      g.scale.set(s * 0.6, s * 1.8, s * 0.6);
+    }
     if (u >= 1) {
       this.swallowed = true;
       g.visible = false;
@@ -390,7 +446,7 @@ export class Wormhole {
       this.funnel.position.copy(this.center);
       this.funnel.scale.set(this.R * 0.7 * open, len, this.R * 0.7 * open);
       this.funnelMat.uniforms.uTime.value = t;
-      this.funnelMat.uniforms.uOpacity.value = 0.9 * reach * open;
+      this.funnelMat.uniforms.uOpacity.value = 0.45 * reach * open;
       if (this.light) {
         this.light.position.copy(this.center).add(V(0, -0.15, 0));
         this.light.intensity = open * (3.2 + 0.8 * Math.sin(t * 23)) + 8 * c * c;

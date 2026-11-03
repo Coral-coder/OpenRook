@@ -103,40 +103,6 @@ export function step(vol = 0.12, heavy = false) {
   n.s.stop(t + 0.25);
 }
 
-/** Stone grinding over stone for `dur` seconds: a statue sliding across the board. */
-export function grind(dur = 1, vol = 0.35) {
-  const c = ctx();
-  if (!c) return;
-  const t = c.currentTime;
-  // a low rumble, roughened by a fast wobble, plus a gritty scrape on top
-  const rumble = noiseSource(c, 'lowpass', 260, 2);
-  const scrape = noiseSource(c, 'bandpass', 1100, 1.5);
-  const wob = c.createOscillator();
-  wob.frequency.value = 17 + Math.random() * 6;
-  const wobGain = c.createGain();
-  wobGain.gain.value = 0.35;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t + 0.12);
-  g.gain.setValueAtTime(vol, t + Math.max(0.15, dur - 0.2));
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  const sg = c.createGain();
-  sg.gain.value = 0.35;
-  wob.connect(wobGain);
-  wobGain.connect(g.gain);
-  rumble.f.connect(g);
-  scrape.f.connect(sg);
-  sg.connect(g);
-  g.connect(c.destination);
-  for (const n of [rumble.s, scrape.s]) {
-    n.loop = true;
-    n.start(t);
-    n.stop(t + dur + 0.05);
-  }
-  wob.start(t);
-  wob.stop(t + dur + 0.05);
-}
-
 export function whoosh(vol = 0.2) {
   const c = ctx();
   if (!c) return;
@@ -230,7 +196,7 @@ export class Particles {
 }
 
 // ------------------------------------------------------------------ the queen's wormhole
-/** Two stone hands clapped together: a sharp slap with a short ringing tail. */
+/** Two stone hands clapped together: a sharp slap, and the knock of stone in it. */
 export function clap(vol = 0.5) {
   const c = ctx();
   if (!c) return;
@@ -242,12 +208,10 @@ export function clap(vol = 0.5) {
   const t2 = env(c, h.f, vol * 0.35, 0.001, 0.03);
   h.s.start(t2);
   h.s.stop(t2 + 0.06);
-  // and a faint magical shimmer
-  const o = c.createOscillator();
-  o.frequency.value = 1760 + Math.random() * 200;
-  const t3 = env(c, o, vol * 0.08, 0.005, 0.35);
-  o.start(t3);
-  o.stop(t3 + 0.45);
+  const k = noiseSource(c, 'lowpass', 420, 1);
+  const t3 = env(c, k.f, vol * 0.6, 0.001, 0.06);
+  k.s.start(t3);
+  k.s.stop(t3 + 0.1);
 }
 
 /** The wormhole's hum: a low throb and a rushing wind that rise together for `dur` seconds. */
@@ -264,8 +228,8 @@ export function wormHum(dur = 2, vol = 0.35) {
   // the throb: two detuned saws, rising, through a low filter that opens as it grows
   const lp = c.createBiquadFilter();
   lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(220, t);
-  lp.frequency.exponentialRampToValueAtTime(1400, t + dur);
+  lp.frequency.setValueAtTime(150, t);
+  lp.frequency.exponentialRampToValueAtTime(520, t + dur);
   lp.Q.value = 3;
   const tg = c.createGain();
   tg.gain.value = 0.5;
@@ -275,15 +239,15 @@ export function wormHum(dur = 2, vol = 0.35) {
   for (const d of [1, 1.013]) {
     const o = c.createOscillator();
     o.type = 'sawtooth';
-    o.frequency.setValueAtTime(55 * d, t);
-    o.frequency.exponentialRampToValueAtTime(190 * d, t + dur);
+    o.frequency.setValueAtTime(36 * d, t);
+    o.frequency.exponentialRampToValueAtTime(62 * d, t + dur);
     o.connect(lp);
     oscs.push(o);
   }
   // the wind being drawn in: noise swept upward
-  const w = noiseSource(c, 'bandpass', 300, 2.5);
-  w.f.frequency.setValueAtTime(300, t);
-  w.f.frequency.exponentialRampToValueAtTime(3200, t + dur);
+  const w = noiseSource(c, 'bandpass', 180, 2.5);
+  w.f.frequency.setValueAtTime(180, t);
+  w.f.frequency.exponentialRampToValueAtTime(900, t + dur);
   w.f.connect(g);
   w.s.loop = true;
   for (const s of [...oscs, w.s]) {
@@ -292,26 +256,51 @@ export function wormHum(dur = 2, vol = 0.35) {
   }
 }
 
-/** The wormhole snapping shut: a bright pop and a deep thump under it. */
-export function flashPop(vol = 0.6) {
+/** The air rushing in as the wormhole collapses ([dur] seconds before the boom). */
+export function implode(dur = 0.3, vol = 0.45) {
   const c = ctx();
   if (!c) return;
-  const o = c.createOscillator();
-  o.type = 'sine';
-  o.frequency.setValueAtTime(1500, c.currentTime);
-  o.frequency.exponentialRampToValueAtTime(90, c.currentTime + 0.18);
-  const t = env(c, o, vol * 0.7, 0.002, 0.2);
-  o.start(t);
-  o.stop(t + 0.3);
-  const b = c.createOscillator();
-  b.frequency.setValueAtTime(80, c.currentTime);
-  b.frequency.exponentialRampToValueAtTime(32, c.currentTime + 0.5);
-  const t2 = env(c, b, vol, 0.004, 0.55);
-  b.start(t2);
-  b.stop(t2 + 0.7);
-  const n = noiseSource(c, 'highpass', 2500, 0.7);
-  const t3 = env(c, n.f, vol * 0.5, 0.001, 0.12);
-  n.s.start(t3);
-  n.s.stop(t3 + 0.2);
-  chime(vol * 0.25);
+  const t = c.currentTime;
+  const n = noiseSource(c, 'lowpass', 300, 1.5);
+  n.f.frequency.setValueAtTime(300, t);
+  n.f.frequency.exponentialRampToValueAtTime(2400, t + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.95);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.03);
+  n.f.connect(g);
+  g.connect(c.destination);
+  n.s.loop = true;
+  n.s.start(t);
+  n.s.stop(t + dur + 0.05);
+}
+
+/** The wormhole collapsing: a deep, heavy boom, a sub-bass thump with a long rumbling tail. */
+export function boom(vol = 0.9) {
+  const c = ctx();
+  if (!c) return;
+  const t = c.currentTime;
+  // the thump: a sine dropping from a low punch into the sub-bass
+  for (const [f0, f1, v, d] of [[70, 24, 1, 1.5], [46, 20, 0.7, 2.0], [120, 40, 0.35, 0.35]]) {
+    const o = c.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + d * 0.8);
+    const tt = env(c, o, vol * v, 0.006, d);
+    o.start(tt);
+    o.stop(tt + d + 0.1);
+  }
+  // the crack of it, dull and low
+  const k = noiseSource(c, 'lowpass', 900, 0.8);
+  const t2 = env(c, k.f, vol * 0.55, 0.002, 0.18);
+  k.s.start(t2);
+  k.s.stop(t2 + 0.25);
+  // and the rumble rolling away
+  const r = noiseSource(c, 'lowpass', 140, 1.2);
+  r.f.frequency.setValueAtTime(220, t);
+  r.f.frequency.exponentialRampToValueAtTime(60, t + 2.6);
+  r.s.loop = true;
+  const t3 = env(c, r.f, vol * 0.8, 0.03, 2.6);
+  r.s.start(t3);
+  r.s.stop(t3 + 2.8);
 }
