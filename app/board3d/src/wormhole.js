@@ -167,7 +167,7 @@ export function castTrail(scene, particles, from, to, white) {
 
 // ------------------------------------------------------------------ the staff
 /**
- * She lets go of her staff: it stays standing upright on her pedestal, at her right side, until
+ * She lets go of her staff: it stays standing upright on the board, at her right side, until
  * `grabAt` (seconds into her move) or until she is doing something else, when it goes back into
  * her hand. Returns an effect (update(dt) -> still running).
  */
@@ -178,7 +178,7 @@ export function plantStaff(fig, moveName, grabAt) {
   const hand = st.parent;
   const home = { pos: st.position.clone(), quat: st.quaternion.clone() };
   holder.attach(st); // it keeps its place in the world
-  // its foot (the ferrule, below the grip) comes to rest on the pedestal's top
+  // its foot (the ferrule, below the grip) comes to rest on the board
   const box = new THREE.Box3();
   st.updateMatrixWorld(true);
   const inv = st.matrixWorld.clone().invert();
@@ -193,9 +193,7 @@ export function plantStaff(fig, moveName, grabAt) {
   // upright, turned the way it was
   const e = new THREE.Euler().setFromQuaternion(st.quaternion, 'YXZ');
   const toQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, e.y, 0, 'YXZ'));
-  const r = Math.hypot(from.pos.x, from.pos.z);
-  const k = r > 0.24 ? 0.24 / r : 1; // on the pedestal, not beside it
-  const toP = V(from.pos.x * k, 0.215 + foot + 0.002, from.pos.z * k);
+  const toP = V(from.pos.x, foot + 0.002, from.pos.z);
   let t = 0, back = null;
   return {
     update(dt) {

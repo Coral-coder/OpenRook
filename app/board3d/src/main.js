@@ -8,7 +8,7 @@
 // Bridge: the app calls window.openrook.receive(json). This page posts JSON strings back
 // through window.OpenRook.postMessage (WebView channel) or window.parent.postMessage (web).
 import * as THREE from 'three';
-import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow, knock, rebound } from './figures.js';
+import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, arsenal, moveInfo, parryFor, probeMove, aimAt, setAim, weaponNow, knock, rebound } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
 import { setupPost } from './post.js';
 import { stoneTime } from './stone.js';
@@ -931,10 +931,10 @@ function kill(p, style, from, power = 1, blow = null) {
     // where the blow landed, and dust rolls out across the board
     const fig = p.fig;
     // where the weapon landed (on the victim, at the height of the blow) and which way it swung
-    const top = 0.25 + fig.height * 0.85;
+    const top = fig.height * 0.92;
     const hit = blow
-      ? g.position.clone().addScaledVector(away, -0.12).setY(Math.min(top, Math.max(0.3, blow.at.y)))
-      : g.position.clone().addScaledVector(away, -0.14).setY(0.55 + 0.25 * Math.min(1, fig.height / 1.2));
+      ? g.position.clone().addScaledVector(away, -0.12).setY(Math.min(top, Math.max(0.12, blow.at.y)))
+      : g.position.clone().addScaledVector(away, -0.14).setY(fig.height * 0.56);
     const swing = blow ? blow.dir.clone() : away.clone();
     swing.y = Math.max(-0.45, Math.min(0.3, swing.y));
     swing.normalize();
@@ -1145,6 +1145,24 @@ const pick = (list, not) => {
   const l = list.length > 1 ? list.filter((x) => x !== not) : list;
   return l[(Math.random() * l.length) | 0];
 };
+// a sword fight is mostly flat cuts, a good share of thrusts, and now and then something else:
+// pick the kind of blow by those odds, then a blow of that kind (never the same one twice running)
+const ODDS = { cut: 0.55, thrust: 0.3, other: 0.15 };
+function pickBlow(fig, list, not) {
+  const l = list.length > 1 ? list.filter((x) => x !== not) : list;
+  const by = {};
+  for (const m of l) {
+    const c = moveInfo(fig, m).cat;
+    (by[c] = by[c] || []).push(m);
+  }
+  const cats = Object.keys(by);
+  let r = Math.random() * cats.reduce((s, c) => s + (ODDS[c] || 0.1), 0);
+  for (const c of cats) {
+    r -= ODDS[c] || 0.1;
+    if (r <= 0) return pick(by[c]);
+  }
+  return pick(l);
+}
 function planDuel(a, walkTime) {
   const A = a.mover, V = a.cap;
   const armA = arsenal(A.fig), armV = arsenal(V.fig);
@@ -1166,15 +1184,17 @@ function planDuel(a, walkTime) {
   for (let i = 0; i < n; i++) {
     const att = i % 2 === 0; // the attacker opens, the victim answers
     const fig = att ? A.fig : V.fig;
-    const move = att ? (lastA = pick(armA.blows, lastA)) : (lastV = pick(armV.blows, lastV));
+    const move = att ? (lastA = pickBlow(fig, armA.blows, lastA)) : (lastV = pickBlow(fig, armV.blows, lastV));
     const info = moveInfo(fig, move);
     const defFig = att ? V.fig : A.fig;
     const r = Math.random();
-    const react = window.__forceReact ? window.__forceReact : r < 0.2 ? (Math.random() < 0.5 ? 'dodgeL' : 'dodgeR') : info.heavy && r < 0.65 ? (info.line === 'high' ? 'staggerHigh' : 'stagger') : info.line === 'high' ? 'parryHigh' : 'parry';
+    // dodged, or met with the blade (upright on the side the cut comes from, or beating a
+    // thrust aside), or a heavy blow that drives the guard back
+    const react = window.__forceReact ? window.__forceReact : r < 0.2 ? (Math.random() < 0.5 ? 'dodgeL' : 'dodgeR') : parryFor(info, undefined, info.heavy && r < 0.65);
     // the next blow comes as this one recovers
     const d = info.d * (react.startsWith('stagger') ? 0.98 : 0.84);
     total += d;
-    a.phases.push({ name: 'blow', d, who: att ? 'A' : 'V', move, info, react, shield: !!defFig.shieldAt && !react.startsWith('dodge') });
+    a.phases.push({ name: 'blow', d, who: att ? 'A' : 'V', move, info, react, shield: !!defFig.shieldAt && !react.startsWith('dodge') && !react.endsWith('R') }); // (a cut from the sword side is met with the sword)
     if (total > 2.9) break;
   }
   if (worm) {
@@ -1183,7 +1203,7 @@ function planDuel(a, walkTime) {
     a.phases.push({ name: 'kill', wormhole: true, d: fi.hits[2] * fi.d + WORM.flash + 0.5, move: 'clap', info: fi });
     a.phases.push({ name: 'wait', d: 0.45 });
   } else {
-    const fin = armA.finishers.includes(window.__forceFin) ? window.__forceFin : pick(armA.finishers); // (__forceFin: for testing)
+    const fin = armA.finishers.includes(window.__forceFin) ? window.__forceFin : pickBlow(A.fig, armA.finishers, lastA); // (__forceFin: for testing)
     const fi = moveInfo(A.fig, fin);
     const killAt = fi.hits[fi.hits.length - 1] * fi.d;
     a.phases.push({ name: 'kill', d: killAt + 0.32, move: fin, info: fi, killAt });
@@ -1195,9 +1215,10 @@ function planDuel(a, walkTime) {
 
 // where a fighter stands when not stepping in: the attacker at its approach, the victim on its square
 const homeOf = (a, p) => (p === a.mover ? a.approach : a.capPos);
+// (the statues stand on the board: a cut goes in at the chest, a high one at the shoulders)
 const heightOf = (p, line) => {
-  const h = Math.max(0.6, p.fig.height || 1);
-  return 0.24 + (h - 0.24) * (line === 'high' ? 0.78 : line === 'low' ? 0.3 : 0.55);
+  const h = Math.max(0.45, p.fig.height || 1);
+  return 0.02 + h * (line === 'high' ? 0.76 : line === 'low' ? 0.3 : 0.56);
 };
 // Set a blow up: how far the striker steps in so the weapon reaches, and its aim.
 function aimBlow(a, striker, defender, move, k, target, minGap) {
@@ -1256,7 +1277,7 @@ function sparksAt(at, push, defender, heavy) {
   shake = Math.max(shake, heavy ? 0.06 : 0.035);
 }
 
-// A parried blow still carries its weight: the defender is knocked back (pedestal skidding and
+// A parried blow still carries its weight: the defender is knocked back (feet skidding and
 // rocking, body whipping, head snapping) and settles; the striker's blade rebounds off the guard
 // the way it came; a glancing edge knocks a flake of stone off the defender; the camera jolts.
 function blowLands(striker, defender, at, push, power) {
@@ -1394,16 +1415,17 @@ function stepKill(a, phase, tt, dt, once) {
   for (let h = 0; h < info.hits.length - 1; h++) {
     const hT = info.hits[h] * info.d;
     if (!cap) break;
-    const pr = moveInfo(cap.fig, 'parry');
+    const pm = parryFor(info, h);
+    const pr = moveInfo(cap.fig, pm);
     if (tt >= hT - pr.hits[0] * pr.d && once('cparry' + h)) {
-      act(cap, 'parry', { fade: 0.1 });
+      act(cap, pm, { fade: 0.1 });
       const pw = probeMove(mover.fig, 'S_' + move, info.hits[h]);
-      const r = aimAt(cap.fig, 'S_parry', pr.hits[0], pw.grip.clone().lerp(pw.tip, 0.8), cap.fig.shieldAt ? 'shield' : 'parry');
+      const r = aimAt(cap.fig, 'S_' + pm, pr.hits[0], pw.grip.clone().lerp(pw.tip, 0.8), cap.fig.shieldAt && !pm.endsWith('R') ? 'shield' : 'parry');
       setAim(cap.fig, r.aim);
     }
     if (tt >= hT && once('chit' + h)) {
       const sw = weaponNow(mover.fig), dw = weaponNow(cap.fig);
-      const c = cap.fig.shieldAt ? contactPoint(sw.grip, sw.tip, dw.shield, dw.shield) : contactPoint(sw.grip, sw.tip, dw.butt.distanceTo(dw.grip) > 0.15 ? dw.butt : dw.grip, dw.tip);
+      const c = cap.fig.shieldAt && !parryFor(info, h).endsWith('R') ? contactPoint(sw.grip, sw.tip, dw.shield, dw.shield) : contactPoint(sw.grip, sw.tip, dw.butt.distanceTo(dw.grip) > 0.15 ? dw.butt : dw.grip, dw.tip);
       sparksAt(c.at, a.dir, cap, true);
       blowLands(mover, cap, c.at, a.dir, 0.9);
       a.hitStop = 0.08;
@@ -1411,7 +1433,7 @@ function stepKill(a, phase, tt, dt, once) {
     }
   }
   // too late, the victim's guard comes up
-  if (cap && tt >= killAt - 0.3 && once('late')) act(cap, (info.line === 'high' ? 'parryHigh' : 'parry'), { fade: 0.12 });
+  if (cap && tt >= killAt - 0.3 && once('late')) act(cap, parryFor(info), { fade: 0.12 });
   if (!info.cast && tt > killAt - 0.2 && tt < killAt + 0.08) particles.burst(weaponNow(mover.fig).tip, { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.1, life: 0.28, gravity: 0 });
   if (tt > killAt - 0.24 && once('whooshF')) info.cast ? zap(0.4) : whoosh(1);
   if (info.cast && tt >= killAt - 0.32 && once('bolt')) launchBolt(weaponNow(mover.fig).butt, phase.target, mover.fig.isWhite ? 0x9fd8ff : 0xc77dff);
@@ -1473,7 +1495,7 @@ function stepWormhole(a, phase, tt, dt, once) {
   }
   const ct = fig.move.name === move ? fig.move.t : phase.d; // the clip's own clock
   const castT = info.hits[2] * info.d;
-  // she lets go of the staff: it stands on her pedestal until she takes it back
+  // she lets go of the staff: it stands on the board at her side until she takes it back
   if (ct >= info.plant && once('plant')) fx.push(plantStaff(fig, move, info.grab));
   // two claps: the hands meet in a ring of light
   for (const k of [0, 1]) {

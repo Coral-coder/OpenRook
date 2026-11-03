@@ -1,10 +1,11 @@
 // The Wizard Chess statues, carved in detail (carving.js) on real skeletons.
 //
-// Every piece stands on the same octagonal, columned pedestal. Above it the figure is a
+// Every piece stands directly on the board, on its own feet (the horse on its hooves, the keep
+// on its own footing, the robes on their hems). The figure is a
 // hierarchy of joints (pelvis, spine, chest, neck, head; shoulder, elbow, wrist; hip, knee,
 // ankle; the horse's shoulders, knees, neck and tail), and each body part is solid stone hung
 // on its joint: nothing bends or stretches, the stone turns at the joint like a jointed
-// statue. The legs are solved with two-bone IK so the feet stay planted on the pedestal while
+// statue. The legs are solved with two-bone IK so the feet stay planted on the board while
 // the body crouches, lunges or rises.
 //
 // Units are board squares (a square is 1; the real board's squares are 40 mm). Figures face
@@ -13,11 +14,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { granite } from './granite.js';
-import { kit, pedestal } from './carving.js';
+import { kit } from './carving.js';
 import { BUILD } from './pieces/index.js';
 
 export const PAWN = 1, KNIGHT = 2, BISHOP = 3, ROOK = 4, QUEEN = 5, KING = 6;
-export const PED = 0.215; // pedestal height
+export const PED = 0; // (the pedestal is gone: the statues stand on the board)
+const SCALE = 1.12;
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -55,10 +57,10 @@ function template(type) {
   if (TEMPLATES[type]) return TEMPLATES[type];
   const P = kit(new THREE.MeshStandardMaterial());
   const model = new THREE.Group();
-  pedestal(model, P);
   const body = new THREE.Group();
   body.name = 'body';
   body.position.y = PED;
+  body.scale.setScalar(SCALE); // (off their pedestals they're carved a little larger)
   model.add(body);
   const J = {};
   const info = BUILD[type](J, body, P);
@@ -69,7 +71,7 @@ function template(type) {
 // ------------------------------------------------------------------ poses and moves
 // A pose is { joint: [rx, ry, rz] } plus
 //   '$hips': [dy, dz]      the pelvis (in figure heights); the legs follow by IK
-//   '$fL', '$fR': [dx, dy, dz]  a foot lifting and stepping on the pedestal top (figure heights)
+//   '$fL', '$fR': [dx, dy, dz]  a foot lifting and stepping on the board (figure heights)
 //   '$root': [dx, dy, dz, rx, ry, rz]  the whole statue sliding, hopping, tilting, turning
 //   '$aim': [w]            how much of the fight's aiming correction (see aimAt) applies
 // A move is a list of keys [seconds, pose, 'h'?] played as a smooth spline through them (with
@@ -104,6 +106,20 @@ function dual(l, r, x = {}) {
   return { shL: [l[0], 0, l[1]], elL: [l[2], 0, 0], wrL: [l[3] - l[0] - l[2] - p, 0, 0], shR: [r[0], 0, -r[1]], elR: [r[2], 0, 0], wrR: [r[3] - r[0] - r[2] - p, 0, 0], ...x };
 }
 const lerpPose = (a, b, u) => blend(a, b, u);
+// a blade turned edge-on (rolled about its own length by the wrist): a flat cut leads with its
+// edge, not the flat
+const EDGE = 1.57;
+// the wrist cocked (the blade trailing the hand in a flat swing): + back for either hand
+function cock(p, side, a) {
+  const w = p['wr' + side];
+  if (w) p['wr' + side] = [w[0], w[1] || 0, (side === 'L' ? -1 : 1) * a];
+  return p;
+}
+function edge(p, side, a = EDGE) {
+  const w = p['wr' + side];
+  if (w) p['wr' + side] = [w[0], (side === 'L' ? -1 : 1) * a, w[2] || 0];
+  return p;
+}
 
 // how far each joint trails the move (seconds): the legs and hips lead, the hand follows last
 const LAG = {
@@ -115,7 +131,7 @@ const LAG = {
 // ---- the two-handed fighter: king (greatsword) and queen (staff)
 function twoHanded() {
   const guard = two(-1.0, -0.12, -0.95, -2.3, { spine: [0.06, 0.18, 0], head: [0.04, -0.12, 0], $hips: [-0.05, 0], $fL: [0, 0, 0.07], $fR: [0, 0, -0.06] });
-  const rest = { shL: [-0.55, 0, -0.35], elL: [-1.05, 0, 0], shR: [-0.55, 0, 0.35], elR: [-1.05, 0, 0], wrR: [1.5, 0, 0], wrL: [1.5, 0, 0] };
+  const rest = { shL: [-0.55, 0, -0.35], elL: [-1.05, 0, 0], shR: [-0.55, 0, 0.35], elR: [-1.05, 0, 0], wrR: [1.2, 0, 0], wrL: [1.2, 0, 0] };
   const recover = (p) => lerpPose(p, guard, 0.6);
   const P = { rest, guard };
   const M = {};
@@ -123,7 +139,7 @@ function twoHanded() {
   {
     const wind = two(-2.85, 0.0, -1.1, -4.45, { spine: [-0.18, -0.1, 0], chest: [-0.08, 0, 0], head: [-0.05, 0.1, 0], $hips: [-0.02, -0.05], $fL: [0, 0.05, 0.03], $fR: [0, 0, -0.06], $root: [0, 0.015, -0.05, -0.05, 0, 0] });
     const imp = two(-1.5, 0.05, -0.12, -1.72, { spine: [0.45, 0.02, 0], chest: [0.18, 0, 0], head: [-0.3, 0, 0], $hips: [-0.12, 0.08], $fL: [0, 0, 0.15], $fR: [0, 0, -0.08], $root: [0, 0, 0.18, 0.06, 0, 0], $aim: [1] });
-    M.cleave = { line: 'high', heavy: true, hits: [0.7], keys: [
+    M.cleave = { line: 'high', from: 'C', heavy: true, hits: [0.7], keys: [
       [0, guard],
       [0.22, two(-0.75, -0.1, -1.45, -1.9, { spine: [0.16, 0.1, 0], chest: [0.05, 0, 0], $hips: [-0.09, -0.02], $fL: [0, 0, 0.06], $fR: [0, 0, -0.06] })],
       [0.48, wind, 'h'],
@@ -145,42 +161,51 @@ function twoHanded() {
       [t0 + 0.76, two(-0.8, 0.8, -0.15, -1.0, { spine: [0.5, 0.6, 0.15], chest: [0.15, 0.3, 0], head: [-0.3, -0.4, 0], $hips: [-0.12, 0.08], $fL: [0, 0, 0.13], $fR: [0, 0, -0.07], $root: [0, 0, 0.17, 0.07, 0.25, 0], $aim: [0.5] })],
     ];
   };
-  M.slash = { line: 'mid', hits: [0.64], keys: [[0, guard], ...slashKeys(0), [1.0, recover(two(-0.8, 0.8, -0.15, -1.0, { spine: [0.5, 0.6, 0.15], $root: [0, 0, 0.17, 0.04, 0.2, 0] }))], [1.25, guard]] };
-  // horizontal sweep: wound round to the right, the whole body unwinds, blade level
-  {
-    const wind = two(-1.5, -1.45, -0.7, -2.0, { spine: [0.05, -0.75, 0], chest: [0, -0.35, 0], head: [0, 0.75, 0], $hips: [-0.07, -0.03], $fL: [0, 0.04, 0.03], $fR: [0, 0, -0.07], $root: [0, 0, -0.04, 0, -0.35, 0] });
-    M.sweep = { line: 'mid', hits: [0.66], keys: [
-      [0, guard],
-      [0.2, two(-1.1, -0.5, -1.2, -2.2, { spine: [0.1, -0.3, 0], $hips: [-0.08, -0.01], $fL: [0, 0, 0.06], $fR: [0, 0, -0.06] })],
-      [0.46, wind, 'h'],
-      [0.58, two(-1.5, -0.7, -0.3, -1.7, { spine: [0.1, -0.3, 0], chest: [0, -0.1, 0], head: [0, 0.3, 0], $hips: [-0.08, 0.03], $fL: [0, 0.05, 0.1], $fR: [0, 0, -0.07], $root: [0, 0.03, 0.08, 0, -0.15, 0], $aim: [0.7] })],
-      [0.66, two(-1.5, 0.1, -0.1, -1.6, { spine: [0.15, 0.15, 0], chest: [0.05, 0.1, 0], head: [-0.1, -0.15, 0], $hips: [-0.1, 0.05], $fL: [0, 0, 0.13], $fR: [0, 0, -0.07], $root: [0, 0, 0.15, 0, 0.05, 0], $aim: [1] })],
-      [0.78, two(-1.45, 0.95, -0.2, -1.6, { spine: [0.15, 0.6, 0], chest: [0.05, 0.35, 0], head: [0, -0.35, 0], $hips: [-0.1, 0.05], $fL: [0, 0, 0.13], $fR: [0, 0, -0.07], $root: [0, 0, 0.16, 0, 0.35, 0], $aim: [0.4] })],
-      [1.02, recover(two(-1.45, 0.95, -0.2, -1.6, { spine: [0.15, 0.6, 0], $root: [0, 0, 0.12, 0, 0.3, 0] }))],
-      [1.3, guard],
-    ] };
-  }
-  // the thrust: drawn back to the right hip, then driven straight in with a long lunge
-  M.thrust = { line: 'mid', hits: [0.62], keys: [
+  M.slash = { line: 'mid', from: 'R', hits: [0.64], keys: [[0, guard], ...slashKeys(0), [1.0, recover(two(-0.8, 0.8, -0.15, -1.0, { spine: [0.5, 0.6, 0.15], $root: [0, 0, 0.17, 0.04, 0.2, 0] }))], [1.25, guard]] };
+  // the forehand: wound round to the right, the whole body unwinds and the blade, edge
+  // leading, travels flat through the target at chest height
+  const E2 = (p) => edge(p, 'R');
+  const foreKeys2 = (t0) => [
+    [t0 + 0.2, two(-1.1, -0.5, -1.2, -2.2, { spine: [0.1, -0.3, 0], $hips: [-0.08, -0.01], $fL: [0, 0, 0.06], $fR: [0, 0, -0.06] })],
+    [t0 + 0.44, E2(two(-1.45, -1.3, -0.55, -1.75, { spine: [0.05, -0.55, 0], chest: [0, -0.25, 0], head: [0, 0.6, 0], $hips: [-0.08, -0.03], $fL: [0, 0, 0.05], $fR: [0, 0, -0.07], $root: [0, 0, -0.04, 0, -0.3, 0] })), 'h'],
+    [t0 + 0.56, E2(two(-1.52, -0.75, -0.2, -1.62, { spine: [0.1, -0.25, 0], chest: [0, -0.1, 0], head: [0, 0.3, 0], $hips: [-0.09, 0.03], $fL: [0, 0.06, 0.11], $fR: [0, 0, -0.07], $root: [0, 0.01, 0.07, 0, -0.14, 0], $aim: [0.7] }))],
+    [t0 + 0.64, E2(two(-1.55, 0.05, -0.06, -1.57, { spine: [0.15, 0.12, 0], chest: [0.05, 0.08, 0], head: [-0.1, -0.15, 0], $hips: [-0.11, 0.05], $fL: [0, 0, 0.14], $fR: [0, 0, -0.07], $root: [0, 0, 0.14, 0.02, 0.05, 0], $aim: [1] }))],
+    [t0 + 0.76, E2(two(-1.48, 0.9, -0.15, -1.57, { spine: [0.15, 0.5, 0], chest: [0.05, 0.25, 0], head: [0, -0.35, 0], $hips: [-0.11, 0.05], $fL: [0, 0, 0.14], $fR: [0, 0, -0.07], $root: [0, 0, 0.15, 0.02, 0.3, 0], $aim: [0.4] }))],
+  ];
+  M.sweep = { line: 'mid', from: 'R', hits: [0.64], keys: [[0, guard], ...foreKeys2(0), [1.02, recover(two(-1.48, 0.9, -0.15, -1.57, { spine: [0.15, 0.5, 0], $root: [0, 0, 0.11, 0, 0.25, 0] }))], [1.28, guard]] };
+  // the backhand: the blade carried across to the left shoulder, then swept flat out to the right
+  M.back = { line: 'mid', from: 'L', hits: [0.62], keys: [
     [0, guard],
-    [0.4, two(0.25, -0.55, -1.75, -1.65, { spine: [-0.05, -0.5, 0], chest: [0, -0.2, 0], head: [0, 0.4, 0], $hips: [-0.11, -0.04], $fL: [0, 0.03, 0.04], $fR: [0, 0, -0.07], $root: [0, 0, -0.08, -0.04, -0.25, 0] }), 'h'],
-    [0.54, two(-0.9, -0.45, -0.9, -1.6, { spine: [0.2, -0.1, 0], head: [0, 0.1, 0], $hips: [-0.08, 0.04], $fL: [0, 0.05, 0.12], $fR: [0, 0, -0.08], $root: [0, 0.03, 0.1, 0.02, -0.1, 0], $aim: [0.8] })],
-    [0.62, two(-1.52, -0.3, -0.05, -1.6, { spine: [0.35, 0.1, 0], chest: [0.1, 0.1, 0], head: [-0.2, 0, 0], $hips: [-0.13, 0.09], $fL: [0, 0, 0.17], $fR: [0, 0, -0.09], $root: [0, 0, 0.24, 0.06, 0.05, 0], $aim: [1] })],
-    [0.74, two(-1.5, -0.3, -0.05, -1.55, { spine: [0.38, 0.12, 0], chest: [0.1, 0.1, 0], head: [-0.2, 0, 0], $hips: [-0.13, 0.09], $fL: [0, 0, 0.17], $fR: [0, 0, -0.09], $root: [0, 0, 0.25, 0.06, 0.05, 0], $aim: [0.8] })],
+    [0.2, two(-1.15, 0.45, -1.25, -2.4, { spine: [0.1, 0.3, 0], $hips: [-0.08, -0.01], $fL: [0, 0, 0.06], $fR: [0, 0, -0.06] })],
+    [0.42, E2(two(-1.4, 1.2, -0.75, -1.85, { spine: [0.05, 0.55, 0], chest: [0, 0.25, 0], head: [0, -0.55, 0], $hips: [-0.08, -0.03], $fL: [0, 0, 0.05], $fR: [0, 0, -0.07], $root: [0, 0, -0.04, 0, 0.3, 0] })), 'h'],
+    [0.54, E2(two(-1.52, 0.65, -0.25, -1.62, { spine: [0.1, 0.25, 0], chest: [0, 0.1, 0], head: [0, -0.3, 0], $hips: [-0.09, 0.03], $fR: [0, 0.06, -0.02], $fL: [0, 0, 0.08], $root: [0, 0.01, 0.07, 0, 0.14, 0], $aim: [0.7] }))],
+    [0.62, E2(two(-1.55, -0.15, -0.06, -1.57, { spine: [0.15, -0.1, 0], chest: [0.05, -0.06, 0], head: [-0.1, 0.12, 0], $hips: [-0.11, 0.05], $fR: [0, 0, 0.05], $fL: [0, 0, 0.08], $root: [0, 0, 0.13, 0.02, -0.05, 0], $aim: [1] }))],
+    [0.74, E2(two(-1.48, -1.05, -0.15, -1.57, { spine: [0.15, -0.5, 0], chest: [0.05, -0.25, 0], head: [0, 0.35, 0], $hips: [-0.11, 0.05], $fR: [0, 0, 0.05], $fL: [0, 0, 0.08], $root: [0, 0, 0.14, 0.02, -0.3, 0], $aim: [0.4] }))],
+    [1.0, recover(two(-1.48, -1.05, -0.15, -1.57, { spine: [0.15, -0.5, 0], $root: [0, 0, 0.1, 0, -0.25, 0] }))],
+    [1.26, guard],
+  ] };
+  // the thrust: drawn back to the right hip, then driven straight in with a long lunge
+  M.thrust = { line: 'mid', from: 'C', hits: [0.62], keys: [
+    [0, guard],
+    [0.4, two(0.25, -0.55, -1.75, -1.65, { spine: [-0.05, -0.5, 0], chest: [0, -0.2, 0], head: [0, 0.4, 0], $hips: [-0.12, -0.04], $fL: [0, 0, 0.05], $fR: [0, 0, -0.08], $root: [0, 0, -0.06, -0.04, -0.25, 0] }), 'h'],
+    [0.54, two(-0.9, -0.45, -0.9, -1.6, { spine: [0.2, -0.1, 0], head: [0, 0.1, 0], $hips: [-0.1, 0.05], $fL: [0, 0.08, 0.15], $fR: [0, 0, -0.09], $root: [0, 0.01, 0.08, 0.02, -0.1, 0], $aim: [0.8] })],
+    [0.62, two(-1.52, -0.3, -0.05, -1.6, { spine: [0.35, 0.1, 0], chest: [0.1, 0.1, 0], head: [-0.2, 0, 0], $hips: [-0.16, 0.11], $fL: [0, 0, 0.22], $fR: [0, 0, -0.11], $root: [0, 0, 0.18, 0.05, 0.05, 0], $aim: [1] })],
+    [0.74, two(-1.5, -0.3, -0.05, -1.55, { spine: [0.38, 0.12, 0], chest: [0.1, 0.1, 0], head: [-0.2, 0, 0], $hips: [-0.16, 0.11], $fL: [0, 0, 0.22], $fR: [0, 0, -0.11], $root: [0, 0, 0.19, 0.05, 0.05, 0], $aim: [0.8] })],
     [0.92, recover(two(-1.2, 0.0, -0.5, -1.9, { spine: [0.3, 0.1, 0], $hips: [-0.1, 0.05], $root: [0, 0, 0.12, 0.03, 0, 0] }))],
     [1.15, guard],
   ] };
-  // the finisher: a diagonal slash, then the blade carried right round in a full spin
+  // the finisher: a flat forehand, then the blade carried right round in a full turn and back
+  // through the foe, flat, at the same height
   {
-    const s = slashKeys(0);
-    const sp = (ry, p) => ({ ...p, $root: [0, 0.03, 0.18, 0.02, ry, 0] });
-    M.spin = { line: 'mid', heavy: true, hits: [0.64, 1.34], keys: [
+    const s = foreKeys2(0);
+    const sp = (ry, p) => ({ ...p, $root: [0, 0.02, 0.14, 0.02, ry, 0] });
+    M.spin = { line: 'mid', from: ['R', 'R'], heavy: true, hits: [0.64, 1.34], keys: [
       [0, guard], ...s.slice(0, 4),
-      [0.8, sp(0.9, two(-1.3, 0.9, -0.2, -1.5, { spine: [0.3, 0.6, 0.1], chest: [0.1, 0.3, 0], head: [-0.1, -0.5, 0], $hips: [-0.1, 0.05], $fL: [0, 0.04, 0.1] }))],
-      [0.98, sp(PI * 0.75, two(-1.6, -1.2, -0.3, -1.9, { spine: [0.1, -0.5, 0], chest: [0, -0.3, 0], head: [0, 0.6, 0], $hips: [-0.06, 0.02], $fR: [0, 0.04, 0] }))],
-      [1.16, sp(PI * 1.5, two(-1.55, -1.3, -0.4, -1.95, { spine: [0.05, -0.7, 0], chest: [0, -0.35, 0], head: [0, 0.8, 0], $hips: [-0.07, 0.0], $fL: [0, 0.05, 0.06] }))],
-      [1.34, { ...two(-1.5, 0.15, -0.1, -1.6, { spine: [0.2, 0.15, 0], chest: [0.05, 0.1, 0], head: [-0.15, -0.15, 0], $hips: [-0.12, 0.06], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $aim: [1] }), $root: [0, 0, 0.24, 0.03, PI * 2 + 0.05, 0] }],
-      [1.46, { ...two(-1.45, 0.9, -0.2, -1.6, { spine: [0.2, 0.55, 0], chest: [0.05, 0.3, 0], head: [0, -0.3, 0], $hips: [-0.12, 0.06], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $aim: [0.5] }), $root: [0, 0, 0.25, 0.03, PI * 2 + 0.35, 0] }],
+      [0.8, sp(0.9, E2(two(-1.45, 0.9, -0.15, -1.57, { spine: [0.2, 0.5, 0.05], chest: [0.05, 0.25, 0], head: [-0.1, -0.5, 0], $hips: [-0.1, 0.05], $fL: [0, 0.05, 0.1] })))],
+      [0.98, sp(PI * 0.75, E2(two(-1.5, -1.2, -0.2, -1.6, { spine: [0.1, -0.5, 0], chest: [0, -0.3, 0], head: [0, 0.6, 0], $hips: [-0.07, 0.02], $fR: [0, 0.05, 0] })))],
+      [1.16, sp(PI * 1.5, E2(two(-1.5, -1.3, -0.3, -1.65, { spine: [0.05, -0.6, 0], chest: [0, -0.3, 0], head: [0, 0.7, 0], $hips: [-0.08, 0.0], $fL: [0, 0.06, 0.06] })))],
+      [1.34, { ...E2(two(-1.55, 0.1, -0.06, -1.57, { spine: [0.18, 0.12, 0], chest: [0.05, 0.08, 0], head: [-0.15, -0.15, 0], $hips: [-0.12, 0.06], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $aim: [1] })), $root: [0, 0, 0.18, 0.03, PI * 2 + 0.05, 0] }],
+      [1.46, { ...E2(two(-1.48, 0.9, -0.15, -1.57, { spine: [0.18, 0.5, 0], chest: [0.05, 0.25, 0], head: [0, -0.3, 0], $hips: [-0.12, 0.06], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $aim: [0.4] })), $root: [0, 0, 0.19, 0.03, PI * 2 + 0.35, 0] }],
       [1.85, { ...guard, $root: [0, 0, 0.05, 0, PI * 2, 0] }],
       [2.05, { ...guard, $root: [0, 0, 0, 0, PI * 2, 0] }],
     ] };
@@ -223,6 +248,9 @@ function twoHanded() {
   }
   // guards: blade upright across the body, or held flat over the head
   P.blockMid = two(-1.25, -0.25, -1.15, -3.0, { spine: [0.0, 0.25, 0], head: [-0.05, -0.2, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
+  // a cut from the side: the blade held upright out on that side
+  P.blockL = two(-1.25, 0.55, -1.1, -3.05, { spine: [0.0, 0.45, 0], chest: [0, 0.15, 0], head: [-0.05, -0.4, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
+  P.blockR = two(-1.25, -0.8, -1.1, -3.05, { spine: [0.0, -0.35, 0], chest: [0, -0.15, 0], head: [-0.05, 0.35, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
   P.blockHigh = { ...two(-2.25, 0.05, -1.05, -4.0, { spine: [-0.12, 0.1, 0], head: [-0.15, 0, 0], $hips: [-0.09, -0.03], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] }), wrR: [-4.0 + 2.25 + 1.05, 0, 1.2], wrL: [-4.0 + 2.25 + 1.05, 0, 1.2] };
   P.fling = two(-2.4, 0.4, -0.3, -3.0, { spine: [-0.4, 0.3, 0.15], chest: [-0.2, 0.1, 0], head: [-0.5, 0.3, 0.3] });
   P.cheer = two(-3.0, 0, -0.1, -3.2, { spine: [-0.15, 0, 0], head: [-0.35, 0, 0] });
@@ -247,9 +275,9 @@ function oneHanded() {
       [t0 + 0.76 * d, one(-0.7, -0.35, -0.1, -0.75, [-0.3, -0.4, -1.1], { spine: [0.55, 0.35, 0], chest: [0.18, 0.15, 0], head: [-0.4, -0.25, 0], $hips: [-0.12, 0.08], $fL: [0, 0, 0.13], $fR: [0, 0, -0.07], $root: [0, 0, 0.18, 0.1, 0.15, 0], $aim: [0.5] })],
     ];
   };
-  M.cleave = { line: 'high', heavy: true, hits: [0.64], keys: [[0, guard], ...cleaveKeys(0), [1.0, recover(one(-0.7, -0.35, -0.1, -0.75, [-0.3, -0.4, -1.1], { spine: [0.55, 0.35, 0], $hips: [-0.12, 0.08], $root: [0, 0, 0.18, 0.06, 0.12, 0] }))], [1.25, guard]] };
+  M.cleave = { line: 'high', from: 'C', heavy: true, hits: [0.64], keys: [[0, guard], ...cleaveKeys(0), [1.0, recover(one(-0.7, -0.35, -0.1, -0.75, [-0.3, -0.4, -1.1], { spine: [0.55, 0.35, 0], $hips: [-0.12, 0.08], $root: [0, 0, 0.18, 0.06, 0.12, 0] }))], [1.25, guard]] };
   // diagonal slash, high right to low left, the shield swung back for balance
-  M.slash = { line: 'mid', hits: [0.62], keys: [
+  M.slash = { line: 'mid', from: 'R', hits: [0.62], keys: [
     [0, guard],
     [0.18, one(-1.1, 0.5, -1.2, -2.5, shieldUp, { spine: [0.1, -0.2, 0], $hips: [-0.08, -0.01], $fL: [0, 0, 0.06], $fR: [0, 0, -0.05] })],
     [0.42, one(-2.5, 1.0, -1.3, -4.2, [-1.4, 0.1, -0.8], { spine: [-0.15, -0.65, -0.12], chest: [-0.08, -0.3, 0], head: [0, 0.6, 0], $hips: [-0.03, -0.04], $fL: [0, 0.04, 0.02], $fR: [0, 0, -0.06], $root: [0, 0.01, -0.03, -0.03, -0.28, 0] }), 'h'],
@@ -259,31 +287,44 @@ function oneHanded() {
     [0.98, recover(one(-0.8, -0.9, -0.15, -1.0, [-0.3, -0.5, -1.1], { spine: [0.5, 0.65, 0.15], $root: [0, 0, 0.15, 0.04, 0.22, 0] }))],
     [1.22, guard],
   ] };
-  // backhand-forehand sweep: wound round to the right, the body unwinds, the blade level
-  M.sweep = { line: 'mid', hits: [0.64], keys: [
+  // the forehand: wound round to the right, the body unwinds, the blade flat and edge-on
+  const E1 = (p) => edge(p, 'R');
+  M.sweep = { line: 'mid', from: 'R', hits: [0.64], keys: [
     [0, guard],
     [0.2, one(-1.1, 0.7, -1.3, -2.2, shieldUp, { spine: [0.1, -0.3, 0], $hips: [-0.08, -0.01], $fL: [0, 0, 0.06], $fR: [0, 0, -0.05] })],
-    [0.44, one(-1.45, 1.45, -0.9, -2.0, [-1.3, 0.1, -1.0], { spine: [0.05, -0.75, 0], chest: [0, -0.35, 0], head: [0, 0.75, 0], $hips: [-0.07, -0.03], $fL: [0, 0.04, 0.03], $fR: [0, 0, -0.07], $root: [0, 0, -0.04, 0, -0.35, 0] }), 'h'],
-    [0.56, one(-1.5, 0.8, -0.3, -1.7, [-1.0, -0.1, -1.1], { spine: [0.1, -0.3, 0], head: [0, 0.3, 0], $hips: [-0.08, 0.03], $fL: [0, 0.05, 0.1], $fR: [0, 0, -0.07], $root: [0, 0.03, 0.08, 0, -0.15, 0], $aim: [0.7] })],
-    [0.64, one(-1.5, -0.1, -0.1, -1.6, [-0.5, -0.4, -1.1], { spine: [0.15, 0.2, 0], chest: [0.05, 0.1, 0], head: [-0.1, -0.15, 0], $hips: [-0.1, 0.05], $fL: [0, 0, 0.13], $fR: [0, 0, -0.07], $root: [0, 0, 0.15, 0, 0.08, 0], $aim: [1] })],
-    [0.76, one(-1.45, -1.0, -0.2, -1.6, [-0.4, -0.5, -1.0], { spine: [0.15, 0.65, 0], chest: [0.05, 0.35, 0], head: [0, -0.35, 0], $hips: [-0.1, 0.05], $fL: [0, 0, 0.13], $fR: [0, 0, -0.07], $root: [0, 0, 0.16, 0, 0.38, 0], $aim: [0.4] })],
-    [1.0, recover(one(-1.45, -1.0, -0.2, -1.6, [-0.4, -0.5, -1.0], { spine: [0.15, 0.65, 0], $root: [0, 0, 0.12, 0, 0.3, 0] }))],
-    [1.28, guard],
+    [0.44, cock(E1(one(-1.45, 1.3, -0.4, -1.75, [-1.3, 0.1, -1.0], { spine: [0.05, -0.55, 0], chest: [0, -0.25, 0], head: [0, 0.6, 0], $hips: [-0.07, -0.03], $fL: [0, 0, 0.05], $fR: [0, 0, -0.07], $root: [0, 0, -0.04, 0, -0.3, 0] })), 'R', 0.6), 'h'],
+    [0.56, E1(one(-1.52, 0.75, -0.15, -1.62, [-1.0, -0.1, -1.1], { spine: [0.1, -0.25, 0], head: [0, 0.3, 0], $hips: [-0.08, 0.03], $fL: [0, 0.06, 0.11], $fR: [0, 0, -0.07], $root: [0, 0.01, 0.07, 0, -0.14, 0], $aim: [0.7] }))],
+    [0.64, E1(one(-1.55, -0.05, -0.05, -1.57, [-0.5, -0.4, -1.1], { spine: [0.15, 0.15, 0], chest: [0.05, 0.08, 0], head: [-0.1, -0.15, 0], $hips: [-0.1, 0.05], $fL: [0, 0, 0.14], $fR: [0, 0, -0.07], $root: [0, 0, 0.14, 0.02, 0.06, 0], $aim: [1] }))],
+    [0.76, E1(one(-1.48, -0.95, -0.15, -1.57, [-0.4, -0.5, -1.0], { spine: [0.15, 0.5, 0], chest: [0.05, 0.25, 0], head: [0, -0.35, 0], $hips: [-0.1, 0.05], $fL: [0, 0, 0.14], $fR: [0, 0, -0.07], $root: [0, 0, 0.15, 0.02, 0.3, 0], $aim: [0.4] }))],
+    [1.0, recover(one(-1.48, -0.95, -0.15, -1.57, [-0.4, -0.5, -1.0], { spine: [0.15, 0.5, 0], $root: [0, 0, 0.11, 0, 0.25, 0] }))],
+    [1.26, guard],
+  ] };
+  // the backhand: the blade carried across in front of the shield (swung wide out of its way)
+  // to the left hip, then whipped out flat to the right
+  M.back = { line: 'mid', from: 'L', hits: [0.6], keys: [
+    [0, guard],
+    [0.2, one(-1.05, -0.4, -1.3, -2.3, [-0.6, -0.4, -1.2], { spine: [0.1, 0.3, 0], $hips: [-0.08, -0.01], $fL: [0, 0, 0.06], $fR: [0, 0, -0.05] })],
+    [0.42, E1(one(-1.25, -1.05, -0.95, -1.75, [-0.3, -0.9, -0.7], { spine: [0.05, 0.55, 0], chest: [0, 0.25, 0], head: [0, -0.55, 0], $hips: [-0.08, -0.03], $fL: [0, 0, 0.05], $fR: [0, 0, -0.07], $root: [0, 0, -0.04, 0, 0.3, 0] })), 'h'],
+    [0.53, E1(one(-1.5, -0.55, -0.3, -1.62, [-0.3, -0.9, -0.7], { spine: [0.1, 0.25, 0], head: [0, -0.3, 0], $hips: [-0.09, 0.03], $fR: [0, 0.06, -0.02], $fL: [0, 0, 0.08], $root: [0, 0.01, 0.07, 0, 0.14, 0], $aim: [0.7] }))],
+    [0.6, E1(one(-1.55, 0.25, -0.05, -1.57, [-0.5, -0.6, -1.0], { spine: [0.15, -0.1, 0], chest: [0.05, -0.06, 0], head: [-0.1, 0.12, 0], $hips: [-0.1, 0.05], $fR: [0, 0, 0.05], $fL: [0, 0, 0.08], $root: [0, 0, 0.13, 0.02, -0.05, 0], $aim: [1] }))],
+    [0.72, E1(one(-1.48, 1.25, -0.12, -1.57, [-0.9, -0.2, -1.2], { spine: [0.15, -0.5, 0], chest: [0.05, -0.25, 0], head: [0, 0.35, 0], $hips: [-0.1, 0.05], $fR: [0, 0, 0.05], $fL: [0, 0, 0.08], $root: [0, 0, 0.14, 0.02, -0.3, 0], $aim: [0.4] }))],
+    [0.98, recover(one(-1.48, 1.25, -0.12, -1.57, [-0.9, -0.2, -1.2], { spine: [0.15, -0.5, 0], $root: [0, 0, 0.1, 0, -0.25, 0] }))],
+    [1.24, guard],
   ] };
   // a lunging thrust, shield tucked in
-  M.thrust = { line: 'mid', hits: [0.6], keys: [
+  M.thrust = { line: 'mid', from: 'C', hits: [0.6], keys: [
     [0, guard],
-    [0.38, one(0.35, 0.3, -1.85, -1.6, [-1.2, 0.5, -1.4], { spine: [-0.05, -0.55, 0], chest: [0, -0.2, 0], head: [0, 0.45, 0], $hips: [-0.11, -0.04], $fL: [0, 0.03, 0.04], $fR: [0, 0, -0.07], $root: [0, 0, -0.08, -0.04, -0.28, 0] }), 'h'],
-    [0.52, one(-0.8, 0.1, -1.0, -1.6, [-1.0, 0.3, -1.3], { spine: [0.2, -0.1, 0], head: [0, 0.1, 0], $hips: [-0.08, 0.04], $fL: [0, 0.05, 0.12], $fR: [0, 0, -0.08], $root: [0, 0.03, 0.1, 0.02, -0.1, 0], $aim: [0.8] })],
-    [0.6, one(-1.55, -0.1, -0.05, -1.6, [-0.4, -0.2, -1.3], { spine: [0.35, 0.25, 0], chest: [0.1, 0.12, 0], head: [-0.2, -0.1, 0], $hips: [-0.13, 0.09], $fL: [0, 0, 0.17], $fR: [0, 0, -0.09], $root: [0, 0, 0.25, 0.06, 0.12, 0], $aim: [1] })],
-    [0.72, one(-1.52, -0.1, -0.05, -1.55, [-0.4, -0.2, -1.3], { spine: [0.38, 0.27, 0], chest: [0.1, 0.12, 0], head: [-0.2, -0.1, 0], $hips: [-0.13, 0.09], $fL: [0, 0, 0.17], $fR: [0, 0, -0.09], $root: [0, 0, 0.26, 0.06, 0.12, 0], $aim: [0.8] })],
+    [0.38, one(0.35, 0.3, -1.85, -1.6, [-1.2, 0.5, -1.4], { spine: [-0.05, -0.55, 0], chest: [0, -0.2, 0], head: [0, 0.45, 0], $hips: [-0.12, -0.04], $fL: [0, 0, 0.05], $fR: [0, 0, -0.08], $root: [0, 0, -0.06, -0.04, -0.28, 0] }), 'h'],
+    [0.52, one(-0.8, 0.1, -1.0, -1.6, [-1.0, 0.3, -1.3], { spine: [0.2, -0.1, 0], head: [0, 0.1, 0], $hips: [-0.1, 0.05], $fL: [0, 0.08, 0.15], $fR: [0, 0, -0.09], $root: [0, 0.01, 0.08, 0.02, -0.1, 0], $aim: [0.8] })],
+    [0.6, one(-1.55, -0.1, -0.05, -1.6, [-0.4, -0.2, -1.3], { spine: [0.35, 0.25, 0], chest: [0.1, 0.12, 0], head: [-0.2, -0.1, 0], $hips: [-0.16, 0.11], $fL: [0, 0, 0.22], $fR: [0, 0, -0.11], $root: [0, 0, 0.19, 0.05, 0.12, 0], $aim: [1] })],
+    [0.72, one(-1.52, -0.1, -0.05, -1.55, [-0.4, -0.2, -1.3], { spine: [0.38, 0.27, 0], chest: [0.1, 0.12, 0], head: [-0.2, -0.1, 0], $hips: [-0.16, 0.11], $fL: [0, 0, 0.22], $fR: [0, 0, -0.11], $root: [0, 0, 0.2, 0.05, 0.12, 0], $aim: [0.8] })],
     [0.9, recover(one(-1.2, 0.1, -0.5, -1.9, shieldUp, { spine: [0.3, 0.1, 0], $hips: [-0.1, 0.05], $root: [0, 0, 0.12, 0.03, 0.05, 0] }))],
     [1.12, guard],
   ] };
   // the finisher: a shield-bash (or off-hand shove) that rocks the foe, then the cleave
   {
     const c = cleaveKeys(0.42, 1.1);
-    M.bash = { line: 'high', heavy: true, hits: [0.32, 0.42 + 0.64 * 1.1], keys: [
+    M.bash = { line: 'high', from: ['C', 'C'], heavy: true, hits: [0.32, 0.42 + 0.64 * 1.1], keys: [
       [0, guard],
       [0.16, one(-0.6, 0.3, -1.3, -2.1, [-0.6, 0.7, -1.9], { spine: [0.0, 0.35, 0], chest: [0, 0.15, 0], $hips: [-0.09, -0.03], $fL: [0, 0.04, 0.03], $fR: [0, 0, -0.06], $root: [0, 0, -0.04, 0, 0.25, 0] }), 'h'],
       [0.32, one(-0.6, 0.4, -1.4, -2.0, [-1.55, -0.1, -0.15], { spine: [0.3, -0.45, 0], chest: [0.1, -0.2, 0], head: [-0.1, 0.3, 0], $hips: [-0.11, 0.07], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $root: [0, 0.02, 0.2, 0.05, -0.3, 0] })],
@@ -293,6 +334,8 @@ function oneHanded() {
     ] };
   }
   P.blockMid = one(-1.2, 0.2, -1.35, -3.0, [-1.45, 0.5, -1.25], { spine: [0.0, 0.2, 0], head: [-0.05, -0.15, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
+  P.blockL = one(-1.2, -0.45, -1.35, -3.05, [-1.45, 0.6, -1.25], { spine: [0.0, 0.4, 0], chest: [0, 0.15, 0], head: [-0.05, -0.35, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
+  P.blockR = one(-1.2, 0.75, -1.3, -3.05, [-1.3, 0.3, -1.3], { spine: [0.0, -0.4, 0], chest: [0, -0.15, 0], head: [-0.05, 0.35, 0], $hips: [-0.08, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
   P.blockHigh = { ...one(-2.3, 0.3, -1.0, -4.0, [-2.2, 0.35, -1.0], { spine: [-0.12, 0.1, 0], head: [-0.15, 0, 0], $hips: [-0.09, -0.03], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] }) };
   P.blockHigh.wrR = [P.blockHigh.wrR[0], 0, 1.2];
   P.fling = one(-2.2, 0.8, -0.3, -2.8, [-1.6, -0.6, -0.4], { spine: [-0.4, 0.3, 0.15], chest: [-0.2, 0.1, 0], head: [-0.5, 0.3, 0.3] });
@@ -300,76 +343,103 @@ function oneHanded() {
   return { P, M };
 }
 
-// ---- the pawn: crouched at rest, up on his feet with a blade in each hand to fight
+// ---- the pawn: crouched at rest, up on his feet with a blade in each hand to fight. A sword
+// fighter: flat cuts swung round the body at chest height (forehand, backhand, both blades
+// scissoring in, a spinning cut), and the point driven in on a lunge. No hacking from above.
 function dualBlades() {
-  const rest = { $hips: [-0.13, 0.02], spine: [0.85, 0, 0], chest: [0.25, 0, 0], head: [-0.75, 0, 0], shL: [-0.9, 0, -0.55], elL: [-1.5, 0, 0], shR: [-0.9, 0, 0.55], elR: [-1.5, 0, 0], wrL: [1.1, 0, 0], wrR: [1.1, 0, 0] };
+  const rest = { $hips: [-0.13, 0.02], spine: [0.85, 0, 0], chest: [0.25, 0, 0], head: [-0.75, 0, 0], shL: [-0.9, 0, -0.55], elL: [-1.5, 0, 0], shR: [-0.9, 0, 0.55], elR: [-1.5, 0, 0], wrL: [0.72, 0, 0], wrR: [0.72, 0, 0] };
   const guard = dual([-0.95, 0.35, -1.15, -2.4], [-1.1, 0.3, -1.0, -2.25], { spine: [0.18, 0.1, 0], chest: [0.05, 0, 0], head: [-0.15, -0.08, 0], $hips: [-0.07, 0], $fL: [0, 0, 0.07], $fR: [0, 0, -0.06] });
   const recover = (p) => lerpPose(p, guard, 0.6);
   const P = { rest, guard };
   const M = {};
-  // the X: rise up tall with both blades flung wide and high, then cut them in across each other
-  M.cross = { line: 'high', hits: [0.62], keys: [
+  const D = (l, r, x, rl = EDGE, rr = EDGE) => edge(edge(dual(l, r, x), 'L', rl), 'R', rr);
+  // the off blade, held up out of the way of a cut across the body
+  const offHigh = [-1.35, 0.55, -1.3, -2.75], offBack = [-0.35, 0.7, -0.9, -1.6];
+  // forehand: the right blade wound back round the right side, then swung flat through the
+  // target at chest height, the hips and shoulders unwinding behind it
+  const foreKeys = (t0) => [
+    [t0 + 0.24, cock(D(offHigh, [-1.45, 1.25, -0.3, -1.62], { spine: [0.1, -0.42, 0], chest: [0.04, -0.18, 0], head: [-0.1, 0.5, 0], $hips: [-0.1, -0.02], $fL: [0, 0, 0.06], $fR: [0, 0, -0.08], $root: [0, 0, -0.03, 0, -0.28, 0] }), 'R', 0.8), 'h'],
+    [t0 + 0.42, D(offHigh, [-1.5, 0.85, -0.12, -1.6], { spine: [0.14, -0.25, 0], chest: [0.05, -0.12, 0], head: [-0.12, 0.25, 0], $hips: [-0.11, 0.03], $fL: [0, 0.07, 0.12], $fR: [0, 0, -0.08], $root: [0, 0.01, 0.05, 0, -0.2, 0], $aim: [0.7] })],
+    [t0 + 0.5, D(offHigh, [-1.53, 0.0, -0.04, -1.57], { spine: [0.18, 0.12, 0], chest: [0.06, 0.08, 0], head: [-0.15, -0.12, 0], $hips: [-0.13, 0.06], $fL: [0, 0, 0.15], $fR: [0, 0, -0.08], $root: [0, 0, 0.1, 0.03, 0.04, 0], $aim: [1] })],
+    [t0 + 0.62, D(offBack, [-1.45, -0.95, -0.12, -1.57], { spine: [0.18, 0.45, 0], chest: [0.06, 0.2, 0], head: [-0.15, -0.45, 0], $hips: [-0.13, 0.06], $fL: [0, 0, 0.15], $fR: [0, 0, -0.08], $root: [0, 0, 0.11, 0.03, 0.3, 0], $aim: [0.35] })],
+  ];
+  M.fore = { line: 'mid', from: 'R', hits: [0.5], keys: [[0, guard], ...foreKeys(0), [0.86, recover(D(offBack, [-1.45, -1.1, -0.12, -1.57], { spine: [0.18, 0.62, 0], $root: [0, 0, 0.08, 0, 0.35, 0] }))], [1.1, guard]] };
+  // backhand: the right blade drawn across to the left hip, then whipped out flat to the right
+  M.back = { line: 'mid', from: 'L', hits: [0.52], keys: [
     [0, guard],
-    [0.2, dual([-0.6, 0.15, -1.7, -2.5], [-0.6, 0.15, -1.7, -2.5], { spine: [0.45, 0, 0], chest: [0.1, 0, 0], head: [-0.35, 0, 0], $hips: [-0.15, 0], $fL: [0, 0, 0.06], $fR: [0, 0, -0.06] })],
-    [0.46, dual([-2.6, 0.9, -0.6, -3.95], [-2.6, 0.9, -0.6, -3.95], { spine: [-0.22, 0, 0], chest: [-0.12, 0, 0], head: [-0.2, 0, 0], $hips: [0, -0.02], $fL: [0, 0.05, 0.04], $fR: [0, 0, -0.05], $root: [0, 0.04, -0.03, -0.05, 0, 0] }), 'h'],
-    [0.55, dual([-2.3, 0.45, -0.3, -3.0], [-2.3, 0.45, -0.3, -3.0], { spine: [0.05, 0, 0], $hips: [-0.03, 0.02], $fL: [0, 0.06, 0.11], $fR: [0, 0, -0.06], $root: [0, 0.07, 0.09, 0, 0, 0], $aim: [0.7] })],
-    [0.62, dual([-1.4, -0.45, -0.15, -1.65], [-1.5, -0.35, -0.15, -1.7], { spine: [0.45, 0, 0], chest: [0.15, 0, 0], head: [-0.3, 0, 0], $hips: [-0.12, 0.08], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $root: [0, 0, 0.17, 0.06, 0, 0], $aim: [1] })],
-    [0.75, dual([-0.8, -0.75, -0.2, -0.9], [-0.8, -0.65, -0.2, -0.9], { spine: [0.6, 0, 0], chest: [0.18, 0, 0], head: [-0.45, 0, 0], $hips: [-0.14, 0.09], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $root: [0, 0, 0.18, 0.08, 0, 0], $aim: [0.5] })],
-    [0.96, recover(dual([-0.8, -0.75, -0.2, -0.9], [-0.8, -0.65, -0.2, -0.9], { spine: [0.6, 0, 0], $hips: [-0.14, 0.09], $root: [0, 0, 0.15, 0.04, 0, 0] }))],
-    [1.2, guard],
+    [0.26, D(offBack, [-1.15, -1.05, -1.0, -1.75], { spine: [0.12, 0.65, 0], chest: [0.05, 0.3, 0], head: [-0.12, -0.6, 0], $hips: [-0.1, -0.02], $fL: [0, 0, 0.05], $fR: [0, 0, -0.08], $root: [0, 0, -0.03, 0, 0.45, 0] }), 'h'],
+    [0.44, D(offBack, [-1.45, -0.6, -0.35, -1.6], { spine: [0.15, 0.3, 0], chest: [0.05, 0.12, 0], head: [-0.12, -0.25, 0], $hips: [-0.11, 0.03], $fR: [0, 0.07, -0.02], $fL: [0, 0, 0.07], $root: [0, 0.01, 0.05, 0, 0.2, 0], $aim: [0.7] })],
+    [0.52, D(offBack, [-1.53, 0.2, -0.04, -1.57], { spine: [0.18, -0.1, 0], chest: [0.06, -0.06, 0], head: [-0.15, 0.1, 0], $hips: [-0.13, 0.05], $fR: [0, 0, 0.06], $fL: [0, 0, 0.06], $root: [0, 0, 0.1, 0.03, -0.04, 0], $aim: [1] })],
+    [0.64, D(offHigh, [-1.45, 1.45, -0.1, -1.57], { spine: [0.18, -0.6, 0], chest: [0.06, -0.3, 0], head: [-0.15, 0.55, 0], $hips: [-0.13, 0.05], $fR: [0, 0, 0.06], $fL: [0, 0, 0.06], $root: [0, 0, 0.11, 0.03, -0.42, 0], $aim: [0.35] })],
+    [0.88, recover(D(offHigh, [-1.45, 1.45, -0.1, -1.57], { spine: [0.18, -0.6, 0], $root: [0, 0, 0.08, 0, -0.35, 0] }))],
+    [1.12, guard],
   ] };
-  // right forehand, then the left blade backhanded through
-  M.double = { line: 'mid', hits: [0.56, 0.92], keys: [
-    [0, guard],
-    [0.36, dual([-1.0, 0.3, -1.2, -2.4], [-2.4, 1.0, -1.1, -4.1], { spine: [-0.1, -0.55, -0.1], chest: [-0.05, -0.25, 0], head: [0, 0.5, 0], $hips: [-0.04, -0.03], $fL: [0, 0.04, 0.03], $fR: [0, 0, -0.06], $root: [0, 0.02, -0.03, -0.03, -0.25, 0] }), 'h'],
-    [0.48, dual([-1.1, 0.2, -1.2, -2.4], [-2.1, 0.4, -0.4, -3.0], { spine: [0.15, -0.2, 0], $hips: [-0.06, 0.03], $fL: [0, 0.05, 0.1], $root: [0, 0.04, 0.08, 0, -0.1, 0], $aim: [0.7] })],
-    [0.56, dual([-1.6, 1.2, -0.6, -2.0], [-1.45, -0.45, -0.15, -1.75], { spine: [0.35, 0.4, 0.1], chest: [0.1, 0.2, 0], head: [-0.2, -0.3, 0], $hips: [-0.1, 0.06], $fL: [0, 0, 0.12], $fR: [0, 0, -0.07], $root: [0, 0, 0.14, 0.04, 0.2, 0], $aim: [1] })],
-    [0.7, dual([-2.0, 1.4, -0.9, -3.6], [-0.9, -0.85, -0.2, -1.0], { spine: [0.3, 0.6, 0.12], chest: [0.08, 0.3, 0], head: [-0.15, -0.5, 0], $hips: [-0.1, 0.06], $fL: [0, 0.03, 0.12], $root: [0, 0.02, 0.15, 0.03, 0.4, 0], $aim: [0.3] }), 'h'],
-    [0.84, dual([-1.9, 0.6, -0.3, -2.6], [-1.0, -0.4, -0.6, -1.6], { spine: [0.3, 0.2, 0], head: [-0.2, -0.1, 0], $hips: [-0.11, 0.07], $fR: [0, 0.04, 0.06], $root: [0, 0.03, 0.18, 0.03, 0.15, 0], $aim: [0.7] })],
-    [0.92, dual([-1.45, -0.45, -0.15, -1.7], [-1.2, 0.2, -0.9, -2.0], { spine: [0.4, -0.35, -0.1], chest: [0.12, -0.2, 0], head: [-0.25, 0.25, 0], $hips: [-0.12, 0.08], $fL: [0, 0, 0.1], $fR: [0, 0, 0.0], $root: [0, 0, 0.2, 0.05, -0.2, 0], $aim: [1] })],
-    [1.04, dual([-0.8, -0.8, -0.2, -0.9], [-1.1, 0.4, -1.0, -2.1], { spine: [0.5, -0.55, -0.12], chest: [0.15, -0.25, 0], head: [-0.35, 0.4, 0], $hips: [-0.12, 0.08], $root: [0, 0, 0.2, 0.06, -0.35, 0], $aim: [0.5] })],
-    [1.26, recover(dual([-0.8, -0.8, -0.2, -0.9], [-1.1, 0.4, -1.0, -2.1], { spine: [0.5, -0.55, -0.12], $root: [0, 0, 0.14, 0.03, -0.25, 0] }))],
-    [1.5, guard],
-  ] };
-  // a whirl: arms out, blades level, spun right round on the pedestal
+  // the scissors: both arms flung wide, then both blades swept in flat, crossing in the foe
   {
-    const out = (ry, x = {}) => ({ ...dual([-1.5, 1.2, -0.1, -1.6], [-1.5, 1.2, -0.1, -1.6], { spine: [0.15, 0, 0], head: [-0.1, 0, 0], $hips: [-0.08, 0.03], ...x }), $root: [0, 0.05, 0.12, 0, ry, 0] });
-    M.whirl = { line: 'mid', hits: [0.86], keys: [
+    const wide = D([-1.4, 1.45, -0.35, -1.8], [-1.4, 1.45, -0.35, -1.8], { spine: [-0.05, 0, 0], chest: [-0.08, 0, 0], head: [-0.15, 0, 0], $hips: [-0.06, -0.02], $fL: [0, 0, 0.05], $fR: [0, 0, -0.07], $root: [0, 0.01, -0.04, -0.03, 0, 0] });
+    M.scissor = { line: 'mid', from: 'C', hits: [0.52], keys: [
       [0, guard],
-      [0.22, { ...dual([-0.8, 0.2, -1.6, -2.4], [-0.8, 0.2, -1.6, -2.4], { spine: [0.35, 0.3, 0], $hips: [-0.13, 0], $fL: [0, 0, 0.05], $fR: [0, 0, -0.06] }), $root: [0, 0, -0.03, 0, 0.45, 0] }, 'h'],
-      [0.42, out(-0.6, { $fL: [0, 0.05, 0.05] })],
-      [0.6, out(-PI * 0.8)],
-      [0.76, out(-PI * 1.45, { $fR: [0, 0.05, 0] })],
-      [0.86, { ...dual([-1.5, 0.2, -0.1, -1.6], [-1.5, 1.4, -0.1, -1.6], { spine: [0.3, 0, 0], head: [-0.2, 0, 0], $hips: [-0.11, 0.07], $fL: [0, 0, 0.12], $fR: [0, 0, -0.07], $aim: [1] }), $root: [0, 0, 0.2, 0.04, -PI * 2 + 0.1, 0] }],
-      [0.98, { ...dual([-1.45, -0.6, -0.1, -1.6], [-1.45, 1.4, -0.1, -1.6], { spine: [0.3, -0.3, 0], head: [-0.2, 0.2, 0], $hips: [-0.11, 0.07], $fL: [0, 0, 0.12], $fR: [0, 0, -0.07], $aim: [0.5] }), $root: [0, 0, 0.2, 0.04, -PI * 2 - 0.25, 0] }],
-      [1.2, { ...recover(dual([-1.45, -0.6, -0.1, -1.6], [-1.45, 1.4, -0.1, -1.6], { spine: [0.3, -0.3, 0] })), $root: [0, 0, 0.1, 0, -PI * 2, 0] }],
-      [1.42, { ...guard, $root: [0, 0, 0, 0, -PI * 2, 0] }],
+      [0.28, wide, 'h'],
+      [0.44, D([-1.55, 0.6, -0.1, -1.62], [-1.42, 0.6, -0.1, -1.55], { spine: [0.12, 0, 0], $hips: [-0.1, 0.04], $fL: [0, 0.07, 0.13], $fR: [0, 0, -0.08], $root: [0, 0.01, 0.06, 0.01, 0, 0], $aim: [0.7] })],
+      [0.52, D([-1.58, -0.12, -0.03, -1.6], [-1.42, -0.12, -0.03, -1.52], { spine: [0.2, 0, 0], chest: [0.06, 0, 0], head: [-0.15, 0, 0], $hips: [-0.13, 0.07], $fL: [0, 0, 0.16], $fR: [0, 0, -0.08], $root: [0, 0, 0.11, 0.03, 0, 0], $aim: [1] })],
+      [0.64, D([-1.6, -0.75, -0.08, -1.62], [-1.38, -0.7, -0.08, -1.5], { spine: [0.22, 0, 0], chest: [0.06, 0, 0], head: [-0.15, 0, 0], $hips: [-0.13, 0.07], $fL: [0, 0, 0.16], $fR: [0, 0, -0.08], $root: [0, 0, 0.12, 0.03, 0, 0], $aim: [0.4] })],
+      [0.9, recover(D([-1.6, -0.75, -0.08, -1.62], [-1.38, -0.7, -0.08, -1.5], { spine: [0.22, 0, 0], $root: [0, 0, 0.08, 0, 0, 0] }))],
+      [1.14, guard],
     ] };
   }
-  // both blades driven straight in, a long low lunge
-  M.lunge = { line: 'mid', hits: [0.58], keys: [
-    [0, guard],
-    [0.36, dual([0.3, 0.25, -1.8, -1.6], [0.3, 0.25, -1.8, -1.6], { spine: [0.1, 0, 0], head: [-0.1, 0, 0], $hips: [-0.15, -0.04], $fL: [0, 0.03, 0.04], $fR: [0, 0, -0.07], $root: [0, 0, -0.08, -0.04, 0, 0] }), 'h'],
-    [0.5, dual([-0.9, 0.1, -0.9, -1.6], [-0.9, 0.1, -0.9, -1.6], { spine: [0.3, 0, 0], $hips: [-0.1, 0.04], $fL: [0, 0.05, 0.12], $fR: [0, 0, -0.08], $root: [0, 0.04, 0.12, 0.02, 0, 0], $aim: [0.8] })],
-    [0.58, dual([-1.55, -0.12, -0.05, -1.6], [-1.55, -0.12, -0.05, -1.6], { spine: [0.42, 0, 0], chest: [0.12, 0, 0], head: [-0.3, 0, 0], $hips: [-0.15, 0.1], $fL: [0, 0, 0.17], $fR: [0, 0, -0.1], $root: [0, 0, 0.27, 0.07, 0, 0], $aim: [1] })],
-    [0.7, dual([-1.5, -0.12, -0.05, -1.55], [-1.5, -0.12, -0.05, -1.55], { spine: [0.45, 0, 0], chest: [0.12, 0, 0], head: [-0.3, 0, 0], $hips: [-0.15, 0.1], $fL: [0, 0, 0.17], $fR: [0, 0, -0.1], $root: [0, 0, 0.28, 0.07, 0, 0], $aim: [0.8] })],
-    [0.88, recover(dual([-1.2, 0.2, -0.6, -1.9], [-1.2, 0.2, -0.6, -1.9], { spine: [0.35, 0, 0], $hips: [-0.12, 0.06], $root: [0, 0, 0.14, 0.03, 0, 0] }))],
-    [1.1, guard],
+  // forehand with the right, then the left blade brought round flat the other way
+  M.double = { line: 'mid', from: ['R', 'L'], hits: [0.5, 0.86], keys: [
+    [0, guard], ...foreKeys(0).slice(0, 3),
+    [0.62, D([-1.25, 1.35, -0.5, -1.85], [-1.45, -1.1, -0.12, -1.57], { spine: [0.18, 0.62, 0], chest: [0.06, 0.3, 0], head: [-0.15, -0.55, 0], $hips: [-0.13, 0.06], $fL: [0, 0, 0.15], $fR: [0, 0, -0.08], $root: [0, 0, 0.11, 0.03, 0.42, 0], $aim: [0.35] }), 'h'],
+    [0.78, D([-1.5, 0.75, -0.12, -1.6], [-1.0, -0.6, -0.9, -1.9], { spine: [0.16, 0.3, 0], chest: [0.05, 0.12, 0], head: [-0.12, -0.25, 0], $hips: [-0.12, 0.08], $fR: [0, 0.07, 0.04], $fL: [0, 0, 0.15], $root: [0, 0.01, 0.14, 0.02, 0.2, 0], $aim: [0.7] })],
+    [0.86, D([-1.53, 0.0, -0.04, -1.57], [-0.6, 0.6, -1.0, -1.7], { spine: [0.18, -0.12, 0], chest: [0.06, -0.08, 0], head: [-0.15, 0.12, 0], $hips: [-0.13, 0.08], $fR: [0, 0, 0.1], $fL: [0, 0, 0.15], $root: [0, 0, 0.17, 0.03, -0.04, 0], $aim: [1] })],
+    [0.98, D([-1.45, -1.1, -0.12, -1.57], [-0.4, 0.7, -0.9, -1.6], { spine: [0.18, -0.6, 0], chest: [0.06, -0.3, 0], head: [-0.15, 0.55, 0], $hips: [-0.13, 0.08], $fR: [0, 0, 0.1], $fL: [0, 0, 0.15], $root: [0, 0, 0.18, 0.03, -0.42, 0], $aim: [0.35] })],
+    [1.22, recover(D([-1.45, -1.1, -0.12, -1.57], [-0.4, 0.7, -0.9, -1.6], { spine: [0.18, -0.6, 0], $root: [0, 0, 0.12, 0, -0.35, 0] }))],
+    [1.46, guard],
   ] };
-  // the finisher: a leap, both blades high, brought down together as he lands
-  M.leap = { line: 'high', heavy: true, hits: [0.78], keys: [
+  // the spinning cut: wound up, then round on the spot with both blades out flat, the left one
+  // coming round through the foe at the end of the turn
+  {
+    const out = (ry, x = {}) => ({ ...D([-1.5, 1.3, -0.08, -1.57], [-1.5, 1.3, -0.08, -1.57], { spine: [0.12, 0, 0], head: [-0.1, 0, 0], $hips: [-0.09, 0.03], ...x }), $root: [0, 0.02, 0.08, 0, ry, 0] });
+    M.spin = { line: 'mid', from: 'L', hits: [0.86], keys: [
+      [0, guard],
+      [0.24, { ...D([-1.3, -0.4, -0.6, -1.8], [-1.0, 0.9, -1.0, -1.8], { spine: [0.25, 0.45, 0], chest: [0.06, 0.2, 0], head: [-0.15, -0.3, 0], $hips: [-0.13, 0], $fL: [0, 0, 0.05], $fR: [0, 0, -0.07] }), $root: [0, 0, -0.03, 0, 0.5, 0] }, 'h'],
+      [0.42, out(-0.55, { $fL: [0, 0.06, 0.05] })],
+      [0.6, out(-PI * 0.8)],
+      [0.76, out(-PI * 1.45, { $fR: [0, 0.06, 0] })],
+      [0.86, { ...D([-1.53, 0.0, -0.04, -1.57], [-1.5, 1.4, -0.08, -1.57], { spine: [0.2, 0, 0], head: [-0.15, 0, 0], $hips: [-0.12, 0.07], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $aim: [1] }), $root: [0, 0, 0.14, 0.03, -PI * 2 + 0.08, 0] }],
+      [0.98, { ...D([-1.45, -0.95, -0.1, -1.57], [-1.45, 1.4, -0.1, -1.57], { spine: [0.2, -0.35, 0], head: [-0.15, 0.25, 0], $hips: [-0.12, 0.07], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $aim: [0.4] }), $root: [0, 0, 0.15, 0.03, -PI * 2 - 0.3, 0] }],
+      [1.22, { ...recover(D([-1.45, -0.95, -0.1, -1.57], [-1.45, 1.4, -0.1, -1.57], { spine: [0.2, -0.35, 0] })), $root: [0, 0, 0.08, 0, -PI * 2, 0] }],
+      [1.44, { ...guard, $root: [0, 0, 0, 0, -PI * 2, 0] }],
+    ] };
+  }
+  // the lunge: the right blade drawn back to the hip, then the front foot steps out long and
+  // the point is driven straight into the chest; the left arm swings back for balance
+  M.lunge = { line: 'mid', from: 'C', hits: [0.54], keys: [
     [0, guard],
-    [0.26, dual([-0.4, 0.3, -1.8, -2.3], [-0.4, 0.3, -1.8, -2.3], { spine: [0.5, 0, 0], chest: [0.12, 0, 0], head: [-0.4, 0, 0], $hips: [-0.17, 0], $fL: [0, 0, 0.05], $fR: [0, 0, -0.05] }), 'h'],
-    [0.5, dual([-2.9, 0.35, -0.7, -4.4], [-2.9, 0.35, -0.7, -4.4], { spine: [-0.3, 0, 0], chest: [-0.12, 0, 0], head: [-0.25, 0, 0], $hips: [0.0, -0.02], $fL: [0, 0.08, 0.05], $fR: [0, 0.06, -0.04], $root: [0, 0.32, 0.12, -0.08, 0, 0] })],
-    [0.66, dual([-2.95, 0.2, -0.3, -3.6], [-2.95, 0.2, -0.3, -3.6], { spine: [-0.15, 0, 0], head: [-0.2, 0, 0], $hips: [-0.02, 0.0], $fL: [0, 0.06, 0.1], $fR: [0, 0.05, -0.02], $root: [0, 0.26, 0.24, -0.02, 0, 0], $aim: [0.6] })],
-    [0.78, dual([-1.45, 0.05, -0.1, -1.75], [-1.45, 0.05, -0.1, -1.75], { spine: [0.5, 0, 0], chest: [0.16, 0, 0], head: [-0.35, 0, 0], $hips: [-0.15, 0.09], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $root: [0, 0, 0.3, 0.08, 0, 0], $aim: [1] })],
-    [0.92, dual([-0.8, -0.1, -0.15, -0.85], [-0.8, -0.1, -0.15, -0.85], { spine: [0.65, 0, 0], chest: [0.2, 0, 0], head: [-0.5, 0, 0], $hips: [-0.17, 0.1], $fL: [0, 0, 0.14], $fR: [0, 0, -0.08], $root: [0, 0, 0.3, 0.1, 0, 0], $aim: [0.5] })],
-    [1.2, recover(dual([-0.8, -0.1, -0.15, -0.85], [-0.8, -0.1, -0.15, -0.85], { spine: [0.65, 0, 0], $hips: [-0.15, 0.09], $root: [0, 0, 0.25, 0.05, 0, 0] }))],
-    [1.45, { ...guard, $root: [0, 0, 0.1, 0, 0, 0] }],
+    [0.32, dual([-1.3, -0.05, -1.25, -2.6], [0.25, 0.3, -1.8, -1.6], { spine: [0.1, -0.4, 0], chest: [0.03, -0.15, 0], head: [-0.1, 0.4, 0], $hips: [-0.13, -0.04], $fL: [0, 0, 0.06], $fR: [0, 0, -0.08], $root: [0, 0, -0.04, -0.02, -0.3, 0] }), 'h'],
+    [0.46, dual([-0.9, 0.3, -1.0, -2.0], [-0.95, 0.1, -0.85, -1.6], { spine: [0.25, -0.1, 0], head: [-0.15, 0.1, 0], $hips: [-0.13, 0.05], $fL: [0, 0.08, 0.15], $fR: [0, 0, -0.09], $root: [0, 0.01, 0.05, 0.02, -0.1, 0], $aim: [0.8] })],
+    [0.54, dual([0.25, 0.55, -0.25, -0.2], [-1.56, -0.06, -0.02, -1.58], { spine: [0.38, 0.22, 0], chest: [0.1, 0.1, 0], head: [-0.3, -0.12, 0], $hips: [-0.17, 0.12], $fL: [0, 0, 0.23], $fR: [0, 0, -0.12], $root: [0, 0, 0.13, 0.04, 0.12, 0], $aim: [1] })],
+    [0.68, dual([0.3, 0.6, -0.25, -0.2], [-1.54, -0.06, -0.02, -1.56], { spine: [0.4, 0.24, 0], chest: [0.1, 0.1, 0], head: [-0.3, -0.12, 0], $hips: [-0.17, 0.12], $fL: [0, 0, 0.23], $fR: [0, 0, -0.12], $root: [0, 0, 0.14, 0.04, 0.12, 0], $aim: [0.8] })],
+    [0.88, recover(dual([-0.9, 0.3, -1.0, -2.0], [-1.0, 0.2, -0.8, -1.8], { spine: [0.3, 0.1, 0], $hips: [-0.13, 0.06], $fL: [0, 0.05, 0.12], $root: [0, 0, 0.07, 0.02, 0.05, 0] }))],
+    [1.12, guard],
   ] };
+  // both points driven in together off a long low lunge
+  M.twin = { line: 'mid', from: 'C', hits: [0.58], keys: [
+    [0, guard],
+    [0.36, dual([0.3, 0.25, -1.8, -1.6], [0.3, 0.25, -1.8, -1.6], { spine: [0.1, 0, 0], head: [-0.1, 0, 0], $hips: [-0.15, -0.04], $fL: [0, 0, 0.05], $fR: [0, 0, -0.08], $root: [0, 0, -0.06, -0.04, 0, 0] }), 'h'],
+    [0.5, dual([-0.9, 0.1, -0.9, -1.6], [-0.9, 0.1, -0.9, -1.6], { spine: [0.3, 0, 0], $hips: [-0.12, 0.05], $fL: [0, 0.08, 0.15], $fR: [0, 0, -0.09], $root: [0, 0.01, 0.06, 0.02, 0, 0], $aim: [0.8] })],
+    [0.58, dual([-1.55, -0.12, -0.05, -1.6], [-1.55, -0.12, -0.05, -1.6], { spine: [0.42, 0, 0], chest: [0.12, 0, 0], head: [-0.3, 0, 0], $hips: [-0.17, 0.12], $fL: [0, 0, 0.23], $fR: [0, 0, -0.12], $root: [0, 0, 0.13, 0.05, 0, 0], $aim: [1] })],
+    [0.7, dual([-1.5, -0.12, -0.05, -1.55], [-1.5, -0.12, -0.05, -1.55], { spine: [0.45, 0, 0], chest: [0.12, 0, 0], head: [-0.3, 0, 0], $hips: [-0.17, 0.12], $fL: [0, 0, 0.23], $fR: [0, 0, -0.12], $root: [0, 0, 0.14, 0.05, 0, 0], $aim: [0.8] })],
+    [0.9, recover(dual([-1.2, 0.2, -0.6, -1.9], [-1.2, 0.2, -0.6, -1.9], { spine: [0.35, 0, 0], $hips: [-0.13, 0.06], $fL: [0, 0.05, 0.12], $root: [0, 0, 0.07, 0.03, 0, 0] }))],
+    [1.12, guard],
+  ] };
+  // guards: blades crossed upright before him, one upright out to a side, or held flat overhead
   P.blockMid = dual([-1.5, -0.2, -1.4, -3.05], [-1.5, -0.25, -1.4, -3.05], { spine: [0.1, 0.1, 0], head: [-0.1, -0.1, 0], $hips: [-0.09, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
   P.blockMid.wrL = [P.blockMid.wrL[0], 0, -0.6];
   P.blockMid.wrR = [P.blockMid.wrR[0], 0, 0.6];
+  P.blockL = dual([-1.3, 0.5, -1.35, -3.05], [-1.0, 0.2, -1.2, -2.4], { spine: [0.1, 0.35, 0], chest: [0.03, 0.15, 0], head: [-0.1, -0.35, 0], $hips: [-0.1, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
+  P.blockR = dual([-1.0, 0.2, -1.2, -2.4], [-1.3, 0.5, -1.35, -3.05], { spine: [0.1, -0.35, 0], chest: [0.03, -0.15, 0], head: [-0.1, 0.35, 0], $hips: [-0.1, -0.02], $fL: [0, 0, 0.07], $fR: [0, 0, -0.08] });
   P.blockHigh = { ...P.blockMid, shL: [-2.3, 0, -0.1], shR: [-2.3, 0, 0.1], elL: [-0.9, 0, 0], elR: [-0.9, 0, 0], wrL: [-4.0 + 3.2, 0, -1.0], wrR: [-4.0 + 3.2, 0, 1.0], spine: [-0.1, 0, 0], head: [-0.2, 0, 0] };
   P.fling = dual([-2.0, 1.1, -0.3, -2.6], [-2.2, 1.0, -0.3, -2.8], { spine: [-0.4, 0.3, 0.15], chest: [-0.2, 0.1, 0], head: [-0.5, 0.3, 0.3] });
   P.cheer = { $hips: [0, 0], spine: [-0.15, 0, 0], head: [-0.3, 0, 0], shL: [-2.9, 0, 0.3], elL: [-0.2, 0, 0], shR: [-2.9, 0, -0.3], elR: [-0.2, 0, 0] };
@@ -407,7 +477,8 @@ function reactions(P) {
   const g = P.guard;
   const R = (dz, rx, ry = 0, rz = 0, dx = 0, dy = 0) => [dx, dy, dz, rx, ry, rz];
   const M = {};
-  for (const [name, blk] of [['parry', P.blockMid], ['parryHigh', P.blockHigh]]) {
+  const STAG = { parry: 'stagger', parryHigh: 'staggerHigh', parryL: 'staggerL', parryR: 'staggerR' };
+  for (const [name, blk] of [['parry', P.blockMid], ['parryHigh', P.blockHigh], ['parryL', P.blockL], ['parryR', P.blockR]]) {
     const hit = add(blk, { spine: [-0.14, 0.05, 0], chest: [-0.06, 0, 0], head: [-0.12, 0, 0] });
     M[name] = { react: true, hits: [0.42], keys: [
       [0, g],
@@ -418,7 +489,7 @@ function reactions(P) {
       [0.98, g],
     ] };
     // a heavy blow: the guard holds, but it drives the defender back a step, reeling
-    M[name === 'parry' ? 'stagger' : 'staggerHigh'] = { react: true, hits: [0.42], keys: [
+    M[STAG[name]] = { react: true, hits: [0.42], keys: [
       [0, g],
       [0.27, { ...blk, $aim: [1] }, 'h'],
       [0.42, { ...blk, $aim: [1] }],
@@ -426,6 +497,18 @@ function reactions(P) {
       [0.8, { ...lerpPose(blk, g, 0.5), $root: R(-0.26, -0.05, 0.06), $fR: [0, 0, -0.12], $fL: [0, 0, 0.05], $hips: [-0.13, -0.03] }, 'h'],
       [1.08, { ...g, $root: R(-0.1, 0, 0, 0, 0, 0.03), $fL: [0, 0.05, 0.08] }],
       [1.4, g],
+    ] };
+  }
+  // against a thrust: the blade beats the point aside, sweeping across from right to left
+  {
+    const a = P.blockR, b = P.blockL;
+    M.deflect = { react: true, hits: [0.4], keys: [
+      [0, g],
+      [0.24, { ...a, $aim: [1] }, 'h'],
+      [0.4, { ...lerpPose(a, b, 0.5), $aim: [1] }],
+      [0.5, { ...add(b, { spine: [-0.1, 0.1, 0], head: [-0.1, 0, 0] }), $aim: [0.8], $root: R(-0.05, -0.05, 0.1) }],
+      [0.68, { ...b, $aim: [0.4], $root: R(-0.02, -0.02, 0.05) }],
+      [0.98, g],
     ] };
   }
   // a sidestep (to the figure's left, +x, or right)
@@ -464,18 +547,24 @@ const HORSE_TRACK = {
   leap: [[0, HORSE.rest], [0.25, HORSE.rear], [0.75, HORSE.rear], [1, HORSE.stamp]],
   cheer: [[0, HORSE.rest], [0.45, HORSE.high, 'h'], [0.95, HORSE.high], [1.3, HORSE.rest]],
 };
-HORSE_TRACK.parryHigh = HORSE_TRACK.parry;
+HORSE_TRACK.back = [[0, HORSE.rest], [0.42, HORSE.pivotL, 'h'], [0.6, HORSE.pivotR], [0.76, HORSE.pivotR], [1.24, HORSE.rest]];
+HORSE_TRACK.parryHigh = HORSE_TRACK.parryL = HORSE_TRACK.parryR = HORSE_TRACK.deflect = HORSE_TRACK.parry;
+HORSE_TRACK.staggerL = HORSE_TRACK.staggerR = HORSE_TRACK.stagger;
 HORSE_TRACK.staggerHigh = HORSE_TRACK.stagger;
 HORSE_TRACK.hit = HORSE_TRACK.parry;
 
-// what each kind of fighter does: the blows of an exchange and the finishing moves
+// what each kind of fighter does: the blows of an exchange and the finishing moves. Swords
+// fight with flat cuts round the body (forehand and backhand) and the point; the occasional
+// diagonal; only the knight's mace (and the rook, after a shield-bash) still comes down from above.
 const ARSENAL = {
-  two: { blows: ['cleave', 'slash', 'sweep', 'thrust'], finishers: ['cleave', 'spin', 'thrust', 'spin'] },
-  oneR: { blows: ['cleave', 'slash', 'sweep', 'thrust'], finishers: ['bash', 'cleave', 'slash'] },
-  oneL: { blows: ['cleave', 'slash', 'sweep', 'thrust'], finishers: ['bash', 'cleave', 'thrust'] },
-  mounted: { blows: ['cleave', 'slash', 'sweep', 'thrust'], finishers: ['bash', 'cleave', 'bash'] },
-  dual: { blows: ['cross', 'whirl', 'lunge'], finishers: ['leap', 'double', 'cross'] },
+  two: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'spin', 'thrust', 'back'] },
+  oneR: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'back', 'thrust', 'bash'] },
+  oneL: { blows: ['sweep', 'back', 'thrust', 'slash'], finishers: ['sweep', 'thrust', 'back'] },
+  mounted: { blows: ['sweep', 'back', 'thrust', 'cleave'], finishers: ['bash', 'cleave', 'sweep', 'thrust'] },
+  dual: { blows: ['fore', 'back', 'scissor', 'lunge', 'twin', 'double'], finishers: ['fore', 'spin', 'lunge', 'scissor', 'back', 'twin'] },
 };
+// what kind of blow each move is: a flat cut, a thrust, or anything else
+const CAT = { sweep: 'cut', back: 'cut', fore: 'cut', scissor: 'cut', double: 'cut', spin: 'cut', thrust: 'thrust', lunge: 'thrust', twin: 'thrust' };
 
 function lib(kind) {
   if (kind === 'two') return twoHanded();
@@ -484,7 +573,12 @@ function lib(kind) {
   if (kind !== 'oneL') return L;
   const P = {}, M = {};
   for (const [k, v] of Object.entries(L.P)) P[k] = mirror(v);
-  for (const [k, v] of Object.entries(L.M)) M[k] = { ...v, keys: v.keys.map(([t, p, h]) => [t, mirror(p), h]) };
+  const flip = (f) => (Array.isArray(f) ? f.map(flip) : f === 'L' ? 'R' : f === 'R' ? 'L' : f);
+  for (const [k, v] of Object.entries(L.M)) M[k] = { ...v, from: flip(v.from), keys: v.keys.map(([t, p, h]) => [t, mirror(p), h]) };
+  // (mirrored, the guard on the right is on the left)
+  [P.blockL, P.blockR] = [P.blockR, P.blockL];
+  // the bishop at rest holds his crozier upright at his side, its foot on the board
+  P.rest = mirror(one(-0.6, 0.22, -1.5, 0.0, [-0.4, 0.2, -1.2]));
   return { P, M };
 }
 
@@ -632,7 +726,7 @@ export function buildStatue(code) {
   const group = new THREE.Group();
   const inner = new THREE.Group(); // effects move this
   group.add(inner);
-  const model = t.model.clone(true); // the statue: glides and tilts on its pedestal
+  const model = t.model.clone(true); // the statue: glides, hops and tilts on the board
   model.rotation.order = 'YXZ';
   inner.add(model);
   const J = {};
@@ -655,6 +749,13 @@ export function buildStatue(code) {
     butt.position.copy(ends.butt);
     J.weapon.add(hand, butt);
   }
+  // the horse's tail, a strut that reaches down to the board: where its end is
+  let tailTip = null;
+  if (J.tail) {
+    tailTip = new THREE.Object3D();
+    tailTip.position.set(0, -0.4, 0);
+    J.tail.add(tailTip);
+  }
   // the shield's face
   let shieldAt = null;
   if (J.shield) {
@@ -672,14 +773,28 @@ export function buildStatue(code) {
     J.shield.add(shieldAt);
   }
   const kind = type === KNIGHT ? 'mounted' : info.style === 'one' ? (info.hand === 'L' ? 'oneL' : 'oneR') : info.style;
-  const box3 = new THREE.Box3().setFromObject(model);
   const fig = {
     group, type, isWhite, code, spec: {}, model, materials: [mat], stone: false, statue: true,
-    parts: { inner }, current: null, J, info, kind, body, hand, butt, shieldAt,
-    height: box3.max.y - box3.min.y, radius: 0.26,
+    parts: { inner }, current: null, J, info, kind, body, hand, butt, shieldAt, tailTip,
+    robe: type === QUEEN || type === BISHOP,
+    height: 1, radius: 0.26,
     move: { name: 'idle', t: 0, d: 3.2, loop: true }, from: null, blendT: 1, fade: 0.18, aim: null, seed: Math.random() * 10,
   };
   fig.mixer = { update: (dt) => animate(fig, dt) };
+  // its height (where blows land, how high rubble piles against it): standing on guard, the
+  // figure itself without the weapon held up over it
+  fig.move = { name: 'guard', t: 0, d: 1.6, loop: true };
+  animate(fig, 0);
+  fig.group.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    for (let p = o; p && p !== model; p = p.parent) if (p.name === 'weapon' || p.name === 'weapon2') return;
+    box.expandByObject(o);
+  });
+  fig.height = box.max.y;
+  fig.move = { name: 'idle', t: 0, d: 3.2, loop: true };
+  fig.from = null;
   animate(fig, 0);
   return fig;
 }
@@ -716,10 +831,24 @@ export const strikeAt = (name) => clipSet('two')[name.replace(/^S_/, '')]?.at;
 /** A move's timing for this figure: duration (s), when its blows land (0..1), and its nature. */
 // how each killing blow breaks the victim: cut through along the blade's path, run through, or
 // split top to bottom
-const CUT = { slash: 'slice', sweep: 'slice', spin: 'slice', whirl: 'slice', double: 'slice', cross: 'slice', thrust: 'stab', lunge: 'stab', cleave: 'cleave', bash: 'cleave', leap: 'cleave' };
+const CUT = { slash: 'slice', sweep: 'slice', back: 'slice', fore: 'slice', scissor: 'slice', spin: 'slice', double: 'slice', thrust: 'stab', lunge: 'stab', twin: 'stab', cleave: 'cleave', bash: 'cleave' };
 export function moveInfo(fig, name) {
-  const c = clipSet(fig.kind)[key(fig, name)];
-  return { d: c.d, at: c.at, hits: c.hits.map((h) => h / c.d), line: c.line || 'mid', heavy: !!c.heavy, cast: !!c.cast, plant: c.plant, grab: c.grab, cut: CUT[key(fig, name)] || 'smash' };
+  const k = key(fig, name);
+  const c = clipSet(fig.kind)[k];
+  // the side each blow comes in from (the striker's own right or left, or straight in, 'C')
+  const from = c.hits.map((_, i) => (Array.isArray(c.from) ? c.from[i] || c.from[c.from.length - 1] : c.from || 'C'));
+  return { d: c.d, at: c.at, hits: c.hits.map((h) => h / c.d), line: c.line || 'mid', heavy: !!c.heavy, cast: !!c.cast, plant: c.plant, grab: c.grab, cut: CUT[k] || 'smash', cat: CAT[k] || 'other', from };
+}
+
+/** The guard that meets a blow coming in from the striker's [from] side (or a thrust). */
+export function parryFor(info, i = info.hits.length - 1, heavy = false) {
+  if (info.line === 'high') return heavy ? 'staggerHigh' : 'parryHigh';
+  const f = info.from[i];
+  // the striker's right is the defender's left
+  const side = f === 'R' ? 'L' : f === 'L' ? 'R' : '';
+  if (heavy) return 'stagger' + side;
+  if (!side && info.cat === 'thrust') return 'deflect';
+  return 'parry' + side;
 }
 
 /** The blows this figure throws in an exchange, and its finishing moves. */
@@ -796,7 +925,7 @@ function animate(fig, dt) {
 }
 
 // ------------------------------------------------------------------ being hit
-// Blows carry momentum: a struck statue is knocked (its pedestal skids and rocks, the body
+// Blows carry momentum: a struck statue is knocked (it skids and rocks on its feet, the body
 // whips back, the head snaps) by damped springs layered over whatever move it is playing, and
 // a blade that meets another rebounds off it. They settle back on their own.
 const ARMS = ['shL', 'elL', 'wrL', 'shR', 'elR', 'wrR'];
@@ -861,11 +990,23 @@ function applyPose(fig, pose) {
   const rp = pose.$root || [0, 0, 0, 0, 0, 0];
   fig.model.position.set(rp[0] || 0, rp[1] || 0, rp[2] || 0);
   fig.model.rotation.set(rp[3] || 0, rp[4] || 0, rp[5] || 0);
-  // the pelvis moves; legs follow by IK, feet stay on the pedestal (or step about on it)
+  // the pelvis moves; legs follow by IK, feet stay on the board (or step about on it)
   if (J.hips && fig.info.legs.length) {
     const hp = pose.$hips || [0, 0];
-    J.hips.position.set(0, 0.5 * H + hp[0] * H, hp[1] * H);
+    // (a gown or an alb hangs from the hips to the board: the hips don't sink, or the hem would
+    // sink into the board; the robed lean and twist from the waist instead)
+    J.hips.position.set(0, 0.5 * H + (fig.robe ? 0 : hp[0]) * H, hp[1] * H);
     solveLegs(fig, pose);
+  }
+  // the horse's tail rests on the board, it never goes through it
+  if (fig.tailTip) {
+    // (the marker is on the tail's axis; its strands spread a little lower)
+    for (let i = 0; i < 3; i++) {
+      fig.group.updateMatrixWorld(true);
+      const y = fig.group.worldToLocal(fig.tailTip.getWorldPosition(_a)).y;
+      if (y >= 0.062) break;
+      J.tail.rotation.x += Math.min(0.8, (0.066 - y) / 0.4);
+    }
   }
 }
 
@@ -898,7 +1039,7 @@ function solveLegs(fig, pose) {
 }
 const _q = new THREE.Vector3(), _a = new THREE.Vector3();
 
-// struck down: the figure topples off its pedestal backwards, stiff as stone
+// struck down: the figure topples over backwards, stiff as stone
 function fall(fig, t, d) {
   const k = Math.min(1, t / d);
   const a = k * k * 1.45;

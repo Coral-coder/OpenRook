@@ -1,14 +1,14 @@
 // Stone rubble with real rigid-body physics.
 //
 // When a statue is struck down it cracks: every part (head, arms, weapon, torso, robe, the
-// horse's body and legs, the pedestal) becomes a solid body, and the big ones are split
+// horse's body and legs, the rook's keep) becomes a solid body, and the big ones are split
 // along planes into two to four chunks with capped faces. The blow drives the break: an
 // impulse at the point where the weapon landed, along the swing, falling off with distance,
 // so the parts nearest the blow fly and spin while the far ones only tip over.
 //
 // Each body is an oriented box of stone (mass from its volume, inertia from its sides) with a
 // few spheres along its long axis for colliding with other fragments. Contacts (the board,
-// the frame and table beyond it, the pedestals and bodies of the statues still standing, and
+// the frame and table beyond it, the statues still standing, and
 // other fragments) are solved with impulses: restitution only for hard hits, Coulomb friction,
 // positional correction, and sleeping once still, so heaps settle without jitter. Fixed
 // 120 Hz steps, a cap on substeps and on live bodies keep it cheap on a phone. Stone chips are
@@ -373,7 +373,7 @@ export class Rubble {
         const radial = _b.copy(toward).addScaledVector(ax, -ahead);
         if (radial.lengthSq() > 1e-6) radial.normalize();
         dv.copy(ax).multiplyScalar(S * (0.35 + (ahead > 0 ? 0.9 : 0.4) * fall) * light).addScaledVector(radial, S * 0.45 * fall * light).add(_a.set(0, S * 0.18 * fall, 0));
-        if (b === base) dv.copy(ax).multiplyScalar(S * 0.45); // the pedestal skids back
+        if (b === base) dv.copy(ax).multiplyScalar(S * 0.45); // the feet skid back
       } else {
         toward.y = Math.max(0.05, toward.y);
         toward.normalize();
@@ -616,18 +616,18 @@ export class Rubble {
         b.v.x *= 0.996;
         b.v.z *= 0.996;
       }
-      // the statues still standing: pedestal and body as upright cylinders
+      // the statues still standing: an upright cylinder each (a broad foot, a body above it)
       for (const o of obst) {
         const dx = b.p.x - o.x, dz = b.p.z - o.z;
-        if (dx * dx + dz * dz > (0.3 + b.rad) * (0.3 + b.rad)) continue;
+        if (dx * dx + dz * dz > (0.22 + b.rad) * (0.22 + b.rad)) continue;
         for (const s of b.spheres) {
           const c = _r1.copy(s).applyQuaternion(b.q).add(b.p);
-          for (const [R, top] of [[0.27, 0.215], [0.15, 0.215 + o.h * 0.75]]) {
+          for (const [R, top] of [[0.18, o.h * 0.12], [0.14, o.h * 0.85]]) {
             if (c.y - b.sr > top) continue;
             const ex = c.x - o.x, ez = c.z - o.z, dd = Math.hypot(ex, ez);
             const pen = R + b.sr - dd;
             if (pen <= 0) continue;
-            // on top of the pedestal: pushed up; against its side: pushed out
+            // on top of it: pushed up; against its side: pushed out
             if (top - (c.y - b.sr) < pen && c.y > top - 0.05) {
               this._contactStatic(b, c.clone().sub(b.p).setY(c.y - b.sr - b.p.y), new THREE.Vector3(0, 1, 0), top - (c.y - b.sr), 0.15);
             } else {
@@ -651,7 +651,7 @@ export class Rubble {
       // air drag on the spin keeps it from rolling forever
       b.w.multiplyScalar(0.9985);
     }
-    // chips: little spheres on the ground and against the pedestals
+    // chips: little spheres on the ground and against the statues' feet
     for (const c of this.chipsList) {
       if (c.sleep || c.sink) continue;
       c.v.y -= G * H;
@@ -671,9 +671,9 @@ export class Rubble {
       }
       for (const o of obst) {
         const ex = p.x - o.x, ez = p.z - o.z, dd = Math.hypot(ex, ez);
-        if (dd < 0.27 + c.r && p.y < 0.215) {
-          p.x = o.x + (ex / (dd || 1)) * (0.27 + c.r);
-          p.z = o.z + (ez / (dd || 1)) * (0.27 + c.r);
+        if (dd < 0.17 + c.r && p.y < o.h * 0.6) {
+          p.x = o.x + (ex / (dd || 1)) * (0.17 + c.r);
+          p.z = o.z + (ez / (dd || 1)) * (0.17 + c.r);
           const vn = (c.v.x * ex + c.v.z * ez) / (dd || 1);
           if (vn < 0) {
             c.v.x -= 1.3 * vn * (ex / (dd || 1));
