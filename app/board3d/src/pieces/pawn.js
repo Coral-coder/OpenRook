@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { carve, skeleton } from '../carving.js';
 import { bead, boot, lathe, muscleLimb, outward, robe, sculptHead, sword } from './bp_kit.js';
-import { chain, cord, denseProfile, pearls, rope, rivetRing } from './bp_fine.js';
+import { cord, denseProfile, pearls, rope, rivetRing, scaleCoat, turnedSurface } from './bp_fine.js';
 import { arc, cop, gauntlet, spaulder, tabardEdges, tabardPanel, vambrace, visor } from './bp_pawn.js';
 
 export function pawn(J, root, P) {
@@ -18,10 +18,11 @@ export function pawn(J, root, P) {
 
   // ---- the coat of scales
   const TP = [[0.0001, -0.005], [0.096, -0.005], [0.106, 0.05], [0.124, 0.11], [0.136, 0.16], [0.14, 0.19], [0.122, 0.218], [0.08, 0.245], [0.052, 0.27], [0.0001, 0.272]];
-  const body = outward(new THREE.LatheGeometry(denseProfile(TP.map(([r, y]) => [r * H, y * H]), 46), 80));
-  chain(body, 20, 0.024 * H, 0.009 * H, { kind: 'scale', y0: 0.255 * H, y1: 0.0 });
+  const body = outward(new THREE.LatheGeometry(denseProfile(TP.map(([r, y]) => [r * H, y * H]), 26), 40));
   body.scale(1, 1, 0.8);
   P.add(J.spine, body);
+  // the scales, in staggered rows, each overlapping the one below (left out under the tabard)
+  P.add(J.spine, scaleCoat(turnedSurface(TP.slice(1, 8).map(([r, y]) => [r * H, y * H]), 0.8, -0.005 * H), { y0: 0.19 * H, rows: 10, pitch: 0.02 * H, cols: 24, skip: (q) => Math.abs(q.x) < 0.056 * H }));
   // the tabard over it, before and behind, with a device on the breast
   const TPs = TP.slice(1, 8).map(([r, y]) => [r * H, y * H]);
   for (const side of [1, -1]) {
@@ -65,20 +66,21 @@ export function pawn(J, root, P) {
   // shoulders: a mail mass on the body, so a raised arm never opens a gap, and the spaulders
   for (const s of [-1, 1]) {
     const side = s > 0 ? 'L' : 'R';
-    P.add(J.chest, chain(new THREE.SphereGeometry(0.056 * H, 32, 18), 8, 0.017 * H, 0.006 * H, { kind: 'scale', y0: 0.02 * H }), s * 0.125 * H, 0.09 * H, 0, 0, 0, 0, [0.9, 0.95, 0.85]);
+    P.add(J.chest, new THREE.SphereGeometry(0.056 * H, 24, 16), s * 0.125 * H, 0.09 * H, 0, 0, 0, 0, [0.9, 0.95, 0.85]);
     spaulder(P, J['sh' + side], H, s);
   }
-  // a standing mail collar, its top edge bound with a riveted band
-  const collar = outward(new THREE.LatheGeometry(denseProfile([[0.04, -0.03], [0.058, -0.025], [0.062, 0.0], [0.056, 0.02], [0.044, 0.024]].map(([r, y]) => [r * H, y * H]), 16), 48));
-  chain(collar, 12, 0.012 * H, 0.006 * H, { y0: 0.019 * H });
-  P.add(J.neck, collar);
+  // a standing collar of scales, its top edge bound with a riveted band
+  const CP = [[0.04, -0.03], [0.058, -0.025], [0.062, 0.0], [0.056, 0.02], [0.044, 0.024]].map(([r, y]) => [r * H, y * H]);
+  P.add(J.neck, outward(new THREE.LatheGeometry(denseProfile(CP, 8), 32)));
+  P.add(J.neck, scaleCoat(turnedSurface(CP.slice(1, 4), 1, -0.002 * H), { y0: 0.018 * H, rows: 2, pitch: 0.017 * H, cols: 16 }));
   P.add(J.neck, cord(arc(0.05 * H, 0.022 * H, 0, Math.PI * 2, 40), 0.004 * H, { closed: true, radial: 6, perPt: 1.2 }));
   P.add(J.neck, rivetRing(0.054 * H, 0.022 * H, 14, 0.0028 * H));
   P.cyl(J.neck, 0.036 * H, 0.044 * H, 0.06 * H, 0, 0, 0, 0, 0, 0, 16);
-  // the mail skirt from the belt, flaring, with a dagged hem of brass links
-  const skirt = robe([[0.1 * H, 0.05 * H], [0.112 * H, -0.02 * H], [0.13 * H, -0.1 * H], [0.142 * H, -0.15 * H], [0.13 * H, -0.152 * H], [0.118 * H, -0.1 * H]], { folds: 10, depth: 0.05, seg: 96, rows: 27, seed: 7, flat: 0.86, hemWave: 0 });
-  chain(skirt, 24, 0.02 * H, 0.007 * H, { y0: 0.03 * H, y1: -0.149 * H });
+  // the skirt of scales from the belt, flaring, over a lining (left out under the back tabard)
+  const skirt = outward(new THREE.LatheGeometry(denseProfile([[0.1, 0.05], [0.112, -0.02], [0.13, -0.1], [0.138, -0.15], [0.124, -0.152], [0.114, -0.1]].map(([r, y]) => [r * H, y * H]), 18), 40));
+  skirt.scale(1, 1, 0.86);
   P.add(J.hips, skirt);
+  P.add(J.hips, scaleCoat(turnedSurface([[0.1 * H, 0.05 * H], [0.112 * H, -0.02 * H], [0.13 * H, -0.1 * H], [0.142 * H, -0.15 * H]], 0.86, -0.005 * H), { y0: 0.03 * H, rows: 8, pitch: 0.021 * H, cols: 24, skip: (q) => q.z < 0 && Math.abs(q.x) < 0.058 * H }));
   // belt, buckle, pouch, dagger
   P.belt(J.hips, 0.104 * H, 0.03 * H);
   // the belt's tongue hanging from the buckle, with its strap end and studs
@@ -105,12 +107,12 @@ export function pawn(J, root, P) {
   // ---- arms: mail sleeves, plate couters and vambraces, gauntlets round the hilts
   for (const s of [1, -1]) {
     const side = s > 0 ? 'L' : 'R';
-    const ua = muscleLimb(0.18 * H, 0.056 * H, 0.046 * H, { bulge: 0.16, at: 0.35, seg: 48, rows: 30 });
-    chain(ua, 12, 0.017 * H, 0.0075 * H, { kind: 'scale', y0: 0.0 });
+    const ua = muscleLimb(0.18 * H, 0.056 * H, 0.046 * H, { bulge: 0.16, at: 0.35, seg: 20, rows: 12 });
     P.add(J['sh' + side], ua);
-    const fa = muscleLimb(0.155 * H, 0.046 * H, 0.036 * H, { bulge: 0.2, at: 0.2, seg: 32, rows: 16 });
-    chain(fa, 8, 0.017 * H, 0.006 * H, { kind: 'scale', y0: 0.0, y1: -0.07 * H });
+    P.add(J['sh' + side], scaleCoat(limbSurface(0.18 * H, 0.056 * H, 0.046 * H, 0.16, 0.35, -0.005 * H), { y0: -0.004 * H, rows: 9, pitch: 0.018 * H, cols: 10 }));
+    const fa = muscleLimb(0.155 * H, 0.046 * H, 0.036 * H, { bulge: 0.2, at: 0.2, seg: 20, rows: 12 });
     P.add(J['el' + side], fa);
+    P.add(J['el' + side], scaleCoat(limbSurface(0.155 * H, 0.046 * H, 0.036 * H, 0.2, 0.2, -0.004 * H), { y0: 0.0, rows: 3, pitch: 0.019 * H, cols: 8 }));
     cop(P, J['el' + side], H, 0.046 * H, s, false, { z: -0.012 * H, wing: 1.2 });
     vambrace(P, J['el' + side], H, -0.062 * H, -0.15 * H, 0.047 * H, 0.04 * H);
     gauntlet(P, J['wr' + side], H, 0.1 * H, s);
@@ -201,4 +203,13 @@ export function pawn(J, root, P) {
   J.weapon = bR;
   J.weapon2 = bL;
   return { H, legs, style: 'dual' };
+}
+
+// the surface of a muscleLimb (hanging -y from its joint), for laying scales on it
+function limbSurface(len, r0, r1, bulge, at, grow) {
+  return (a, y) => {
+    const t = Math.max(0, Math.min(1, -y / len));
+    const r = r0 + (r1 - r0) * t + r0 * bulge * Math.exp(-(((t - at) / 0.22) ** 2)) + grow;
+    return new THREE.Vector3(Math.sin(a) * r, y, Math.cos(a) * r);
+  };
 }

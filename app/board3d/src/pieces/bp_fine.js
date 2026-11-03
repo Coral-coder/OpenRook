@@ -317,3 +317,90 @@ export function rivetRing(r, y, n, size, { from = 0, to = TAU, sz = 1 } = {}) {
   }
   return pearls(pts, size, { w: 6, h: 4 });
 }
+
+/**
+ * A coat of separate scales laid over a surface S(a, y) (a: angle round the y axis, 0 = +z,
+ * PI/2 = +x; y: height), in staggered rows from y0 downward, every `pitch`, `cols` round.
+ * Each scale is a flat, slightly cupped lame with a rounded lower edge, a ridge down its
+ * middle and a rivet near its top; it hangs down the surface, its lower edge standing out
+ * over the row below with a thickness strip (a crisp shadow line). skip(p) leaves out scales
+ * that would be hidden. Returns one geometry.
+ */
+export function scaleCoat(S, { y0, rows, pitch, cols, tilt = 0.3, lift = 0.0015, thick = 0.0028, cup = 0.16, overlapW = 1.22, overlapH = 1.65, skip = null, aFrom = 0, aTo = TAU } = {}) {
+  const NS = [-1, -0.5, 0, 0.5, 1], NT = [0, 0.34, 0.67, 1];
+  const pos = [], idx = [];
+  const P0 = new THREE.Vector3(), Pa = new THREE.Vector3(), Pb = new THREE.Vector3();
+  const X = new THREE.Vector3(), Y = new THREE.Vector3(), Z = new THREE.Vector3(), q = new THREE.Vector3();
+  const full = aTo - aFrom >= TAU - 1e-6;
+  for (let r = 0; r < rows; r++) {
+    const y = y0 - r * pitch;
+    for (let c = 0; c < cols; c++) {
+      const a = aFrom + ((c + (r & 1 ? 0.5 : 0) + (full ? 0 : 0.5)) / cols) * (aTo - aFrom);
+      P0.copy(S(a, y));
+      if (skip && skip(P0, a, y)) continue;
+      const da = 0.01, dy = pitch * 0.25;
+      X.copy(S(a + da, y)).sub(Pa.copy(S(a - da, y))).divideScalar(2 * da); // d/da
+      const arc = X.length();
+      X.normalize();
+      Y.copy(S(a, y + dy)).sub(Pb.copy(S(a, y - dy))).normalize();
+      Z.crossVectors(X, Y).normalize();
+      Y.crossVectors(Z, X).normalize();
+      const w = ((arc * (aTo - aFrom)) / cols) * overlapW, h = pitch * overlapH;
+      const R = Math.max(arc, 1e-4); // the surface's radius here: bend the scale round it
+      const base = pos.length / 3;
+      const put = (x, yy, z) => {
+        q.copy(P0).addScaledVector(X, x).addScaledVector(Y, yy).addScaledVector(Z, z + lift - (x * x) / (2 * R));
+        pos.push(q.x, q.y, q.z);
+      };
+      const shape = (s, t) => {
+        const wf = t < 0.5 ? 1 : 1 - 0.3 * ((t - 0.5) / 0.5) ** 2;
+        const x = s * (w / 2) * wf;
+        const yy = -h * (t + 0.22 * t * t * (1 - s * s));
+        let z = tilt * h * t * t * 0.8 + tilt * h * t * 0.2;
+        z += cup * h * (1 - s * s) * Math.sin(Math.PI * Math.min(1, t * 1.1)) * 0.35; // cupped
+        if (s === 0) z += 0.05 * h * (t > 0.2 ? 1 : 0); // the ridge
+        if (s === 0 && t === NT[1]) z += 0.09 * h; // the rivet
+        return [x, yy, z];
+      };
+      for (const t of NT) for (const s of NS) put(...shape(s, t));
+      const cw = NS.length;
+      for (let j = 0; j < NT.length - 1; j++) for (let i = 0; i < cw - 1; i++) {
+        const k = base + j * cw + i;
+        idx.push(k, k + cw, k + 1, k + 1, k + cw, k + cw + 1);
+      }
+      // the lower edge's thickness, so it throws a crisp line onto the row below
+      const eb = pos.length / 3;
+      const rim = [[-1, NT[2]], ...NS.map((s) => [s, 1]), [1, NT[2]]];
+      for (const [s, t] of rim) {
+        const [x, yy, z] = shape(s, t);
+        put(x, yy, z);
+        put(x, yy + thick * 0.4, z - thick * 2.2);
+      }
+      for (let i = 0; i < rim.length - 1; i++) {
+        const a0 = eb + i * 2, b0 = a0 + 2;
+        idx.push(a0, a0 + 1, b0, b0, a0 + 1, b0 + 1);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A surface S(a, y) for scaleCoat from a turned profile [[r, y]...] squashed in z by sz. */
+export function turnedSurface(prof, sz = 1, grow = 0) {
+  const R = (y) => {
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [r0, y0] = prof[i], [r1, y1] = prof[i + 1];
+      if ((y - y0) * (y - y1) <= 0 && y0 !== y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0);
+    }
+    const A = prof[0], B = prof[prof.length - 1];
+    return Math.abs(y - A[1]) < Math.abs(y - B[1]) ? A[0] : B[0];
+  };
+  return (a, y) => {
+    const r = R(y) + grow;
+    return new THREE.Vector3(Math.sin(a) * r, y, Math.cos(a) * r * sz);
+  };
+}
