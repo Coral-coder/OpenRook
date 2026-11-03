@@ -4,6 +4,7 @@ import '../app/settings.dart';
 import '../net/nostr_pool.dart';
 import '../voice/neural_voice.dart';
 import '../voice/voice.dart';
+import 'board3d/iterations.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -66,6 +67,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
                 selected: {s.room},
                 onSelectionChanged: (v) => setState(() => s.room = v.first),
+              ),
+            ),
+            ListTile(
+              title: const Text('Battle board version'),
+              subtitle: Text(boardIteration(s.boardIteration).blurb),
+              trailing: DropdownButton<String>(
+                value: boardIteration(s.boardIteration).id,
+                items: [
+                  for (final i in boardIterations) DropdownMenuItem(value: i.id, child: Text(i.label)),
+                ],
+                onChanged: (v) => setState(() => s.boardIteration = v ?? 'latest'),
               ),
             ),
             SwitchListTile(

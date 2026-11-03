@@ -9,6 +9,7 @@ import '../../app/settings.dart';
 import '../../chess/position.dart';
 import '../battle_board.dart';
 import '../stone_pieces.dart';
+import 'iterations.dart';
 import 'view_io.dart' if (dart.library.js_interop) 'view_web.dart';
 
 /// Whether this platform can show the WebGL board (WebView or iframe).
@@ -67,7 +68,8 @@ class Board3D extends StatefulWidget {
   State<Board3D> createState() => _Board3DState();
 }
 
-String? _html;
+/// The pages already loaded, by iteration id (each is several MB, so read once).
+final Map<String, String> _pages = {};
 
 class _Board3DState extends State<Board3D> {
   void Function(String)? _send;
@@ -75,20 +77,45 @@ class _Board3DState extends State<Board3D> {
   int? _selected;
   String? _lastSent;
 
+  String? _html;
+  String _iteration = '';
+
   @override
   void initState() {
     super.initState();
-    if (_html == null && supports3D) {
-      rootBundle.loadString('assets/board3d/board3d.html').then((h) {
-        _html = h;
-        if (mounted) setState(() {});
-      });
-    }
+    _load();
+    Settings.shared.addListener(_settingsChanged);
+  }
+
+  void _settingsChanged() {
+    if (boardIteration(Settings.shared.boardIteration).id != _iteration && mounted) setState(_load);
+  }
+
+  @override
+  void dispose() {
+    Settings.shared.removeListener(_settingsChanged);
+    super.dispose();
+  }
+
+  /// Loads the board page for the chosen iteration (Settings → Battle board version).
+  void _load() {
+    final id = boardIteration(Settings.shared.boardIteration).id;
+    if (id == _iteration || !supports3D) return;
+    _iteration = id;
+    _html = _pages[id];
+    _ready = false;
+    _lastSent = null;
+    if (_html != null) return;
+    rootBundle.loadString(boardIteration(id).asset).then((h) {
+      _pages[id] = h;
+      if (mounted && _iteration == id) setState(() => _html = h);
+    });
   }
 
   @override
   void didUpdateWidget(Board3D old) {
     super.didUpdateWidget(old);
+    _load();
     if (old.ply != widget.ply || old.position.fen != widget.position.fen) _selected = null;
     _push();
   }
@@ -200,6 +227,7 @@ class _Board3DState extends State<Board3D> {
     final view = _html == null
         ? const Center(child: CircularProgressIndicator())
         : Board3DView(
+            key: ValueKey(_iteration),
             html: _html!,
             onMessage: _onMessage,
             onSender: (send) => _send = send,
