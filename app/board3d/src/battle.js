@@ -1,6 +1,8 @@
-// Sound effects and spell visuals for the battles. All sounds are synthesised with WebAudio
-// (no audio files): steel clangs, stone crashes, footsteps, whooshes and magic zaps.
+// Sound effects and spell visuals for the battles. The sounds are recorded samples (see sfx.js and
+// sounds/CREDITS.md): steel on steel, breaking stone, footsteps, whooshes and magic. The WebAudio
+// synthesis below is kept only as a stand-in for any sample the browser fails to decode.
 import * as THREE from 'three';
+import { audioContext, setSfxEnabled, sfx, sfxStatus, unlockSfx } from './sfx.js';
 
 let actx = null;
 let enabled = true;
@@ -8,20 +10,27 @@ let noise = null;
 
 export function setSound(on) {
   enabled = on;
+  setSfxEnabled(on);
 }
 
+/** Call from a touch: browsers (iOS above all) only allow sound after a user gesture. */
 export function unlockAudio() {
   if (!enabled) return;
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
-  } catch (_) {
-    actx = null;
-  }
+  actx = unlockSfx();
 }
 
+/** Plays the recorded cue; falls back to the synthesised `synth` only if the cue can't be decoded. */
+function play(name, opts, synth) {
+  if (sfxStatus(name) === 'failed') return synth();
+  return sfx(name, opts);
+}
+
+/** Old volume -> sfx volume, where `ref` was the old default (so a default call plays at vol 1). */
+const rel = (vol, ref, max = 2) => Math.min(max, Math.max(0, vol / ref));
+
 function ctx() {
-  if (!enabled || !actx || actx.state !== 'running') return null;
+  actx = audioContext();
+  if (!actx) return null;
   if (!noise) {
     noise = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
     const d = noise.getChannelData(0);
@@ -53,7 +62,7 @@ function noiseSource(c, filterType, freq, q = 1) {
 }
 
 /** Steel on steel. */
-export function clang(vol = 0.35) {
+function synthClang(vol = 0.35) {
   const c = ctx();
   if (!c) return;
   for (const [f, v] of [[540, 1], [1290, 0.6], [1960, 0.45], [3120, 0.3]]) {
@@ -71,7 +80,7 @@ export function clang(vol = 0.35) {
 }
 
 /** Stone breaking: a thump and a crumbling rumble. */
-export function crash(vol = 0.6) {
+function synthCrash(vol = 0.6) {
   const c = ctx();
   if (!c) return;
   const o = c.createOscillator();
@@ -94,7 +103,7 @@ export function crash(vol = 0.6) {
   }
 }
 
-export function step(vol = 0.12, heavy = false) {
+function synthStep(vol = 0.12, heavy = false) {
   const c = ctx();
   if (!c) return;
   const n = noiseSource(c, 'lowpass', heavy ? 180 : 420, 1);
@@ -103,7 +112,7 @@ export function step(vol = 0.12, heavy = false) {
   n.s.stop(t + 0.25);
 }
 
-export function whoosh(vol = 0.2) {
+function synthWhoosh(vol = 0.2) {
   const c = ctx();
   if (!c) return;
   const n = noiseSource(c, 'bandpass', 500, 2);
@@ -113,7 +122,7 @@ export function whoosh(vol = 0.2) {
   n.s.stop(t + 0.4);
 }
 
-export function zap(vol = 0.25) {
+function synthZap(vol = 0.25) {
   const c = ctx();
   if (!c) return;
   const o = c.createOscillator();
@@ -129,7 +138,7 @@ export function zap(vol = 0.25) {
   o.stop(t + 0.5);
 }
 
-export function chime(vol = 0.25) {
+function synthChime(vol = 0.25) {
   const c = ctx();
   if (!c) return;
   [784, 988, 1175, 1568].forEach((f, i) => {
@@ -197,7 +206,7 @@ export class Particles {
 
 // ------------------------------------------------------------------ the queen's wormhole
 /** Two stone hands clapped together: a sharp slap, and the knock of stone in it. */
-export function clap(vol = 0.5) {
+function synthClap(vol = 0.5) {
   const c = ctx();
   if (!c) return;
   const n = noiseSource(c, 'bandpass', 1300 + Math.random() * 300, 1.2);
@@ -215,7 +224,7 @@ export function clap(vol = 0.5) {
 }
 
 /** The wormhole's hum: a low throb and a rushing wind that rise together for `dur` seconds. */
-export function wormHum(dur = 2, vol = 0.35) {
+function synthWormHum(dur = 2, vol = 0.35) {
   const c = ctx();
   if (!c) return;
   const t = c.currentTime;
@@ -257,7 +266,7 @@ export function wormHum(dur = 2, vol = 0.35) {
 }
 
 /** The air rushing in as the wormhole collapses ([dur] seconds before the boom). */
-export function implode(dur = 0.3, vol = 0.45) {
+function synthImplode(dur = 0.3, vol = 0.45) {
   const c = ctx();
   if (!c) return;
   const t = c.currentTime;
@@ -276,7 +285,7 @@ export function implode(dur = 0.3, vol = 0.45) {
 }
 
 /** The wormhole collapsing: a deep, heavy boom, a sub-bass thump with a long rumbling tail. */
-export function boom(vol = 0.9) {
+function synthBoom(vol = 0.9) {
   const c = ctx();
   if (!c) return;
   const t = c.currentTime;
@@ -303,4 +312,57 @@ export function boom(vol = 0.9) {
   const t3 = env(c, r.f, vol * 0.8, 0.03, 2.6);
   r.s.start(t3);
   r.s.stop(t3 + 2.8);
+}
+
+// ------------------------------------------------------------------ the sounds, as samples
+/** Steel on steel. */
+export function clang(vol = 0.35) {
+  return play('sword_clash', { vol: rel(vol, 0.35) }, () => synthClang(vol));
+}
+
+/** Stone breaking: a big break for the loud ones, a smaller one for knocks. */
+export function crash(vol = 0.6) {
+  const name = vol >= 0.65 ? 'stone_break_large' : 'stone_break_small';
+  return play(name, { vol: rel(vol, 0.6) }, () => synthCrash(vol));
+}
+
+/** A footstep on the stone board; `heavy` for rooks and statues. */
+export function step(vol = 0.12, heavy = false) {
+  return play(heavy ? 'footstep_heavy' : 'footstep_stone', { vol: rel(vol, heavy ? 0.25 : 0.12) }, () => synthStep(vol, heavy));
+}
+
+/** A blade cutting the air. */
+export function whoosh(vol = 0.2) {
+  return play('sword_swing', { vol: rel(vol, 0.2) }, () => synthWhoosh(vol));
+}
+
+/** A spell striking. */
+export function zap(vol = 0.25) {
+  return play('magic_impact', { vol: rel(vol, 0.25) }, () => synthZap(vol));
+}
+
+/** A piece promoted: no chime any more, but stone transformed by magic (a rumble and a shimmer). */
+export function chime(vol = 0.25) {
+  return play('promotion', { vol: rel(vol, 0.25) }, () => synthChime(vol));
+}
+
+/** Two stone hands clapped together. */
+export function clap(vol = 0.5) {
+  return play('clap', { vol: rel(vol, 0.5) }, () => synthClap(vol));
+}
+
+/** The wormhole's hum, rising in and held for `dur` seconds. */
+export function wormHum(dur = 2, vol = 0.35) {
+  return play('wormhole_hum', { vol: rel(vol, 0.35), loop: true, dur, fadeIn: dur * 0.35 }, () => synthWormHum(dur, vol));
+}
+
+/** The air rushing in as the wormhole collapses (`dur` seconds before the boom): a shockwave played backwards. */
+export function implode(dur = 0.3, vol = 0.45) {
+  return play('shockwave', { vol: rel(vol, 0.45), reverse: true, tail: Math.max(0.1, dur), fadeIn: dur * 0.6 },
+    () => synthImplode(dur, vol));
+}
+
+/** The wormhole collapsing: a deep, heavy boom with a long rumbling tail. */
+export function boom(vol = 0.9) {
+  return play('wormhole_boom', { vol: rel(vol, 0.9, 1.5) }, () => synthBoom(vol));
 }

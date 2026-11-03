@@ -11,6 +11,20 @@ for (const f of readdirSync('models').filter((f) => f.endsWith('.glb') && !f.sta
 }
 writeFileSync('src/models_data.gen.js', 'export default ' + JSON.stringify(models) + ';\n');
 
+// The battle sounds (sounds/<cue>_<n>.mp3, see sounds/CREDITS.md) are embedded the same way, as
+// { cue: [base64 of each variant] }; sfx.js decodes them after the first touch.
+const sounds = {};
+let soundBytes = 0;
+for (const f of readdirSync('sounds').filter((f) => f.endsWith('.mp3')).sort()) {
+  const m = f.match(/^(.+)_(\d+)\.mp3$/);
+  if (!m) continue;
+  const data = readFileSync('sounds/' + f);
+  soundBytes += data.length;
+  (sounds[m[1]] ||= [])[Number(m[2]) - 1] = data.toString('base64');
+}
+for (const k of Object.keys(sounds)) sounds[k] = sounds[k].filter(Boolean);
+writeFileSync('src/sounds_data.gen.js', 'export default ' + JSON.stringify(sounds) + ';\n');
+
 const out = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -31,4 +45,5 @@ const html = `<!doctype html>
 `;
 mkdirSync('../assets/board3d', { recursive: true });
 writeFileSync('../assets/board3d/board3d.html', html);
-console.log(`board3d.html: ${(html.length / 1024).toFixed(0)} KB`);
+console.log(`board3d.html: ${(html.length / 1024).toFixed(0)} KB ` +
+  `(sounds: ${Object.keys(sounds).length} cues, ${(soundBytes / 1024).toFixed(0)} KB of mp3)`);
