@@ -100,10 +100,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: s.announce ? (v) => setState(() => s.announceOwn = v) : null,
             ),
             ListTile(
+              title: const Text('Announcer voice'),
+              subtitle: ListenableBuilder(
+                listenable: NeuralVoice.shared,
+                builder: (context, _) {
+                  final v = NeuralVoice.shared.voice;
+                  return Text('${v.name}: ${v.about}\n${_neuralStatus()}');
+                },
+              ),
+              isThreeLine: true,
+              trailing: const Icon(Icons.campaign),
+              onTap: _pickAnnouncer,
+            ),
+            ListTile(
               title: const Text('Voice'),
               subtitle: ListenableBuilder(
                 listenable: NeuralVoice.shared,
-                builder: (context, _) => Text(s.voiceName.isNotEmpty ? s.voiceName : _neuralStatus()),
+                builder: (context, _) => Text(s.voiceName.isNotEmpty ? s.voiceName : 'The announcer (${NeuralVoice.shared.voice.name})'),
               ),
               trailing: const Icon(Icons.record_voice_over),
               onTap: _pickVoice,
@@ -167,13 +180,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _neuralStatus() {
     final n = NeuralVoice.shared;
+    if (!n.supported) return 'Not available here (the phone\'s voice speaks instead)';
     return switch (n.status) {
-      'ready' => 'OpenRook announcer (neural voice, works offline)',
+      'ready' => 'Ready (neural voice, works offline)',
       'downloading' => 'Downloading the announcer voice… ${(n.progress * 100).round()}%',
       'unpacking' => 'Installing the announcer voice…',
       'failed' => 'Announcer voice will download when online (system voice for now)',
-      _ => 'OpenRook announcer (neural voice)',
+      _ => 'Getting the announcer voice ready…',
     };
+  }
+
+  /// Picks which neural voice the announcer uses; a voice not on the phone yet downloads now.
+  Future<void> _pickAnnouncer() async {
+    final n = NeuralVoice.shared;
+    final installed = {for (final v in announcerVoices) v.id: await n.installed(v)};
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Who announces the moves')),
+            for (final v in announcerVoices)
+              ListTile(
+                leading: Icon(v.id == n.voice.id ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                title: Text(v.name),
+                subtitle: Text('${v.about}\n${installed[v.id]! ? 'On this phone' : 'Downloads ${v.megabytes} MB once'}'),
+                isThreeLine: true,
+                onTap: () => Navigator.pop(context, v.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    if (s.voiceName.isNotEmpty) await Voice.shared.useVoice('', ''); // the announcer, not the phone's voice
+    if (mounted) setState(() {});
+    await n.use(picked);
+    if (!mounted || picked != n.voice.id) return;
+    setState(() {});
+    if (n.ready) await Voice.shared.say('Knight takes bishop on E 5. Check!');
   }
 
   Future<void> _pickVoice() async {
@@ -187,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const ListTile(title: Text('Voice that calls the moves')),
             ListTile(
               leading: const Icon(Icons.auto_awesome),
-              title: const Text('OpenRook announcer (neural, built in)'),
+              title: Text('The announcer: ${NeuralVoice.shared.voice.name} (neural, built in)'),
               subtitle: Text(_neuralStatus()),
               trailing: IconButton(
                 icon: const Icon(Icons.play_arrow),
