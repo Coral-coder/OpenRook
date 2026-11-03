@@ -11,6 +11,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { buildStatue, playMove, MOVES } from './statues.js';
+// the statues' sword-fighting: their move sets, timing, and aiming blows and parries
+export { arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow } from './statues.js';
 import MODELS from './models_data.gen.js';
 import { stoneMaterial } from './stone.js';
 
@@ -267,7 +269,7 @@ export const STRIKE_AT = {
 
 /** Plays a clip on a figure, cross-fading from whatever it was doing. */
 export function play(fig, name, { loop = false, fade = 0.18, speed = 1, duration = 0 } = {}) {
-  if (fig.statue) return playMove(fig, name, { loop, speed, duration });
+  if (fig.statue) return playMove(fig, name, { loop, speed, duration, fade });
   const clip = loaded.clips[name];
   if (!clip) return 0;
   const action = fig.mixer.clipAction(clip);

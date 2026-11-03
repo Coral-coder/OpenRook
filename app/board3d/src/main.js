@@ -8,7 +8,7 @@
 // Bridge: the app calls window.openrook.receive(json). This page posts JSON strings back
 // through window.OpenRook.postMessage (WebView channel) or window.parent.postMessage (web).
 import * as THREE from 'three';
-import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING } from './figures.js';
+import { buildFigure, buildRemains, getStyle, setOpacity, setRot, setStyle, clipDuration, clipFor, hasClip, loadFigures, play, STRIKE_AT, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, arsenal, moveInfo, probeMove, aimAt, setAim, weaponNow } from './figures.js';
 import { setupAtmosphere } from './atmosphere.js';
 import { setupPost } from './post.js';
 import { stoneTime } from './stone.js';
@@ -758,7 +758,7 @@ function duelShot(a) {
   }
   const close = a.slowed ? 0.92 : 1;
   const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  const dist = (3.5 / Math.sqrt(aspect)) * close + spread * 0.9; // both fighters fully in frame, even on a tall phone
+  const dist = (3.1 / Math.sqrt(aspect)) * close + spread * 0.9 + Math.max(0, a.approach.distanceTo(a.capPos) - 0.9) * 1.6; // both fighters fully in frame, even on a tall phone
   if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
   // a slow dolly around the fight, never swinging far from the clear side
   const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
@@ -1095,6 +1095,278 @@ function weaponPoint(p) {
   return hand.getWorldPosition(_w).clone();
 }
 
+// ------------------------------------------------------------------ the statues' sword fight
+// A capture between statues is a real fight: they close to sword's reach, trade two to four
+// blows (each parried blade on blade, taken on the shield, sidestepped, or driving the
+// defender back a step), and then the attacker's finishing move lands in the victim's body:
+// it reels from the blow, and only then cracks apart. Every blow is aimed: the striker steps
+// in or back so the weapon reaches, the defender's guard is bent into the blade's path, and
+// the sparks fly where the two actually meet.
+const pick = (list, not) => {
+  const l = list.length > 1 ? list.filter((x) => x !== not) : list;
+  return l[(Math.random() * l.length) | 0];
+};
+function planDuel(a, walkTime) {
+  const A = a.mover, V = a.cap;
+  const armA = arsenal(A.fig), armV = arsenal(V.fig);
+  // stand off at the attacker's reach: where its blows land (with their own lunge), a step short
+  const g = A.fig.group;
+  let reach = 0;
+  for (const m of armA.blows) {
+    const info = moveInfo(A.fig, m);
+    reach += g.worldToLocal(probeMove(A.fig, 'S_' + m, info.at, null).tip).z / armA.blows.length;
+  }
+  reach = Math.max(0.64, Math.min(1.3, reach + 0.24 + 0.08));
+  a.approach = a.capPos.clone().addScaledVector(a.dir, -reach);
+  a.phases.push({ name: 'walk', d: walkTime, a: a.from, b: a.approach });
+  a.phases.push({ name: 'square', d: 0.3 }); // on guard, eye to eye
+  const n = Math.random() < 0.45 ? 2 : 3;
+  let lastA = null, lastV = null, total = 0;
+  for (let i = 0; i < n; i++) {
+    const att = i % 2 === 0; // the attacker opens, the victim answers
+    const fig = att ? A.fig : V.fig;
+    const move = att ? (lastA = pick(armA.blows, lastA)) : (lastV = pick(armV.blows, lastV));
+    const info = moveInfo(fig, move);
+    const defFig = att ? V.fig : A.fig;
+    const r = Math.random();
+    const react = r < 0.2 ? (Math.random() < 0.5 ? 'dodgeL' : 'dodgeR') : info.heavy && r < 0.65 ? (info.line === 'high' ? 'staggerHigh' : 'stagger') : info.line === 'high' ? 'parryHigh' : 'parry';
+    // the next blow comes as this one recovers
+    const d = info.d * (react.startsWith('stagger') ? 0.98 : 0.84);
+    total += d;
+    a.phases.push({ name: 'blow', d, who: att ? 'A' : 'V', move, info, react, shield: !!defFig.shieldAt && !react.startsWith('dodge') });
+    if (total > 2.9) break;
+  }
+  const fin = pick(armA.finishers);
+  const fi = moveInfo(A.fig, fin);
+  const killAt = fi.hits[fi.hits.length - 1] * fi.d;
+  a.phases.push({ name: 'kill', d: killAt + 0.32, move: fin, info: fi, killAt });
+  a.phases.push({ name: 'wait', d: 1.05 });
+  a.phases.push({ name: 'walk', d: 0.7, a: null, b: a.to, settle: true, fromHere: true });
+  a.phases.push({ name: 'turnback', d: 0.35 });
+}
+
+// where a fighter stands when not stepping in: the attacker at its approach, the victim on its square
+const homeOf = (a, p) => (p === a.mover ? a.approach : a.capPos);
+const heightOf = (p, line) => {
+  const h = Math.max(0.6, p.fig.height || 1);
+  return 0.24 + (h - 0.24) * (line === 'high' ? 0.78 : line === 'low' ? 0.3 : 0.55);
+};
+// Set a blow up: how far the striker steps in so the weapon reaches, and its aim.
+function aimBlow(a, striker, defender, move, k, target, minGap) {
+  const g = striker.fig.group;
+  const home = homeOf(a, striker);
+  const dir = defender.fig.group.position.clone().sub(home).setY(0).normalize();
+  g.position.copy(home);
+  setAim(striker.fig, null);
+  let pr = probeMove(striker.fig, move, k, null);
+  const gap = defender.fig.group.position.clone().sub(pr.root).setY(0).length();
+  let shift = target.clone().sub(pr.tip).dot(dir);
+  shift = Math.max(-0.35, Math.min(0.45, shift, gap - minGap));
+  g.position.copy(home).addScaledVector(dir, shift);
+  const { aim, err } = aimAt(striker.fig, move, k, target, 'strike');
+  setAim(striker.fig, aim);
+  pr = probeMove(striker.fig, move, k, aim);
+  g.position.copy(home);
+  return { shift, dir, tip: pr.tip, grip: pr.grip, err };
+}
+// the stepping-in, as a fraction: rises to the blow, holds through it, falls back in recovery
+function stepEnvelope(t, impact, d) {
+  if (t < impact) return ease(clamp01((t - impact * 0.25) / (impact * 0.75)));
+  return 1 - ease(clamp01((t - impact - 0.12) / Math.max(0.1, d - impact - 0.12)));
+}
+const _c1 = new THREE.Vector3(), _c2 = new THREE.Vector3();
+// the closest points between two segments (where two blades cross)
+function contactPoint(p1, q1, p2, q2) {
+  const d1 = q1.clone().sub(p1), d2 = q2.clone().sub(p2), r = p1.clone().sub(p2);
+  const a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r);
+  let s = 0, t = 0;
+  if (a < 1e-9 && e < 1e-9) return p1.clone().lerp(p2, 0.5);
+  if (a < 1e-9) t = clamp01(f / e);
+  else {
+    const c = d1.dot(r);
+    if (e < 1e-9) s = clamp01(-c / a);
+    else {
+      const b = d1.dot(d2), den = a * e - b * b;
+      s = den > 1e-9 ? clamp01((b * f - c * e) / den) : 0;
+      t = (b * s + f) / e;
+      if (t < 0) { t = 0; s = clamp01(-c / a); } else if (t > 1) { t = 1; s = clamp01((b - c) / a); }
+    }
+  }
+  _c1.copy(p1).addScaledVector(d1, s);
+  _c2.copy(p2).addScaledVector(d2, t);
+  return { at: _c1.clone().lerp(_c2, 0.5), gap: _c1.distanceTo(_c2) };
+}
+function sparksAt(at, push, defender, heavy) {
+  particles.burst(at, { color: 0xffe2a0, n: heavy ? 40 : 26, speed: heavy ? 3.4 : 2.6, up: 1, size: 0.07, life: 0.45 });
+  particles.burst(at, { color: 0xfff6e0, n: 10, speed: 5, up: 0.4, size: 0.04, life: 0.18, gravity: 0 });
+  rubble.chips(at, push.clone().setY(0.3), defender.fig.materials[0], heavy ? 14 : 8, heavy ? 0.8 : 0.55, state.ply);
+  flash.position.copy(at);
+  flash.color.set(0xffd59a);
+  flash.intensity = heavy ? 22 : 14;
+  clang(heavy ? 1 : 0.8);
+  send({ type: 'impact', heavy: false });
+  shake = Math.max(shake, heavy ? 0.06 : 0.035);
+}
+
+function stepBlow(a, phase, idx, tt, dt, once) {
+  const striker = phase.who === 'A' ? a.mover : a.cap;
+  const defender = phase.who === 'A' ? a.cap : a.mover;
+  const { info, move } = phase;
+  const impact = info.hits[info.hits.length - 1] * info.d;
+  const kI = impact / info.d;
+  if (once('blow' + idx)) {
+    defender.fig.group.position.copy(homeOf(a, defender));
+    act(striker, move, { fade: 0.14 });
+    const target = defender.fig.group.position.clone().addScaledVector(defender.fig.group.position.clone().sub(striker.fig.group.position).setY(0).normalize(), -0.24);
+    target.y = heightOf(defender, info.line);
+    phase.plan = aimBlow(a, striker, defender, 'S_' + move, kI, target, 0.56);
+    if (info.cast) phase.plan.tip = target.clone();
+  }
+  const plan = phase.plan;
+  // time by the striker's own clip (a hit-stop holds it back from the phase's clock)
+  tt = striker.fig.move.name === move ? striker.fig.move.t : phase.d;
+  const home = homeOf(a, striker);
+  striker.fig.group.position.copy(home).addScaledVector(plan.dir, plan.shift * stepEnvelope(tt, impact, phase.d));
+  // the defender's answer, timed so its guard (or its sidestep) meets the blow
+  const rInfo = moveInfo(defender.fig, phase.react);
+  const rHit = rInfo.hits[0] * rInfo.d;
+  if (tt >= impact - rHit && once('def' + idx)) {
+    act(defender, phase.react, { fade: 0.1 });
+    if (!phase.react.startsWith('dodge')) {
+      // the guard goes where the blade will be: across it, a little short of its point
+      const q = info.cast ? plan.tip : plan.grip.clone().lerp(plan.tip, 0.8);
+      const r = aimAt(defender.fig, 'S_' + phase.react, rInfo.hits[0], q, phase.shield ? 'shield' : 'parry');
+      setAim(defender.fig, r.aim);
+      phase.defErr = r.err;
+    }
+  }
+  if (info.cast && tt >= impact - 0.32 && once('bolt' + idx)) {
+    const w = weaponNow(striker.fig);
+    launchBolt(w.butt, plan.tip, striker.fig.isWhite ? 0x9fd8ff : 0xc77dff);
+  }
+  if (!info.cast && tt > impact - 0.16 && tt < impact + 0.06) particles.burst(weaponNow(striker.fig).tip, { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.07, life: 0.22, gravity: 0 });
+  if (!info.cast && tt > impact - 0.2 && once('whoosh' + idx)) whoosh(info.heavy ? 0.9 : 0.7);
+  if (tt >= impact && once('clash' + idx)) {
+    if (phase.react.startsWith('dodge')) {
+      whoosh(0.35);
+      window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, aimErr: +plan.err.toFixed(3), shift: +plan.shift.toFixed(2) });
+      return;
+    }
+    const sw = weaponNow(striker.fig), dw = weaponNow(defender.fig);
+    let c;
+    if (info.cast) c = { at: plan.tip.clone(), gap: 0 };
+    else if (phase.shield && dw.shield) c = contactPoint(sw.grip, sw.tip, dw.shield, dw.shield);
+    else c = contactPoint(sw.grip, sw.tip, dw.butt.distanceTo(dw.grip) > 0.15 ? dw.butt : dw.grip, dw.tip);
+    const push = defender.fig.group.position.clone().sub(striker.fig.group.position).setY(0).normalize();
+    const heavy = phase.react.startsWith('stagger');
+    sparksAt(c.at, push, defender, heavy);
+    recoil(striker, push.clone().negate(), 0.03);
+    a.hitStop = 0.07; // the blades bite: a beat of stillness
+    window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, gap: +c.gap.toFixed(3), aimErr: +plan.err.toFixed(3), defErr: phase.defErr !== undefined ? +phase.defErr.toFixed(3) : null, shift: +plan.shift.toFixed(2) });
+  }
+}
+
+function stepKill(a, phase, tt, dt, once) {
+  const mover = a.mover, g = mover.fig.group;
+  const { info, move } = phase;
+  if (once('fin')) {
+    act(mover, move, { fade: 0.14 });
+    const v = a.cap;
+    v.fig.group.position.copy(a.capPos);
+    const target = v.fig.group.position.clone().addScaledVector(a.dir, -0.04);
+    target.y = heightOf(v, info.line === 'high' ? 'high' : 'mid') - 0.04;
+    // the killing blow lands where the swing passes closest to the victim
+    if (!info.cast) {
+      let best = null;
+      g.position.copy(a.approach);
+      for (let j = -6; j <= 6; j++) {
+        const t = phase.killAt + j * 0.03;
+        const pr = probeMove(mover.fig, 'S_' + move, t / info.d, null);
+        const gap = a.capPos.clone().sub(pr.root).setY(0).length();
+        const shift = Math.max(-0.35, Math.min(0.45, target.clone().sub(pr.tip).dot(a.dir), gap - 0.48));
+        const e = pr.tip.addScaledVector(a.dir, shift).distanceTo(target) + Math.abs(j) * 0.004;
+        if (!best || e < best.e) best = { e, t };
+      }
+      const delta = best.t - phase.killAt;
+      phase.killAt = best.t;
+      phase.d += delta;
+      a.total += delta;
+    }
+    phase.plan = aimBlow(a, mover, v, 'S_' + move, phase.killAt / info.d, target, 0.48);
+    phase.target = target;
+    if (info.cast) phase.plan.tip = target.clone();
+  }
+  const plan = phase.plan;
+  const killAt = phase.killAt;
+  const pt = tt; // the phase's clock (the kill follows the hit by a moment of it)
+  tt = mover.fig.move.name === move ? mover.fig.move.t : phase.d;
+  // after the blow the attacker stays where it struck (the victim is gone): no stepping back
+  const env = tt < killAt ? stepEnvelope(tt, killAt, phase.d) : 1;
+  g.position.copy(a.approach).addScaledVector(plan.dir, plan.shift * env);
+  const cap = a.cap;
+  // a combo's earlier blows: the victim still parries those
+  for (let h = 0; h < info.hits.length - 1; h++) {
+    const hT = info.hits[h] * info.d;
+    if (!cap) break;
+    const pr = moveInfo(cap.fig, 'parry');
+    if (tt >= hT - pr.hits[0] * pr.d && once('cparry' + h)) {
+      act(cap, 'parry', { fade: 0.1 });
+      const pw = probeMove(mover.fig, 'S_' + move, info.hits[h]);
+      const r = aimAt(cap.fig, 'S_parry', pr.hits[0], pw.grip.clone().lerp(pw.tip, 0.8), cap.fig.shieldAt ? 'shield' : 'parry');
+      setAim(cap.fig, r.aim);
+    }
+    if (tt >= hT && once('chit' + h)) {
+      const sw = weaponNow(mover.fig), dw = weaponNow(cap.fig);
+      const c = cap.fig.shieldAt ? contactPoint(sw.grip, sw.tip, dw.shield, dw.shield) : contactPoint(sw.grip, sw.tip, dw.butt.distanceTo(dw.grip) > 0.15 ? dw.butt : dw.grip, dw.tip);
+      sparksAt(c.at, a.dir, cap, true);
+      a.hitStop = 0.08;
+      whoosh(0.5);
+    }
+  }
+  // too late, the victim's guard comes up
+  if (cap && tt >= killAt - 0.3 && once('late')) act(cap, (info.line === 'high' ? 'parryHigh' : 'parry'), { fade: 0.12 });
+  if (!info.cast && tt > killAt - 0.2 && tt < killAt + 0.08) particles.burst(weaponNow(mover.fig).tip, { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.1, life: 0.28, gravity: 0 });
+  if (tt > killAt - 0.24 && once('whooshF')) info.cast ? zap(0.4) : whoosh(1);
+  if (info.cast && tt >= killAt - 0.32 && once('bolt')) launchBolt(weaponNow(mover.fig).butt, phase.target, mover.fig.isWhite ? 0x9fd8ff : 0xc77dff);
+  if (tt >= killAt - 0.06 && once('slow')) {
+    a.slowed = true;
+    slowLeft = 0.8; // slow motion around the killing blow
+  }
+  const tip = weaponNow(mover.fig).tip;
+  // the blow lands: the victim reels with the weapon in it ...
+  if (cap && tt >= killAt && once('hit')) {
+    phase.hitPt = pt;
+    act(cap, 'reel', { fade: 0.03 });
+    setRot(cap.fig, 0.15);
+    a.hitStop = 0.14;
+    a.stopMoverOnly = true; // the weapon bites and holds; the victim reels from it
+    phase.swing = a.prevTip ? tip.clone().sub(a.prevTip) : a.dir.clone();
+    const at = tip.clone();
+    flash.position.copy(at);
+    flash.color.set(0xffe0a0);
+    flash.intensity = 10;
+    shake = 0.08;
+    crash(0.35);
+    particles.burst(at, { color: 0xfff0c0, n: 18, speed: 2, up: 0.6, size: 0.06, life: 0.4 });
+    if (mover.fig.type === KNIGHT || mover.fig.type === ROOK) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
+  }
+  if (cap && phase.hitPt !== undefined) setRot(cap.fig, 0.15 + clamp01((pt - phase.hitPt) / 0.14) * 0.25);
+  // ... and cracks apart
+  if (cap && phase.hitPt !== undefined && pt >= phase.hitPt + 0.14 && once('kill')) {
+    const swingDir = phase.swing && phase.swing.lengthSq() > 1e-6 ? phase.swing.clone() : a.dir.clone();
+    swingDir.normalize().lerp(a.dir.clone().setY(swingDir.y), 0.35).normalize();
+    const blow = { at: tip.clone(), dir: swingDir };
+    const vc = cap.fig.group.position;
+    window.__duelLog?.push({ kill: move, by: mover.fig.type, victim: cap.fig.type, tipToBody: +Math.hypot(tip.x - vc.x, tip.z - vc.z).toFixed(3), tipY: +tip.y.toFixed(2), victimH: +cap.fig.height.toFixed(2), aimErr: +plan.err.toFixed(3), shift: +plan.shift.toFixed(2) });
+    send({ type: 'impact', heavy: true });
+    const weight = { [PAWN]: 0.9, [KNIGHT]: 1.2, [BISHOP]: 1.0, [ROOK]: 1.5, [QUEEN]: 1.3, [KING]: 1.4 }[mover.fig.type] || 1;
+    a.death = kill(cap, a.fin.style, g.position.clone(), weight * (cap.fig.type >= ROOK ? 1.1 : 1), blow);
+    pieces.delete(a.job.m.cap);
+    a.cap = null;
+  }
+  if (tt >= killAt - 0.1) a.prevTip = tip;
+}
+
 function startMove(job) {
   const { m } = job;
   const mover = pieces.get(m.from);
@@ -1116,6 +1388,11 @@ function startMove(job) {
     const dir = capPos.clone().sub(from).normalize();
     a.dir = dir;
     a.fin = finisherFor(mover.fig.type, mover.fig.statue);
+    if (mover.fig.statue && cap.fig.statue) {
+      planDuel(a, walkTime);
+      a.total = a.phases.reduce((s, ph) => s + ph.d, 0);
+      return a;
+    }
     a.approach = capPos.clone().addScaledVector(dir, -0.85);
     a.phases.push({ name: 'walk', d: walkTime, a: from, b: a.approach });
     // the duel: an attack each way, parried or dodged, then the finisher
@@ -1201,6 +1478,7 @@ function stepMove(a, dt) {
         g.rotation.y = turnToward(g.rotation.y, phase.face, Math.min(1, dt * 12));
         break;
       case 'walk': {
+        if (phase.fromHere && !phase.a) phase.a = g.position.clone().setY(0);
         const leap = a.knight && !phase.settle && phase.a.distanceTo(phase.b) > 1.2;
         if (once('walk' + idx)) {
           if (leap) act(mover, 'leap', { duration: phase.d });
@@ -1209,7 +1487,9 @@ function stepMove(a, dt) {
         }
         g.position.lerpVectors(phase.a, phase.b, leap ? k : ease(k));
         if (leap) g.position.y = Math.sin(Math.PI * clamp01((k - 0.15) / 0.75)) * Math.min(1.3, 0.6 + phase.a.distanceTo(phase.b) * 0.25);
-        g.rotation.y = turnToward(g.rotation.y, angleTo(phase.a, phase.b), Math.min(1, dt * 10));
+        // (backing off to sword's reach, a fighter keeps its eyes on the foe)
+        const back = a.dir && !phase.settle && phase.b.clone().sub(phase.a).dot(a.dir) < 0;
+        g.rotation.y = turnToward(g.rotation.y, back ? angleTo(a.from, a.capPos) : angleTo(phase.a, phase.b), Math.min(1, dt * 10));
         // footsteps
         const step2 = Math.floor(a.t / 0.27);
         if (!leap && step2 !== a.lastStep) {
@@ -1223,6 +1503,18 @@ function stepMove(a, dt) {
         }
         break;
       }
+      case 'square':
+        if (once('square')) {
+          act(mover, 'guard', { loop: true, fade: 0.25 });
+          act(a.cap, 'guard', { loop: true, fade: 0.25 });
+        }
+        break;
+      case 'blow':
+        stepBlow(a, phase, idx, tt, dt, once);
+        break;
+      case 'kill':
+        stepKill(a, phase, tt, dt, once);
+        break;
       case 'clash': {
         // one side strikes; the other parries (sparks and a clang) or dodges aside
         const striker = phase.who === 'A' ? mover : a.cap;
@@ -1308,7 +1600,7 @@ function stepMove(a, dt) {
         break;
     }
     // camera work
-    const fighting = a.dir && (phase.name === 'clash' || phase.name === 'final' || phase.name === 'wait' ||
+    const fighting = a.dir && (phase.name === 'clash' || phase.name === 'final' || phase.name === 'wait' || phase.name === 'blow' || phase.name === 'kill' || phase.name === 'square' ||
       (phase.name === 'walk' && !phase.settle && k > 0.35));
     if (fighting && cinema() !== 'off') {
       if (!a.shotStart) a.shotStart = a.t;
@@ -1319,7 +1611,13 @@ function stepMove(a, dt) {
       releaseShot();
     }
   }
-  mover.fig.mixer.update(dt);
+  // hit-stop: when weapons bite, the fighters freeze for a beat (the world runs on)
+  let fdt = dt;
+  if (a.hitStop > 0) {
+    a.hitStop -= dt;
+    fdt = dt * (a.stopMoverOnly ? 0.02 : 0.15);
+  } else a.stopMoverOnly = false;
+  mover.fig.mixer.update(fdt);
   if (a.cap) {
     const cg = a.cap.fig.group;
     cg.rotation.y = turnToward(cg.rotation.y, angleTo(a.capPos, g.position), Math.min(1, dt * 5));
@@ -1327,7 +1625,7 @@ function stepMove(a, dt) {
       a.events.vIdle = true;
       act(a.cap, '2H_Melee_Idle', { loop: true }); // on guard
     }
-    a.cap.fig.mixer.update(dt);
+    a.cap.fig.mixer.update(a.stopMoverOnly ? dt : fdt);
   }
   if (a.rook) {
     const r = a.rook;
@@ -1475,7 +1773,7 @@ function tick(realDt) {
   updateCamera(realDt);
   fadeBlockers(realDt);
   post.focusOn(camera, FOCUS_PTS);
-  post.render(scene, camera);
+  if (!window.__noRender) post.render(scene, camera);
   const nowBusy = busy || slowLeft > 0;
   if (wasBusy && !nowBusy) send({ type: 'idle', ply: state.ply });
   // the app waits for this before the computer replies: the board shows this position and
@@ -1493,6 +1791,7 @@ let ready = false;
 let pendingState = null;
 loadFigures().then(() => {
   ready = true;
+  window.__ready = true;
   if (pendingState) receive(pendingState);
   send({ type: 'ready' });
 });
