@@ -12,8 +12,8 @@ import { granite } from './granite.js';
 import { groundAt, disposeOwn } from './rubble.js';
 
 const TABLE = -0.65;
-const MELT = 42; // seconds to melt down
-const SPEED = 0.45; // how fast a pool runs off the board
+const MELT = 20; // seconds to melt down
+const SPEED = 0.9; // how fast a pool runs off the board
 const PUDDLE = { white: new THREE.Vector3(5.75, TABLE + 0.004, 1.9), black: new THREE.Vector3(-5.75, TABLE + 0.004, -1.9) };
 
 // a blob outline: a disc with a wobbly edge
@@ -97,7 +97,7 @@ export class Melter {
     pool.position.set(c.x, groundAt(c.x, c.z) + 0.003 + this.layer * 0.00015, c.z);
     this.scene.add(pool);
     const r = Math.max(size.x, size.z) * 0.5;
-    this.items.push({ W, obj, pool, side, vol, r: Math.min(0.3, Math.max(0.025, r)), small, t: 0, dur: small ? 14 + Math.random() * 8 : MELT * (0.85 + Math.random() * 0.3), phase: 'melt', spin: (Math.random() - 0.5) * 0.3 });
+    this.items.push({ W, obj, pool, side, vol, r: Math.min(0.3, Math.max(0.025, r)), small, t: 0, dur: small ? 7 + Math.random() * 4 : MELT * (0.85 + Math.random() * 0.3), phase: 'melt', spin: (Math.random() - 0.5) * 0.3 });
   }
 
   update(dt) {
