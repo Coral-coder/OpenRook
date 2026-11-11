@@ -480,6 +480,7 @@ function releaseShot() {
 let shotsSuppressed = false;
 
 let shake = 0;
+let duelLit = false;
 const camKick = new THREE.Vector3(); // a blow's jolt to the camera, along the swing
 const _v = new THREE.Vector3();
 const topDown = () => state.view === 'top';
@@ -511,6 +512,23 @@ function updateCamera(dt) {
   }
   camera.position.add(camKick);
   camKick.multiplyScalar(Math.exp(-dt * 9));
+  camPunch *= Math.exp(-dt * 7);
+  // the fight's own light: a soft key from the camera's side, so the dark stone reads against
+  // the dark hall (out when no fight is being filmed)
+  // (the light that glows on a king in check does this duty: there's no check to show while a
+  // fight is on, and no extra light for the phone to shade)
+  const lit = !!current && f > 0.01;
+  if (lit !== duelLit) {
+    duelLit = lit;
+    checkLight.color.set(lit ? 0xfff0dc : 0xff3020);
+    checkLight.distance = lit ? 9 : 2.5;
+    checkLight.decay = lit ? 1.4 : 2;
+    if (!lit) checkLight.intensity = 0;
+  }
+  if (lit) {
+    checkLight.intensity = 20 * f * f;
+    checkLight.position.copy(look).lerp(camera.position, 0.5).add(_v.set(0, 1.3, 0)).addScaledVector(_v.setFromMatrixColumn(camera.matrixWorld, 0), 0.9);
+  }
   camera.lookAt(look);
   // the fog hangs around the edges of the hall, never over the board itself
   if (scene.fog) scene.fog.density = 0.22 / Math.max(3, camera.position.distanceTo(look));
@@ -530,9 +548,9 @@ function fadeBlockers(dt) {
     if (k > 0.05 && !(current && (p === current.mover || p === current.cap))) {
       const c = p.fig.group.position.clone().setY(0.6);
       const t = c.clone().sub(camera.position).dot(seg) / len2;
-      if (t > 0 && t < 0.92) {
-        const d = camera.position.clone().addScaledVector(seg, t).distanceTo(c);
-        if (d < 0.7) want = 1 - 0.8 * k;
+      if (t > -0.3 && t < 0.92) {
+        const d = camera.position.clone().addScaledVector(seg, Math.max(0, t)).setY(0.6).distanceTo(c);
+        if (d < 0.7) want = 1 - 0.85 * k;
       }
     }
     p.fade = p.fade ?? 1;
@@ -918,6 +936,54 @@ function idle(p) {
   p.idleAt = simT;
 }
 
+// ------------------------------------------------------------------ the blade's arc
+// A blow takes a tenth of a second: the eye (and a still) reads it by the arc the blade leaves
+// in the air. Two ribbons (one per fighter), fed the blade's position while it is swinging and
+// fading out behind it.
+const TRAIL_N = 14;
+function makeTrail() {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_N * 6), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(TRAIL_N * 6), 3));
+  const idx = [];
+  for (let i = 0; i < TRAIL_N - 1; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  mesh.frustumCulled = false;
+  mesh.visible = false;
+  mesh.renderOrder = 5;
+  scene.add(mesh);
+  return { mesh, n: 0, heat: 0, pts: [] };
+}
+const trails = [makeTrail(), makeTrail()];
+function updateTrail(tr, p, on, dt) {
+  if (on && p) {
+    const w = weaponNow(p.fig);
+    const l = tr.pts[0];
+    // (held in a hit-stop the blade adds nothing to its arc)
+    if (!l || Math.abs(l[0] - w.tip.x) + Math.abs(l[1] - w.tip.y) + Math.abs(l[2] - w.tip.z) > 0.006) tr.pts.unshift([w.tip.x, w.tip.y, w.tip.z, w.grip.x + (w.tip.x - w.grip.x) * 0.3, w.grip.y + (w.tip.y - w.grip.y) * 0.3, w.grip.z + (w.tip.z - w.grip.z) * 0.3]);
+    if (tr.pts.length > TRAIL_N) tr.pts.length = TRAIL_N;
+    tr.heat = 1;
+  } else if (tr.heat > 0) {
+    tr.heat = Math.max(0, tr.heat - dt * 5);
+    if (tr.heat <= 0) tr.pts.length = 0;
+  }
+  const n = tr.pts.length;
+  tr.mesh.visible = n > 1 && tr.heat > 0;
+  if (!tr.mesh.visible) return;
+  const pos = tr.mesh.geometry.attributes.position, col = tr.mesh.geometry.attributes.color;
+  for (let i = 0; i < TRAIL_N; i++) {
+    const q = tr.pts[Math.min(i, n - 1)];
+    pos.setXYZ(i * 2, q[0], q[1], q[2]);
+    pos.setXYZ(i * 2 + 1, q[3], q[4], q[5]);
+    const k = i < n ? Math.pow(1 - i / (n - 1 || 1), 1.6) * tr.heat * 0.55 : 0;
+    col.setXYZ(i * 2, k, k * 0.93, k * 0.78);
+    col.setXYZ(i * 2 + 1, k * 0.25, k * 0.22, k * 0.18);
+  }
+  pos.needsUpdate = true;
+  col.needsUpdate = true;
+}
+
 // ------------------------------------------------------------------ cinematic shots
 const cinema = () => (topDown() ? 'off' : state.cinema || 'fights');
 
@@ -938,20 +1004,26 @@ function blockers(cam, look, skip) {
 
 // Pick the side to film a fight from: the clearest line of sight, preferring the
 // player's own side of the board, and a little higher when the board is crowded.
-function chooseDuelAngle(a, mid, dist) {
+function chooseDuelAngle(a, mid, dist, lowH = 1, prefer = null) {
   const view = playerView();
   const toPlayer = view.pos.clone().sub(mid).setY(0).normalize();
   const skip = [a.mover, a.cap];
   let best = null;
-  for (let i = 0; i < 16; i++) {
-    const ang = (i / 16) * Math.PI * 2;
+  for (let i = 0; i < 24; i++) {
+    const ang = (i / 24) * Math.PI * 2;
     const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
-    // a side-on view of the duel reads best; head-on is fine if it's the only clear one
+    // a three-quarter view reads best: the two overlap a little in depth (so both fill a tall
+    // phone screen) but neither hides the other; head-on only if nothing else is clear
     const across = Math.abs(dir.dot(a.dir));
-    for (const h of [1.6, 2.4]) {
+    for (const h of [lowH, lowH + 0.75]) {
       const cam = mid.clone().addScaledVector(dir, dist).setY(h);
-      const score = blockers(cam, mid.clone().setY(0.6), skip) * 3 + across * 1.2 - dir.dot(toPlayer) * 0.8 + (h > 2 ? 0.6 : 0) +
-        (Math.abs(cam.x) > 7 || Math.abs(cam.z) > 7 ? 2 : 0);
+      // off the board is fine (the room is empty air there) until the eye is far out over the table
+      const out = Math.max(Math.abs(cam.x), Math.abs(cam.z));
+      const vh = a.vHome || a.capPos;
+      let near = 0;
+      for (const p of pieces.values()) if (!skip.includes(p) && Math.hypot(p.fig.group.position.x - cam.x, p.fig.group.position.z - cam.z) < 0.85) near++;
+      const score = (blockers(cam, a.approach.clone().setY(0.6), skip) + blockers(cam, vh.clone().setY(0.6), skip)) * 2.2 + near * 3 + Math.abs(across - 0.38) * 2.0 + (across > 0.8 ? 1.5 : 0) - dir.dot(a.dir) * 0.35 -
+        dir.dot(toPlayer) * 0.45 + (h > lowH ? 0.9 : 0) + (out > 6.4 ? 2 + (out - 6.4) : 0) - (prefer ? dir.dot(prefer) * 1.6 : 0);
       if (!best || score < best.score) best = { score, dir, h };
     }
   }
@@ -973,9 +1045,26 @@ function epicShot(a, type) {
     pos = X.clone().addScaledVector(d, -0.85).addScaledVector(side, fromA ? 0.5 : -0.5).setY(hX * 0.95 + 0.2);
     target = Y.clone().setY(hY * 0.55);
   } else if (type === 'low') {
-    const M = A.clone().lerp(V, 0.5);
-    pos = M.clone().addScaledVector(side, 2.3).addScaledVector(dir, -0.45).setY(0.3);
-    target = M.clone().addScaledVector(dir, -0.1).setY(0.58);
+    // a hero shot: the eye almost on the board, looking up at the two of them, both in frame
+    // whatever the screen's shape (from whichever side is clear)
+    const M = A.clone().lerp(V, 0.5).setY(0);
+    const size = Math.max(a.mover.fig.height || 1, a.vH || 1), sep = Math.hypot(A.x - V.x, A.z - V.z);
+    const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), tanW = tanV * camera.aspect;
+    const across = 0.55;
+    const d = Math.max(2, (sep * 0.5 * Math.sqrt(1 - across * across) + 0.3 + 0.16 * size) / tanW, (size * 0.72 + 0.3) / tanV) + sep * 0.4 * across;
+    const skip = [a.mover, a.cap];
+    let best = null;
+    // (the side is chosen when the shot is cut to, and kept while it runs)
+    const held = a.camPos && a.lowSide;
+    for (const sgn of held ? [a.lowSide.sgn] : [1, -1]) for (const back of held ? [a.lowSide.back] : [-1, 1]) {
+      const c = M.clone().addScaledVector(side, sgn * d * Math.sqrt(1 - across * across)).addScaledVector(dir, back * d * across).setY(0.24);
+      const sc = blockers(c, A.clone().setY(0.6), skip) + blockers(c, V.clone().setY(0.6), skip) + (sgn < 0 ? 0.2 : 0) + (back > 0 ? 0.3 : 0) + (Math.max(Math.abs(c.x), Math.abs(c.z)) > 6.6 ? 3 : 0);
+      if (!best || sc < best.sc) best = { sc, c, sgn, back };
+    }
+    if (!held && best.sc > 1.2) return null;
+    a.lowSide = best;
+    pos = best.c;
+    target = M.clone().setY(size * 0.52 + Math.max(0, V.y) * 0.5);
   } else return null;
   for (const p of pieces.values()) {
     if (p === a.mover || p === a.cap) continue;
@@ -1006,6 +1095,7 @@ function duelShot(a, phase) {
       shot.pos.copy(a.camPos);
       shot.target.copy(a.camLook);
       shot.want = 1;
+      punchIn();
       return;
     }
   }
@@ -1017,26 +1107,44 @@ function duelShot(a, phase) {
   if (dg && dg.parent) {
     const vp = dg.position.clone();
     spread = Math.min(4, vp.distanceTo(mid) + Math.max(0, vp.y) * 0.6);
-    mid.lerp(vp.setY(0), 0.45);
+    mid.lerp(vp.setY(0), 0.3);
   }
-  const close = a.slowed ? 0.92 : 1;
-  const aspect = Math.max(0.6, Math.min(1.4, camera.aspect));
-  // far enough that both fighters, their swings and the victim's pieces stay in frame
-  const halfW = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-  const fit = (a.approach.distanceTo(vh) / 2 + 0.85) / Math.tan(halfW);
-  let dist = Math.max((3.1 / Math.sqrt(aspect)) * close, fit) + spread * 0.9;
+  // as close as the two allow: they fill the frame, whatever their size and the screen's shape
+  // (a pawn fight is filmed closer and lower than a king's)
+  const size = Math.max(a.mover.fig.height || 1, a.vH || 1);
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), tanW = tanV * camera.aspect;
+  const sep = a.approach.distanceTo(vh);
+  const lowH = 0.42 + 0.5 * size;
+  const wide = 0.26 + 0.14 * size + (a.mover.fig.type === KNIGHT || a.vType === KNIGHT ? 0.3 : 0);
+  const frame = (across) => Math.max(2.1, (sep * 0.5 * Math.sqrt(1 - across * across) + wide) / tanW, (size * 0.7 + 0.3) / tanV) + sep * 0.4 * across;
+  if (!a.angle) a.angle = chooseDuelAngle(a, mid, frame(0.4), lowH);
+  else if (a.reangle) {
+    // the fight has moved: is this still the clear side? (it only swings round if it must, and
+    // then along an arc about the two, never through them; an epic cuts)
+    const n = chooseDuelAngle(a, mid, frame(0.4), lowH, a.angle.dir);
+    if (a.epic && !a.camPos) a.angle = n;
+    else a.angleGoal = n;
+  }
+  a.reangle = false;
+  if (a.angleGoal) {
+    const cur = Math.atan2(a.angle.dir.x, a.angle.dir.z), goal = Math.atan2(a.angleGoal.dir.x, a.angleGoal.dir.z);
+    const nx = turnToward(cur, goal, 0.05);
+    a.angle.dir.set(Math.sin(nx), 0, Math.cos(nx));
+    a.angle.h += (a.angleGoal.h - a.angle.h) * 0.05;
+  }
+  a.angle.across = Math.min(0.9, Math.abs(a.angle.dir.dot(a.dir)));
+  let dist = frame(a.angle.across) + spread * 0.9;
   const closeUp = a.slowed && (!a.killT || a.t - a.killT < 0.7);
   if (closeUp) {
     // the killing blow: in close on the victim, until the pieces scatter
-    mid.copy(vh).lerp(a.approach, 0.15);
-    dist = 3.2 / Math.sqrt(aspect);
-  } // both fighters fully in frame, even on a tall phone
-  if (!a.angle) a.angle = chooseDuelAngle(a, mid, dist);
+    mid.copy(vh).lerp(a.approach, 0.3);
+    dist *= 0.88;
+  }
   // a slow dolly around the fight, never swinging far from the clear side
-  const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.35 * a.shotSpin;
+  const orbit = Math.sin((a.t - a.shotStart) * 0.35) * 0.3 * a.shotSpin;
   const off = a.angle.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), orbit).multiplyScalar(dist);
-  shot.pos.copy(mid).add(off).setY((closeUp ? 1.3 : a.angle.h * close) + spread * 0.5);
-  shot.target.copy(mid).setY(0.6 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
+  shot.pos.copy(mid).add(off).setY((closeUp ? a.angle.h * 0.85 : a.angle.h) + spread * 0.5);
+  shot.target.copy(mid).setY(size * 0.46 + (dg && dg.parent ? Math.max(0, dg.position.y) * 0.5 : 0));
   if (a.wormUp) {
     // the queen's wormhole hangs over the victim: back off a little, drop the eye and look up to it
     const toHole = vh.clone().sub(mid).setY(0).multiplyScalar(0.35 * a.wormUp);
@@ -1053,7 +1161,16 @@ function duelShot(a, phase) {
     a.camLook = shot.target.clone();
   }
   shot.want = 1;
+  punchIn();
 }
+// every blow that lands jolts the camera in towards it for a moment
+let camPunch = 0;
+function punchIn() {
+  if (camPunch > 0.002) shot.pos.lerp(shot.target, 0.09 * camPunch);
+}
+const punch = (x) => {
+  camPunch = Math.max(camPunch, x);
+};
 
 function followShot(p) {
   const g = p.fig.group;
@@ -1460,6 +1577,7 @@ const WOUNDS = { cut: ['groove', 'chunk', 'crest'], thrust: ['chunk', 'chunk', '
 // pairing never fights the same fight twice running.
 const CASTERS = [BISHOP, ROOK, QUEEN, KING];
 const lastFight = {};
+let lastEnd = '';
 const pickW = (opts) => {
   let r = Math.random() * opts.reduce((s, o) => s + o[1], 0);
   for (const o of opts) if ((r -= o[1]) <= 0) return o[0];
@@ -1504,8 +1622,11 @@ function composeFight(A, V, len) {
       const who = i % 2 && Math.random() < 0.75 ? 'V' : 'A';
       // (a castle tower fights with its mass more than with its stone arms' sword)
       const tower = (who === 'A' ? tA : tV) === ROOK;
-      const kind = pickW([['blow', tower ? 0.25 : 0.45], ['feint', tower ? 0.04 : 0.14], ['bind', tower ? 0.04 : 0.12], ['special', tower ? 0.5 : 0.17], ['step', o.circles ? 0.08 : 0.04], ['circle', o.circles ? 0.08 : 0]]);
-      if (kind === 'blow') beats.push({ t: 'blow', who, hit: o.hits && Math.random() < 0.35 && who === 'A' });
+      // (a quick fight has no time for footwork or a feint: blows, and a body blow now and then)
+      const q = len === 'quick' ? 0 : 1;
+      const kind = pickW([['blow', tower ? 0.25 : 0.45], ['feint', (tower ? 0.04 : 0.14) * q], ['bind', (tower ? 0.04 : 0.12) * q], ['special', tower ? 0.5 : 0.17], ['step', (o.circles ? 0.08 : 0.04) * q], ['circle', o.circles ? 0.08 : 0]]);
+      const n0 = beats.length;
+      if (kind === 'blow') beats.push({ t: 'blow', who, hit: (o.hits || len !== 'quick') && Math.random() < (who === 'A' ? 0.3 : 0.14) });
       else if (kind === 'feint') beats.push({ t: 'feint', who }, { t: 'blow', who, late: true, hit: Math.random() < 0.5 });
       else if (kind === 'bind') beats.push({ t: 'bind', win: Math.random() < 0.65 ? 'A' : 'V' });
       else if (kind === 'special') {
@@ -1514,6 +1635,7 @@ function composeFight(A, V, len) {
         beats.push({ t: 'special', who, move: mv, outcome: mv === 'disarm' ? 'stagger' : pickW([['stagger', 0.55], ['hurt', 0.3], ['block', 0.15]]) });
       } else if (kind === 'step') beats.push({ t: 'step', mode: pick(['press', 'retreat', 'side']) });
       else beats.push({ t: 'circle' });
+      for (let j = n0; j < beats.length; j++) beats[j].fill = true;
     }
   };
   // the ending
@@ -1529,24 +1651,25 @@ function composeFight(A, V, len) {
   const long = ['down', 'disarm', 'spellKill', 'topple'].includes(end.t);
   if (spellAt === 'open') beats.push(spellBeat('A', mySpell));
   if (len === 'quick') {
-    if (spellAt !== 'open' && !long) exchange(1);
+    if (spellAt !== 'open') exchange(long ? 1 : 2);
   } else if (len === 'standard') {
     if (spellAt === 'mid') {
-      exchange(1);
+      exchange(2);
       beats.push(spellBeat('A', mySpell));
-    } else exchange((spellAt === 'open' ? 1 : 2) - (long && spellAt !== 'open' ? 1 : 0));
+      exchange(1);
+    } else exchange((spellAt === 'open' ? 3 : 5) - (long ? 1 : 0));
   } else {
     // an epic: circling, a flurry each way, first blood, the defender turning the tables (a
     // spell of his own, if he has one), a near miss, a broken blade, an arm lost, then the end
     beats.push({ t: 'circle', cam: 'low' });
-    exchange(3, { circles: true });
+    exchange(5, { circles: true });
     beats.push({ t: 'blow', who: 'A', hit: true, react: 'kneel', cam: 'low' });
     if (spellAt === 'mid') beats.push(spellBeat('A', mySpell));
     beats.push({ t: 'blow', who: 'V', heavy: true, cam: 'otsV' });
     if (CASTERS.includes(tV) && Math.random() < 0.5) beats.push(spellBeat('V', pick(SPELLS_OF[tV])));
     else beats.push({ t: 'special', who: 'V', move: pick(armV.specials.filter((m) => m !== 'trample')), outcome: 'stagger', cam: 'wide' });
     beats.push({ t: 'step', mode: 'press', cam: 'otsV', who: 'V' });
-    exchange(2, { circles: true });
+    exchange(4, { circles: true });
     beats.push({ t: 'blow', who: 'V', dodge: true, cam: 'low' });
     const snapV = chance(0.65);
     beats.push({ t: 'blow', who: 'A', heavy: true, snap: snapV ? 'V' : null, cam: 'otsA' });
@@ -1573,21 +1696,25 @@ function planDuel(a, walkTime) {
   }
   reach = Math.max(0.64, Math.min(1.3, reach + 0.24 + 0.08));
   a.vHome = a.capPos.clone();
+  a.vH = V.fig.height || 1;
+  a.vType = V.fig.type;
   a.approach = a.capPos.clone().addScaledVector(a.dir, -reach);
   a.reach = reach;
-  a.phases.push({ name: 'walk', d: walkTime, a: a.from, b: a.approach });
-  a.phases.push({ name: 'square', d: len === 'quick' ? 0.15 : a.epic ? 0.6 : 0.3, cam: 'wide' }); // on guard, eye to eye
+  // (a long way to come is covered at a run: the time is for the fight)
+  a.phases.push({ name: 'walk', d: Math.min(walkTime, a.epic ? 2.4 : 1.7), a: a.from, b: a.approach });
+  a.phases.push({ name: 'square', d: len === 'quick' ? 0.12 : a.epic ? 0.5 : 0.2, cam: 'wide' }); // on guard, eye to eye
   // compose it (never the same fight twice running for this pairing)
   const key = A.fig.type + '-' + V.fig.type + '-' + len;
   let fight, sig;
   for (let i = 0; i < 10; i++) {
     fight = composeFight(A, V, len);
     sig = fight.beats.map((b) => b.t + (b.move || b.spell || '') + (b.who || '')).join() + '|' + fight.end.t + (fight.end.spell || '');
-    if (sig !== lastFight[key]) break;
+    // (nor does a fight end the way the one before it did, whoever fought that)
+    if (sig !== lastFight[key] && fight.end.t + (fight.end.spell || '') !== lastEnd) break;
   }
+  lastEnd = fight.end.t + (fight.end.spell || '');
   lastFight[key] = sig;
   a.fightSig = sig;
-  window.__lastFight = sig;
   let lastA = null, lastV = null;
   const quick = len === 'quick';
   const first = a.phases.length;
@@ -1601,21 +1728,21 @@ function planDuel(a, walkTime) {
     markGroup();
     group++;
     if (b.t === 'circle') {
-      a.phases.push({ name: 'circle', d: 1.0 + Math.random() * 0.5, drive: b.drive, cam: b.cam });
+      a.phases.push({ name: 'circle', d: 0.9 + Math.random() * 0.4, drive: b.drive, cam: b.cam, fill: b.fill });
       continue;
     }
     if (b.t === 'step') {
-      a.phases.push({ name: 'step', d: 0.75 + Math.random() * 0.25, mode: b.mode, who: b.who || 'A', cam: b.cam });
+      a.phases.push({ name: 'step', d: 0.55 + Math.random() * 0.2, mode: b.mode, who: b.who || 'A', cam: b.cam, fill: b.fill });
       continue;
     }
     if (b.t === 'feint') {
       const fig = b.who === 'A' ? A.fig : V.fig;
-      a.phases.push({ name: 'feint', d: moveInfo(fig, 'feint').d * 0.92, who: b.who, cam: b.cam });
+      a.phases.push({ name: 'feint', d: moveInfo(fig, 'feint').d * 0.8, who: b.who, cam: b.cam, fill: b.fill });
       continue;
     }
     if (b.t === 'bind') {
-      a.phases.push({ name: 'bind', d: (quick ? 0.9 : 1.25) + Math.random() * 0.3, win: b.win, cam: b.cam });
-      a.phases.push({ name: 'shove', d: 0.85, who: b.win, cam: b.cam });
+      a.phases.push({ name: 'bind', d: (quick ? 0.8 : 1.0) + Math.random() * 0.25, win: b.win, cam: b.cam, fill: b.fill });
+      a.phases.push({ name: 'shove', d: 0.7, who: b.win, cam: b.cam, fill: b.fill });
       continue;
     }
     if (b.t === 'special') {
@@ -1626,7 +1753,7 @@ function planDuel(a, walkTime) {
       if (outcome === 'block' && !def.shieldAt) outcome = 'stagger';
       const react = outcome === 'stagger' ? 'stagger' : outcome === 'hurt' ? 'hurt' : outcome === 'disarmed' ? 'disarmed' : outcome === 'down' ? 'down' : 'parry';
       const rd = moveInfo(def, react).d;
-      a.phases.push({ name: 'special', d: Math.max(info.d * 0.9, info.hits[0] * info.d + rd * 0.75), who: b.who, move: b.move, info, outcome, react, cam: b.cam });
+      a.phases.push({ name: 'special', d: Math.max(info.d * 0.74, info.hits[0] * info.d + rd * 0.7), who: b.who, move: b.move, info, outcome, react, cam: b.cam, fill: b.fill });
       continue;
     }
     if (b.t === 'spell') {
@@ -1646,7 +1773,7 @@ function planDuel(a, walkTime) {
     const defFig = att ? V.fig : A.fig;
     const r = Math.random();
     let hit = null;
-    if (b.hit) {
+    if (b.hit && (b.hit === 'sever' || !b.fill || canWound(att ? V : A))) {
       hit = b.hit === 'sever' ? 'sever' : WOUNDS[info.cat][(Math.random() * WOUNDS[info.cat].length) | 0];
       if (window.__forceHit && window.__forceHit !== true && !a.epic) hit = window.__forceHit; // (for testing)
       if (hit === 'crest' && defFig.damage?.crest) hit = 'chunk';
@@ -1659,29 +1786,40 @@ function planDuel(a, walkTime) {
     if (react === 'clutch' && defFig.damage?.severed) react = 'hurt';
     // the next blow comes as this one recovers (a wounded fighter takes a moment longer)
     const impact = info.hits[info.hits.length - 1] * info.d;
-    let d = info.d * (react.startsWith('stagger') ? 0.98 : 0.84);
-    if (hit) d = Math.max(d, impact + { hurt: 0.95, clutch: 1.15, kneel: 1.6 }[react]);
-    if (quick) d *= 0.92;
-    a.phases.push({ name: 'blow', d, who: b.who, move, info, react, hit, snap: b.snap, cam: b.cam, late: b.late, shield: !!defFig.shieldAt && !react.startsWith('dodge') && !react.endsWith('R') && !hit });
+    // (the answer comes while this blow is still recovering: a riposte, not a turn taken)
+    // (and in the thick of it a blow is thrown from wherever the last one left the blade: no going back to guard first)
+    const lead = Math.min(0.2, impact * 0.3);
+    let d = impact - lead + (react.startsWith('stagger') ? 0.5 : react.startsWith('dodge') ? 0.36 : 0.32);
+    if (b.snap) d += 0.25;
+    if (hit) d = impact - lead + { hurt: 0.72, clutch: 0.95, kneel: 1.35 }[react];
+    a.phases.push({ name: 'blow', d, lead, who: b.who, move, info, react, hit, snap: b.snap, cam: b.cam, late: b.late, fill: b.fill, shield: !!defFig.shieldAt && !react.startsWith('dodge') && !react.endsWith('R') && !hit });
   }
   markGroup();
   planEnding(a, fight.end, lastA);
-  a.phases.push({ name: 'walk', d: 0.7, a: null, b: a.to, settle: true, fromHere: true });
+  a.phases.push({ name: 'walk', d: 0.6, a: null, b: a.to, settle: true, fromHere: true });
   a.phases.push({ name: 'turnback', d: 0.35 });
   // keep to the length asked for: drop beats of the exchange (from the end of it) while the fight
   // runs long; a standard fight keeps at least one
-  const budget = { quick: 5.7, standard: 8.7, epic: 23.5 }[len] - (a.wakeD || 0) - 0.3;
+  const budget = { quick: 6.1, standard: 8.7, epic: 23.5 }[len] - (a.wakeD || 0) - 0.3;
   const total = () => a.phases.reduce((s, ph) => s + ph.d, 0);
   const keep = len === 'quick' ? 0 : 1;
-  for (let guard = 0; guard < 20 && total() > budget; guard++) {
+  for (let guard = 0; guard < 40 && total() > budget; guard++) {
     const groups = [...new Set(a.phases.filter((ph) => ph.group).map((ph) => ph.group))];
     if (groups.length <= keep) break;
     // (a spell beat is the last to go)
-    const g = [...groups].reverse().find((x) => !a.phases.some((ph) => ph.group === x && ph.name === 'spell')) ?? groups[groups.length - 1];
+    const rev = [...groups].reverse();
+    // (of the exchange's beats, the shortest one whose going is enough; else the last of them)
+    const over = total() - budget;
+    const durOf = (x) => a.phases.reduce((s, ph) => s + (ph.group === x ? ph.d : 0), 0);
+    const fills = rev.filter((x) => a.phases.some((ph) => ph.group === x && ph.fill));
+    const enough = fills.filter((x) => durOf(x) >= over).sort((x, y) => durOf(x) - durOf(y))[0];
+    const g = enough ?? fills[0] ?? rev.find((x) => !a.phases.some((ph) => ph.group === x && ph.name === 'spell')) ?? groups[groups.length - 1];
     a.phases = a.phases.filter((ph) => ph.group !== g);
   }
   // the downed foe's struggle and the wait after the kill give a little, too
   for (const ph of a.phases) if (total() > budget && (ph.name === 'downed' || ph.name === 'wait')) ph.d = Math.max(ph.name === 'wait' ? 0.6 : 0.7, ph.d - (total() - budget));
+  // (for testing: the fight as it will be fought, after the cuts)
+  window.__lastFight = a.phases.filter((ph) => ph.group || ['kill', 'body', 'downed'].includes(ph.name) || ph.kill).map((ph) => ph.name + (ph.move || ph.spell || '') + (ph.who && ph.group ? ph.who : '')).join() + '|' + a.endKind;
   void first;
 }
 
@@ -1690,7 +1828,7 @@ function planEnding(a, end, lastA) {
   const A = a.mover, V = a.cap;
   const armA = arsenal(A.fig);
   const len = a.len;
-  const waitD = len === 'quick' ? 0.8 : a.epic ? 1.5 : 1.05;
+  const waitD = len === 'quick' ? 0.6 : a.epic ? 1.4 : 0.8;
   a.endKind = end.t;
   if (end.t === 'wormhole') {
     // (see stepWormhole: the wormhole flashes WORM.flash after her cast, then she takes her staff back)
@@ -1704,7 +1842,7 @@ function planEnding(a, end, lastA) {
     const info = moveInfo(A.fig, sp.move);
     const release = info.hits[0] * info.d;
     a.phases.push({ name: 'spell', kill: true, d: release + sp.kill + 0.35, who: 'A', spell: end.spell, info, release, outcome: 'kill', cam: a.epic ? 'low' : 'wide' });
-    a.phases.push({ name: 'wait', d: waitD });
+    a.phases.push({ name: 'wait', d: waitD * 0.75 });
     return;
   }
   if (end.t === 'down') {
@@ -1807,8 +1945,8 @@ function stepCircle(a, phase, idx, k, once) {
   }
   if (k >= 1 && once('circled' + idx)) {
     // (the fight has turned: the camera finds its side again)
-    a.angle = null;
     if (a.epic) a.camPos = null;
+    a.reangle = true;
     act(A, 'guard', { loop: true, fade: 0.2 });
     if (V) act(V, 'guard', { loop: true, fade: 0.2 });
   }
@@ -1864,7 +2002,15 @@ function contactPoint(p1, q1, p2, q2) {
   _c2.copy(p2).addScaledVector(d2, t);
   return { at: _c1.clone().lerp(_c2, 0.5), gap: _c1.distanceTo(_c2) };
 }
+// the instant of contact: a hard white star for a frame or two, and sparks thrown along the blow
+function impactFlash(at, push, size = 0.5) {
+  particles.burst(at, { color: 0xfffbf0, n: 1, speed: 0, up: 0, size, life: 0.11, gravity: 0 });
+  particles.burst(at, { color: 0xffd890, n: 1, speed: 0, up: 0, size: size * 1.35, life: 0.07, gravity: 0 });
+  if (push) for (let i = 0; i < 7; i++) particles.burst(at.clone().addScaledVector(push, 0.03 * i), { color: 0xffeeb8, n: 1, speed: 1.6 + i * 0.5, up: 0.5, size: 0.035, life: 0.3, gravity: 5 });
+}
 function sparksAt(at, push, defender, heavy, shield = false) {
+  impactFlash(at, push, heavy ? 0.62 : 0.42);
+  if (heavy) dustPuff(defender.fig.group.position.clone().setY(0.04), 0.22, 3, defender.fig.isWhite);
   particles.burst(at, { color: 0xffe2a0, n: heavy ? 40 : 26, speed: heavy ? 3.4 : 2.6, up: 1, size: 0.07, life: 0.45 });
   particles.burst(at, { color: 0xfff6e0, n: 10, speed: 5, up: 0.4, size: 0.04, life: 0.18, gravity: 0 });
   rubble.chips(at, push.clone().setY(0.3), defender.fig.materials[0], heavy ? 14 : 8, heavy ? 0.8 : 0.55, state.ply);
@@ -1874,6 +2020,7 @@ function sparksAt(at, push, defender, heavy, shield = false) {
   sfx(shield ? 'shield_block' : 'sword_clash', { vol: heavy ? 1 : 0.8 });
   send({ type: 'impact', heavy: false });
   shake = Math.max(shake, heavy ? 0.06 : 0.035);
+  punch(heavy ? 0.8 : 0.45);
 }
 
 // A parried blow still carries its weight: the defender is knocked back (feet skidding and
@@ -1910,10 +2057,13 @@ function stepBlow(a, phase, idx, tt, dt, once) {
   const kI = impact / info.d;
   if (once('blow' + idx)) {
     defender.fig.group.position.copy(homeOf(a, defender));
+    a.dir.copy(a.vHome).sub(a.approach).setY(0).normalize();
+    a.reangle = true;
     // squarely face to face (the footwork may have left them a little off)
     striker.fig.group.rotation.y = angleTo(homeOf(a, striker), homeOf(a, defender));
     defender.fig.group.rotation.y = angleTo(homeOf(a, defender), homeOf(a, striker));
-    act(striker, move, { fade: 0.14 });
+    act(striker, move, { fade: 0.16 });
+    striker.fig.move.t = phase.lead || 0;
     let target;
     if (phase.hit) target = woundTarget(defender, striker, phase.hit);
     else {
@@ -1935,6 +2085,16 @@ function stepBlow(a, phase, idx, tt, dt, once) {
   tt = striker.fig.move.name === move ? striker.fig.move.t : phase.d;
   const home = homeOf(a, striker);
   striker.fig.group.position.copy(home).addScaledVector(plan.dir, plan.shift * stepEnvelope(tt, impact, phase.d));
+  // a blow he had to take on his guard drives the defender back across the board
+  if (phase.drive) {
+    const dh = homeOf(a, defender);
+    const k = smooth01((a.t - phase.driveAt) / 0.3) * phase.drive;
+    if (k > phase.driven) {
+      dh.addScaledVector(plan.dir, k - phase.driven);
+      phase.driven = k;
+      defender.fig.group.position.copy(dh);
+    }
+  }
   // the defender's answer, timed so its guard (or its sidestep) meets the blow
   if (!phase.hit) {
     const rInfo = moveInfo(defender.fig, phase.react);
@@ -1956,18 +2116,39 @@ function stepBlow(a, phase, idx, tt, dt, once) {
   }
   // the blade checked by the guard (or bitten into the stone) springs back off it
   if (phase.recoilAt && a.t >= phase.recoilAt && once('recoil' + idx)) act(striker, 'recoil', { fade: 0.12 });
-  if (!info.cast && tt > impact - 0.16 && tt < impact + 0.06) particles.burst(weaponNow(striker.fig).tip, { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.07, life: 0.22, gravity: 0 });
+  if (!info.cast && tt > impact - 0.17 && tt < impact + 0.07) striker.swinging = true;
   if (!info.cast && tt > impact - 0.2 && once('whoosh' + idx)) sfx('sword_swing', { vol: info.heavy ? 0.9 : 0.7 });
   if (tt >= impact && once('clash' + idx)) {
     const push = defender.fig.group.position.clone().sub(striker.fig.group.position).setY(0).normalize();
+    // the striker stays where the blow carried him (the fight moves about the board) ...
+    plan.shift0 = plan.shift;
+    if (clearSpot(a, home.clone().addScaledVector(plan.dir, plan.shift))) {
+      home.addScaledVector(plan.dir, plan.shift);
+      plan.shift = 0;
+    }
+    // ... and the defender gives ground under it: a step for a parry, more for a heavy blow or a wound
+    if (!phase.react.startsWith('dodge')) {
+      const want = phase.hit ? 0.18 : phase.react.startsWith('stagger') ? 0.15 : 0.1;
+      const dh = homeOf(a, defender);
+      for (const w of [want, want * 0.5]) {
+        if (clearSpot(a, dh.clone().addScaledVector(plan.dir, w + 0.04))) {
+          phase.drive = w;
+          phase.driven = 0;
+          phase.driveAt = a.t;
+          break;
+        }
+      }
+      if (phase.drive) footDust(dh);
+    }
     if (phase.hit) {
       // it gets through: the stone is struck, and the wound stays
       act(defender, phase.react, { fade: 0.05 });
       setAim(defender.fig, null);
       const r = phase.dmg ? applyDamage(rubble, phase.dmg, push.clone().setY(0.2), state.ply, 1) : { at: plan.tip.clone() };
       rubble.chips(r.at, push.clone().setY(0.4), defender.fig.materials[0], 14, 0.8, state.ply);
-      dustPuff(r.at, 0.25, 3, defender.fig.isWhite);
-      knock(defender.fig, push, 1.1);
+      dustPuff(r.at, 0.3, 5, defender.fig.isWhite);
+      impactFlash(r.at, push, 0.7);
+      knock(defender.fig, push, 1.25);
       knock(striker.fig, push.clone().negate(), 0.2);
       flash.position.copy(r.at);
       flash.color.set(0xffe0b0);
@@ -1976,8 +2157,9 @@ function stepBlow(a, phase, idx, tt, dt, once) {
       clang(0.25);
       shake = Math.max(shake, 0.07);
       camKick.addScaledVector(push, 0.06).add(new THREE.Vector3(0, -0.03, 0));
-      a.hitStop = 0.12;
-      phase.recoilAt = a.t + 0.08;
+      punch(1);
+      a.hitStop = 0.16;
+      phase.recoilAt = a.t + 0.1;
       sfx('sword_hit_stone');
       send({ type: 'impact', heavy: true });
       window.__duelLog?.push({ blow: move, by: striker.fig.type, hit: phase.hit, react: phase.react, aimErr: +plan.err.toFixed(3) });
@@ -1985,7 +2167,7 @@ function stepBlow(a, phase, idx, tt, dt, once) {
     }
     if (phase.react.startsWith('dodge')) {
       whoosh(0.35);
-      window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, aimErr: +plan.err.toFixed(3), shift: +plan.shift.toFixed(2) });
+      window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, aimErr: +plan.err.toFixed(3), shift: +plan.shift0.toFixed(2) });
       return;
     }
     const sw = weaponNow(striker.fig);
@@ -2009,13 +2191,19 @@ function stepBlow(a, phase, idx, tt, dt, once) {
           striker.fig.mixer.update(0);
           dw = weaponNow(defender.fig);
           c = meet(weaponNow(striker.fig), dw);
+          // (and the guard once more onto the blade where that has left it)
+          if (c.gap > 0.035) {
+            snapGuard(defender, phase.react, weaponNow(striker.fig), shieldUse);
+            dw = weaponNow(defender.fig);
+            c = meet(weaponNow(striker.fig), dw);
+          }
         }
       }
     }
     const heavy = phase.react.startsWith('stagger');
     sparksAt(c.at, push, defender, heavy, shieldUse);
     blowLands(striker, defender, c.at, push, heavy ? 1.15 : 0.6);
-    a.hitStop = heavy ? 0.1 : 0.06; // the blades bite: a beat of stillness
+    a.hitStop = heavy ? 0.13 : 0.08; // the blades bite: a beat of stillness
     phase.recoilAt = a.t + a.hitStop * 0.6;
     if (phase.snapPlan) {
       // the blade snaps: the broken end spins away
@@ -2023,7 +2211,7 @@ function stepBlow(a, phase, idx, tt, dt, once) {
       crash(0.35);
       a.hitStop = 0.16;
     }
-    window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, snap: phase.snap || undefined, gap: +c.gap.toFixed(3), aimErr: +plan.err.toFixed(3), defErr: phase.defErr !== undefined ? +phase.defErr.toFixed(3) : null, shift: +plan.shift.toFixed(2) });
+    window.__duelLog?.push({ blow: move, by: striker.fig.type, react: phase.react, snap: phase.snap || undefined, gap: +c.gap.toFixed(3), aimErr: +plan.err.toFixed(3), defErr: phase.defErr !== undefined ? +phase.defErr.toFixed(3) : null, shift: +plan.shift0.toFixed(2) });
   }
 }
 
@@ -2316,7 +2504,7 @@ function stepStep(a, phase, idx, tt, once) {
     sfx('footstep_stone', { vol: 0.4 });
   }
   if (tt >= phase.d - 0.12 && once('stepEnd' + idx)) {
-    a.angle = null;
+    a.reangle = true;
     act(A, 'guard', { loop: true, fade: 0.2 });
     act(V, 'guard', { loop: true, fade: 0.2 });
   }
@@ -2534,6 +2722,7 @@ function stepBody(a, phase, idx, tt, once) {
     g.position.copy(a.approach).addScaledVector(plan.dir, plan.shift * env);
   }
   if (V && tc >= killAt - 0.32 && !phase.onGround && once('cower' + idx)) act(V, move === 'topple' || move === 'hop' ? 'parryHigh' : 'stagger', { fade: 0.1 });
+  if (move === 'execute' && tc > killAt - 0.18 && tc < killAt + 0.08) A.swinging = true;
   if (tc > killAt - 0.2 && once('bw' + idx)) sfx(move === 'execute' ? 'sword_swing' : 'footstep_heavy', { vol: 0.8 });
   if (tc >= killAt - 0.06 && once('slow' + idx)) {
     a.slowed = true;
@@ -2609,6 +2798,7 @@ function stepKill(a, phase, tt, dt, once) {
     act(mover, move, { fade: 0.14 });
     const v = a.cap;
     v.fig.group.position.copy(a.vHome);
+    a.dir.copy(a.vHome).sub(a.approach).setY(0).normalize();
     g.rotation.y = angleTo(a.approach, a.vHome);
     v.fig.group.rotation.y = angleTo(a.vHome, a.approach);
     const target = v.fig.group.position.clone().addScaledVector(a.dir, -0.04);
@@ -2666,12 +2856,12 @@ function stepKill(a, phase, tt, dt, once) {
   }
   // too late, the victim's guard comes up
   if (cap && tt >= killAt - 0.3 && once('late')) act(cap, parryFor(info), { fade: 0.12 });
-  if (!info.cast && tt > killAt - 0.2 && tt < killAt + 0.08) particles.burst(weaponNow(mover.fig).tip, { color: 0xfff2d0, n: 1, speed: 0.05, up: 0, size: 0.1, life: 0.28, gravity: 0 });
+  if (!info.cast && tt > killAt - 0.18 && tt < killAt + 0.1) mover.swinging = true;
   if (tt > killAt - 0.24 && once('whooshF')) info.cast ? zap(0.4) : whoosh(1);
   if (info.cast && tt >= killAt - 0.32 && once('bolt')) launchBolt(weaponNow(mover.fig).butt, phase.target, mover.fig.isWhite ? 0x9fd8ff : 0xc77dff);
-  if (tt >= killAt - (a.epic ? 0.16 : 0.06) && once('slow')) {
+  if (tt >= killAt - (a.epic ? 0.18 : 0.12) && once('slow')) {
     a.slowed = true;
-    slowLeft = a.epic ? 1.7 : 0.8; // slow motion around the killing blow (longer, slower in an epic)
+    slowLeft = a.epic ? 1.8 : 1.0; // slow motion around the killing blow (longer, slower in an epic)
     slowRate = a.epic ? 0.22 : 0.3;
   }
   const tip = weaponNow(mover.fig).tip;
@@ -2682,7 +2872,8 @@ function stepKill(a, phase, tt, dt, once) {
     knock(cap.fig, a.dir, 0.7);
     camKick.addScaledVector(a.dir, 0.08).add(new THREE.Vector3(0, -0.05, 0));
     setRot(cap.fig, 0.15);
-    a.hitStop = 0.14;
+    a.hitStop = 0.16;
+    punch(1);
     a.stopMoverOnly = true; // the weapon bites and holds; the victim reels from it
     phase.swing = a.prevTip ? tip.clone().sub(a.prevTip) : a.dir.clone();
     const at = tip.clone();
@@ -2692,6 +2883,7 @@ function stepKill(a, phase, tt, dt, once) {
     shake = 0.08;
     crash(0.35);
     particles.burst(at, { color: 0xfff0c0, n: 18, speed: 2, up: 0.6, size: 0.06, life: 0.4 });
+    impactFlash(at, a.dir, 0.7);
     if ((phase.cut?.heavy && phase.cut.kind === 'cleave') || mover.fig.type === KNIGHT || mover.fig.type === ROOK) shockwave(g.position.clone().addScaledVector(a.dir, 0.4));
   }
   if (cap && phase.hitPt !== undefined) setRot(cap.fig, 0.15 + clamp01((pt - phase.hitPt) / 0.14) * 0.25);
@@ -2866,6 +3058,7 @@ function finishCurrent() {
   a.mover.sq = job.m.to;
   pieces.set(job.m.to, a.mover);
   a.mover.fig.frozen = false;
+  a.mover.fig.plant = false;
   if (a.mover.fig.statue && a.mover.fig.J?.weapon && a.mover.fig.disarmed) a.mover.fig.J.weapon.visible = true;
   // arrived: it settles back into a still statue (keeping whatever wounds it took)
   if (a.mover.fig.alive) settle(a.mover);
@@ -2885,6 +3078,11 @@ function finishCurrent() {
     np.grow = 0.001;
     sparkle(a.to);
     chime();
+  }
+  for (const tr of trails) {
+    tr.heat = 0;
+    tr.pts.length = 0;
+    tr.mesh.visible = false;
   }
   releaseShot();
   syncTo(job.after);
@@ -3084,6 +3282,10 @@ function stepMove(a, dt) {
         g.rotation.y = turnToward(g.rotation.y, homeFacing(mover.code), Math.min(1, dt * 10));
         break;
     }
+    // in the fight the feet are planted on the board, and step when the body is carried off them
+    const planted = !!a.vHome && FIGHT_PHASES.has(phase.name) && phase.name !== 'wait';
+    mover.fig.plant = planted;
+    if (a.cap) a.cap.fig.plant = planted;
     // camera work
     const fighting = a.dir && (FIGHT_PHASES.has(phase.name) ||
       (phase.name === 'walk' && !phase.settle && k > 0.35));
@@ -3103,6 +3305,8 @@ function stepMove(a, dt) {
     fdt = dt * (a.stopMoverOnly ? 0.02 : 0.15);
   } else a.stopMoverOnly = false;
   mover.fig.mixer.update(fdt);
+  updateTrail(trails[0], mover, mover.swinging, dt);
+  mover.swinging = false;
   if (a.cap) {
     const cg = a.cap.fig.group;
     // (a statue that is awake keeps facing its attacker; one held by a spell can't)
@@ -3110,7 +3314,9 @@ function stepMove(a, dt) {
     // (and the attacker keeps its eyes on the victim as they move about)
     if (a.vHome && (phase?.name === 'circle' || phase?.name === 'blow' || phase?.name === 'square' || phase?.name === 'step' || phase?.name === 'downed')) g.rotation.y = turnToward(g.rotation.y, angleTo(g.position, cg.position), Math.min(1, dt * 6));
     if (!a.cap.fig.frozen) a.cap.fig.mixer.update(a.stopMoverOnly ? dt : fdt);
-  }
+    updateTrail(trails[1], a.cap, a.cap.swinging, dt);
+    a.cap.swinging = false;
+  } else updateTrail(trails[1], null, false, dt);
   if (a.rook) {
     const r = a.rook;
     const k = clamp01((a.t - r.t0) / r.d);

@@ -654,8 +654,8 @@ function reactions(P, kind) {
       [0, g],
       [0.27, { ...blk, $aim: [1] }, 'h'],
       [0.42, { ...blk, $aim: [1] }],
-      [0.5, { ...hit, $aim: [1], $root: R(-0.07, -0.07) }],
-      [0.68, { ...blk, $aim: [0.6], $root: R(-0.03, -0.02) }],
+      [0.49, { ...add(hit, { spine: [-0.1, 0, 0], head: [-0.12, 0, 0] }), $aim: [1], $root: R(-0.12, -0.14), $hips: [-0.05, -0.03], $fR: [0, 0, -0.06] }],
+      [0.68, { ...blk, $aim: [0.6], $root: R(-0.05, -0.03), $fR: [0, 0, -0.04] }],
       [0.98, g],
     ] };
     // a heavy blow: the guard holds, but it drives the defender back a step, reeling
@@ -882,6 +882,46 @@ function lib(kind) {
   return { P, M };
 }
 
+// ---- every blow, pushed: the poses to their extremes and the timing to a snap.
+// The wind-up goes further (the body coiled round and leant back, the weight on the back foot)
+// and is held; the strike itself takes a tenth of a second where it took two; the follow-through
+// carries the body on past the target. The moment each blow lands stays where it was.
+const BODY = { spine: [1.3, 1.5, 1.3], chest: [1.3, 1.5, 1.3], head: [1.2, 1.3, 1.2], $hips: [1.4, 1.5], $root: [1, 1, 1.6, 1.5, 1.5, 1.3] };
+function pushed(p, g, f) {
+  const o = { ...p };
+  for (const [n, w] of Object.entries(BODY)) {
+    const x = p[n];
+    if (!x) continue;
+    const b = g[n] || [];
+    o[n] = x.map((v, i) => (b[i] || 0) + (v - (b[i] || 0)) * (1 + ((w[i] || 1) - 1) * f));
+  }
+  return o;
+}
+function punchUp(c, g) {
+  if (!c.hits || !c.hits.length || c.react || c.cast || c.loop || c.punched) return;
+  c.punched = true;
+  const keys = c.keys.map((k) => [k[0], k[1], k[2]]);
+  let prevHit = -1;
+  for (const hit of c.hits) {
+    let wi = -1;
+    for (let i = 0; i < keys.length; i++) if (keys[i][2] === 'h' && keys[i][0] < hit - 1e-6 && keys[i][0] > prevHit) wi = i;
+    prevHit = hit;
+    if (wi < 0) continue;
+    const tw = keys[wi][0], span = hit - tw;
+    if (span < 0.13) continue;
+    const fast = Math.max(0.1, span * 0.55);
+    const wind = pushed(keys[wi][1], g, 1);
+    keys[wi][1] = wind;
+    for (let i = wi + 1; i < keys.length && keys[i][0] < hit - 1e-6; i++) keys[i][0] = hit - (hit - keys[i][0]) * (fast / span);
+    // held at the top of the wind-up, still coiling a little: the breath before the blow
+    keys.splice(wi + 1, 0, [hit - fast, add(pushed(wind, g, 0.12), { $root: [0, 0, -0.012] }), 'h']);
+  }
+  // the follow-through: whatever comes between the last blow and the recovery
+  const last = c.hits[c.hits.length - 1];
+  if (!c.body && !c.pommel) for (let i = 0; i < keys.length - 2; i++) if (keys[i][0] > last + 1e-6) keys[i][1] = pushed(keys[i][1], g, 0.7);
+  c.keys = keys;
+}
+
 function clips(kind) {
   const { P, M } = lib(kind);
   const g = P.guard;
@@ -909,6 +949,7 @@ function clips(kind) {
   // the old names
   C.attack = C.attack2 = C[ARSENAL[kind].blows[0]];
   C.finish = C[ARSENAL[kind].finishers[0]];
+  for (const c of new Set(Object.values(C))) punchUp(c, g);
   for (const [name, c] of Object.entries(C)) {
     c.name = name;
     c.d = c.keys[c.keys.length - 1][0];
@@ -1245,7 +1286,9 @@ function animate(fig, dt) {
   fig.basePose = pose;
   pose = springs(fig, pose, dt);
   fig.pose = pose;
+  fig.stepDt = dt;
   applyPose(fig, pose);
+  fig.stepDt = 0;
   if (m.name === 'death') fall(fig, m.t, m.d);
   else fig.body.rotation.set(0, 0, 0);
   // settled into the statue's pose: from now on nothing moves until it wakes
@@ -1340,31 +1383,76 @@ function applyPose(fig, pose, legs = true) {
   }
 }
 
-// two-bone IK in the leg's sagittal plane: knee bends forward, foot stays flat
+// two-bone IK in the leg's sagittal plane: knee bends forward, foot stays flat.
+// In a fight (fig.plant) the feet are planted on the board where they stand: as the body is
+// carried about (stepping in, driven back, circling) a foot stays put until it is left too far
+// behind, then it steps (lifted, set down under the body again), one foot at a time.
+const NO_PLANT = new Set(['walk', 'run', 'leap', 'down', 'downed', 'crawl', 'rise', 'death', 'collapse', 'flail', 'bound', 'statue', 'idle', 'settle', 'wake']);
 function solveLegs(fig, pose) {
   const { info } = fig;
   const H = info.H;
   fig.body.updateMatrixWorld(true);
+  const rp = pose.$root;
+  const plant = fig.plant && !fig.robe && !NO_PLANT.has(fig.move.name) && fig.group.position.y < 0.02 &&
+    !(rp && (Math.abs(rp[3] || 0) > 0.4 || Math.abs(rp[5] || 0) > 0.4 || (rp[1] || 0) > 0.06));
+  const dt = fig.stepDt || 0;
   for (const L of info.legs) {
     const off = pose['$f' + L.side];
     const target = L.foot.clone();
     if (off) target.add(_a.set(off[0] * H, Math.max(0, off[1]) * H, off[2] * H));
     fig.body.localToWorld(target);
+    let abd = 0;
+    if (plant) {
+      const P = L.plant || (L.plant = { x: target.x, z: target.z, t: -1, fx: 0, fz: 0 });
+      const d = Math.hypot(target.x - P.x, target.z - P.z);
+      if (P.t >= 0) {
+        // stepping: the foot swings to where it belongs now
+        P.t = Math.min(1, P.t + dt / 0.13);
+        const u = smooth(P.t);
+        P.x = P.fx + (target.x - P.fx) * u;
+        P.z = P.fz + (target.z - P.fz) * u;
+        target.y += Math.sin(Math.PI * u) * 0.055 * H;
+        if (P.t >= 1) P.t = -1;
+      } else if ((off && off[1] > 0.012) || d > 0.4 * H) {
+        // (the move itself lifts this foot: it goes where the move puts it)
+        P.x = target.x;
+        P.z = target.z;
+      } else if (d > 0.085 * H && (d > 0.2 * H || !info.legs.some((o) => o !== L && o.plant && o.plant.t >= 0))) {
+        P.t = 0;
+        P.fx = P.x;
+        P.fz = P.z;
+        fig.stepped = (fig.stepped || 0) + 1;
+      }
+      const ix = target.x, iz = target.z;
+      target.x = P.x;
+      target.z = P.z;
+      // how far to the side of where the leg would hang the foot is planted
+      const pl = L.hip.parent.worldToLocal(_q.copy(target)).x - L.hip.parent.worldToLocal(_a.set(ix, target.y, iz)).x;
+      abd = pl;
+    } else L.plant = null;
     const hipW = L.hip.getWorldPosition(_q);
     L.hip.parent.worldToLocal(target);
     L.hip.parent.worldToLocal(hipW);
-    const dy = target.y - hipW.y, dz = target.z - hipW.z;
+    let dy = target.y - hipW.y;
+    const dz = target.z - hipW.z;
+    // (planted out to the side: the leg swings out from the hip to reach it)
+    let th = 0;
+    if (abd) {
+      th = Math.max(-0.5, Math.min(0.5, Math.atan2(abd, -dy)));
+      dy = -Math.hypot(dy, abd);
+    }
     const a = L.thigh, b = L.shin;
     const len = Math.min(a + b - 1e-4, Math.max(Math.abs(a - b) + 1e-4, Math.hypot(dy, dz)));
     const phi = Math.atan2(dz, -dy);
     const alpha = Math.acos(Math.min(1, Math.max(-1, (a * a + len * len - b * b) / (2 * a * len))));
     const beta = Math.PI - Math.acos(Math.min(1, Math.max(-1, (a * a + b * b - len * len) / (2 * a * b))));
-    L.hip.rotation.set(-(phi + alpha), 0, 0);
+    if (th || L.hip.rotation.order !== 'XYZ') L.hip.rotation.order = th ? 'ZXY' : 'XYZ';
+    L.hip.rotation.set(-(phi + alpha), 0, th);
     L.knee.rotation.set(beta, 0, 0);
     // keep the foot flat on the slab
     let tilt = 0;
     for (let o = L.hip.parent; o && o !== fig.body; o = o.parent) tilt += o.rotation.x;
-    L.ankle.rotation.set(-(L.hip.rotation.x + beta) - tilt, 0, 0);
+    L.ankle.rotation.set(-(L.hip.rotation.x + beta) - tilt, 0, -th);
   }
 }
 const _q = new THREE.Vector3(), _a = new THREE.Vector3();
