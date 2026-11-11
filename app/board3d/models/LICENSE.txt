@@ -1,3 +1,7 @@
+wizard_*.glb: the Wizard Chess statues (Meyerhouse's remix on MakerWorld), made by
+tools/import-wizard.mjs. Not CC0 and not MIT: see ../../../LICENSE-wizard-chess.md.
+
+All other models:
 The character models in this folder come from two packs by Kay Lousberg (www.kaylousberg.com),
 released under Creative Commons Zero (CC0, public domain):
 

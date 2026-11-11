@@ -4,6 +4,7 @@ import '../app/settings.dart';
 import '../net/nostr_pool.dart';
 import '../voice/neural_voice.dart';
 import '../voice/voice.dart';
+import 'board3d/iterations.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -41,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(
                 s.style == 'toon'
                     ? 'Toon: friendly cartoon heroes and skeletons (for kids)'
-                    : 'Wizard: living stone statues, light magic against dark',
+                    : 'Wizard: stone chess statues that duel, wound and break each other apart',
               ),
               trailing: SegmentedButton<String>(
                 segments: const [
@@ -50,6 +51,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
                 selected: {s.style},
                 onSelectionChanged: (v) => setState(() => s.style = v.first),
+              ),
+            ),
+            ListTile(
+              title: const Text('Room'),
+              subtitle: Text(
+                s.room == 'tower'
+                    ? 'Astronomy tower: telescopes, star charts and books under a moonlit sky'
+                    : 'Apothecary cabin: jars and bottles, drying herbs and candlelight',
+              ),
+              trailing: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'apothecary', label: Text('Cabin')),
+                  ButtonSegment(value: 'tower', label: Text('Tower')),
+                ],
+                selected: {s.room},
+                onSelectionChanged: (v) => setState(() => s.room = v.first),
+              ),
+            ),
+            ListTile(
+              title: const Text('Battles'),
+              subtitle: Text(switch (s.battle) {
+                'quick' => 'Quick: one exchange and the finishing blow',
+                'epic' => 'Epic: long duels with footwork, broken weapons and lost limbs',
+                _ => 'Standard: a few blows each way, then the finishing blow',
+              }),
+              trailing: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'quick', label: Text('Quick')),
+                  ButtonSegment(value: 'standard', label: Text('Std')),
+                  ButtonSegment(value: 'epic', label: Text('Epic')),
+                ],
+                selected: {s.battle},
+                onSelectionChanged: (v) => setState(() => s.battle = v.first),
+              ),
+            ),
+            ListTile(
+              title: const Text('Battle board version'),
+              subtitle: Text(boardIteration(s.boardIteration).blurb),
+              trailing: DropdownButton<String>(
+                value: boardIteration(s.boardIteration).id,
+                items: [
+                  for (final i in boardIterations) DropdownMenuItem(value: i.id, child: Text(i.label)),
+                ],
+                onChanged: (v) => setState(() => s.boardIteration = v ?? 'latest'),
               ),
             ),
             SwitchListTile(
@@ -75,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Voice'),
               subtitle: ListenableBuilder(
                 listenable: NeuralVoice.shared,
-                builder: (context, _) => Text(s.voiceName.isNotEmpty ? s.voiceName : _neuralStatus()),
+                builder: (context, _) => Text(s.voiceName.isNotEmpty ? s.voiceName : 'The announcer (neural, built in)'),
               ),
               trailing: const Icon(Icons.record_voice_over),
               onTap: _pickVoice,
@@ -139,12 +184,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _neuralStatus() {
     final n = NeuralVoice.shared;
+    if (!n.supported) return 'Not available here (the phone\'s voice speaks instead)';
     return switch (n.status) {
-      'ready' => 'OpenRook announcer (neural voice, works offline)',
+      'ready' => 'Ready (neural voice, works offline)',
       'downloading' => 'Downloading the announcer voice… ${(n.progress * 100).round()}%',
       'unpacking' => 'Installing the announcer voice…',
       'failed' => 'Announcer voice will download when online (system voice for now)',
-      _ => 'OpenRook announcer (neural voice)',
+      _ => 'Getting the announcer voice ready…',
     };
   }
 
@@ -159,7 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const ListTile(title: Text('Voice that calls the moves')),
             ListTile(
               leading: const Icon(Icons.auto_awesome),
-              title: const Text('OpenRook announcer (neural, built in)'),
+              title: const Text('The announcer (neural, built in)'),
               subtitle: Text(_neuralStatus()),
               trailing: IconButton(
                 icon: const Icon(Icons.play_arrow),

@@ -11,6 +11,7 @@ import '../chess/position.dart';
 import '../net/chesscom.dart';
 import '../net/lichess.dart';
 import '../net/match.dart';
+import '../ui/board3d/board3d.dart' show supports3D;
 import '../voice/speech_moves.dart';
 import '../voice/voice.dart';
 import 'settings.dart';
@@ -293,11 +294,45 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  // ------------------------------------------------------------------ the show
+  // The 3D board acts each move out (the march, the fight, the fall) and the voice calls it.
+  // The computer waits for both to finish before it so much as thinks, so its reply is never
+  // played or announced over the player's move.
+  int _shownPly = -1;
+  Completer<void>? _shownSignal;
+
+  /// The 3D board has finished acting out the game up to [ply].
+  void boardShown(int ply) {
+    _shownPly = ply;
+    _shownSignal?.complete();
+    _shownSignal = null;
+  }
+
+  Future<void> _showFinished() async {
+    if (Settings.shared.battleView && supports3D) {
+      final target = game.ply;
+      // a move takes a few seconds to act out (a capture with its slow motion, longer);
+      // don't wait forever if the board isn't on screen to say it's done
+      final deadline = DateTime.now().add(Duration(seconds: Settings.shared.battle == 'epic' ? 45 : 15)); // epic duels run ~25 s
+      while (!_disposed && _shownPly < target && DateTime.now().isBefore(deadline)) {
+        _shownSignal ??= Completer<void>();
+        await _shownSignal!.future.timeout(const Duration(milliseconds: 400), onTimeout: () {});
+      }
+    }
+    await Voice.shared.quiet.timeout(const Duration(seconds: 15), onTimeout: () {});
+  }
+
   // ------------------------------------------------------------------ computer
   Future<void> _maybeComputer() async {
     if (opponent != Opponent.computer || over || game.turn == myColor || thinking) return;
-    thinking = true;
+    thinking = true; // (the player can't move meanwhile)
     notifyListeners();
+    await _showFinished();
+    if (_disposed || over || game.turn == myColor) {
+      thinking = false;
+      notifyListeners();
+      return;
+    }
     final started = DateTime.now();
     final m = await findBestMove(game.startFen, game.uciMoves, EngineLevel.levels[level]);
     // A short pause so an instant reply doesn't feel abrupt on the real board.

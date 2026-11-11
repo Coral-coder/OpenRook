@@ -1,4 +1,6 @@
-// The armies: rigged, textured, animated characters from KayKit's Adventurers and Skeletons
+// The armies. The default ('stone') look is the Wizard Chess set of carved statues (see the end
+// of this file); the 'toon' look, and the fallback when the statues aren't built in, are
+// rigged, textured, animated characters from KayKit's Adventurers and Skeletons
 // packs (CC0, Kay Lousberg, www.kaylousberg.com), packed by tools/pack-models.mjs.
 //
 // White are the living: hooded rogues (pawns), the armoured knight, the mage (bishop), the
@@ -8,6 +10,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { buildStatue, playMove, MOVES } from './statues.js';
+// the statues' sword-fighting: their move sets, timing, and aiming blows and parries
+export { arsenal, moveInfo, parryFor, probeMove, aimAt, setAim, weaponNow, knock, rebound } from './statues.js';
 import MODELS from './models_data.gen.js';
 import { stoneMaterial } from './stone.js';
 
@@ -87,6 +92,7 @@ function crown(isWhite) {
 
 /** Builds a figure for a piece code (Dart's: white 1..6, black 9..14). */
 export function buildFigure(code) {
+  if (style === 'stone') return buildStatue(code);
   const type = code & 7, isWhite = (code & 8) === 0;
   const spec = ROSTER[isWhite ? 'white' : 'black'][type];
   const group = new THREE.Group();
@@ -212,6 +218,7 @@ export function setRot(fig, r) {
 
 /** Name of the clip a piece uses for an action ('idle', 'walk', 'attack', 'finish' ...). */
 export function clipFor(fig, action) {
+  if (fig.statue) return 'S_' + action;
   const s = fig.spec.style, white = fig.isWhite, t = fig.type;
   switch (action) {
     case 'idle':
@@ -262,6 +269,7 @@ export const STRIKE_AT = {
 
 /** Plays a clip on a figure, cross-fading from whatever it was doing. */
 export function play(fig, name, { loop = false, fade = 0.18, speed = 1, duration = 0 } = {}) {
+  if (fig.statue) return playMove(fig, name, { loop, speed, duration, fade });
   const clip = loaded.clips[name];
   if (!clip) return 0;
   const action = fig.mixer.clipAction(clip);
@@ -283,6 +291,7 @@ export function hasClip(name) {
 }
 
 export function clipDuration(name) {
+  if (name.startsWith('S_')) return MOVES[name.slice(2)]?.d || 1;
   return loaded.clips[name]?.duration || 1;
 }
 
@@ -324,3 +333,7 @@ export function buildRemains(fig) {
   group.position.y -= new THREE.Box3().setFromObject(group, true).min.y - 0.01;
   return { group, model, materials, isWhite: fig.isWhite, parts: { inner }, opacity: 1 };
 }
+
+// ================================================================== the wizard's chess statues
+// Built from scratch with skeletons: see statues.js.
+for (const [k, v] of Object.entries(MOVES)) if (v.at) STRIKE_AT['S_' + k] = v.at;
